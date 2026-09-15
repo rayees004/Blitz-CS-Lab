@@ -13,7 +13,7 @@ class Command(BaseCommand):
             username='admin',
             defaults={'email': 'admin@blitzacademy.local', 'role': 'SUPER_ADMIN', 'is_staff': True, 'is_superuser': True}
         )
-        if not admin_user.has_usable_password():
+        if not admin_user.check_password('AdminPass!123'):
             admin_user.set_password('AdminPass!123')
             admin_user.save()
 
@@ -21,7 +21,7 @@ class Command(BaseCommand):
             username='instructor1',
             defaults={'email': 'instructor@blitzacademy.local', 'role': 'INSTRUCTOR'}
         )
-        if not instructor_user.has_usable_password():
+        if not instructor_user.check_password('InstructorPass!123'):
             instructor_user.set_password('InstructorPass!123')
             instructor_user.save()
 
@@ -40,7 +40,7 @@ class Command(BaseCommand):
             username='student01',
             defaults={'email': 'student01@blitzacademy.local', 'role': 'STUDENT'}
         )
-        if not student_user.has_usable_password():
+        if not student_user.check_password('StudentPass!123'):
             student_user.set_password('StudentPass!123')
             student_user.save()
 
