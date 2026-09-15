@@ -24,7 +24,7 @@
           <div class="alert">{{ message }}</div>
         {% endfor %}
       {% endif %}
-      <form method="post">
+      <form method="post" >
         {% csrf_token %}
         <label for="username">Username</label>
         <input id="username" name="username" type="text" required />
