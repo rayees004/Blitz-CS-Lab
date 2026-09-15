@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Blitz Academy Login</title>
+    <style>
+      body { font-family: Arial, sans-serif; background: #07111f; color: #eaf6ff; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+      .card { width: min(420px, 90vw); background: rgba(10,24,38,0.95); border: 1px solid rgba(122,231,255,0.18); border-radius: 18px; padding: 30px; box-shadow: 0 20px 40px rgba(0,0,0,0.3); }
+      h1 { margin-top: 8px; color: #7ae7ff; }
+      label { display: block; margin-bottom: 8px; color: #dfefff; }
+      input { width: 100%; box-sizing: border-box; padding: 12px 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1); background: #0b1d2f; color: #f5fbff; margin-bottom: 18px; }
+      button { width: 100%; background: linear-gradient(135deg, #00d1ff, #5d7cff); border: none; color: white; padding: 12px; border-radius: 10px; font-weight: bold; cursor: pointer; }
+      .alert { padding: 10px; background: rgba(255, 91, 91, 0.1); border: 1px solid rgba(255, 91, 91, 0.25); border-radius: 8px; margin-bottom: 18px; }
+      a { color: #7ae7ff; text-decoration: none; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div style="font-weight:bold; letter-spacing:2px; color:#7ae7ff; text-transform:uppercase;">Blitz Academy</div>
+      <h1>Student Login</h1>
+      {% if messages %}
+        {% for message in messages %}
+          <div class="alert">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+      <form method="post">
+        {% csrf_token %}
+        <label for="username">Username</label>
+        <input id="username" name="username" type="text" required />
+
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" required />
+
+        <button type="submit">Login</button>
+      </form>
+      <p style="margin-top:20px; text-align:center;"><a href="/">Return to academy</a></p>
+    </div>
+  </body>
+</html>

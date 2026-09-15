@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Blitz Academy</title>
+    <style>
+      body { font-family: Arial, sans-serif; background: #07111f; color: #eaf6ff; margin: 0; }
+      .container { max-width: 1200px; margin: 0 auto; padding: 40px 20px; }
+      .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 50px; }
+      .brand { font-weight: bold; letter-spacing: 1.5px; color: #7ae7ff; }
+      .nav a { margin-left: 18px; color: #dfefff; text-decoration: none; }
+      .hero { display: flex; justify-content: space-between; align-items: center; gap: 40px; }
+      .hero h1 { font-size: 3rem; margin-bottom: 15px; }
+      .hero p { color: #b8d8f7; line-height: 1.7; }
+      .cta { margin-top: 20px; }
+      .btn { display: inline-block; background: linear-gradient(135deg, #00d1ff, #5d7cff); color: #fff; text-decoration: none; padding: 14px 24px; border-radius: 10px; font-weight: bold; }
+      .btn.secondary { background: transparent; border: 1px solid #6ee7ff; margin-left: 12px; }
+      .stats { display: grid; grid-template-columns: repeat(4, minmax(150px, 1fr)); gap: 16px; margin-top: 50px; }
+      .stat { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 20px; }
+      .panel { margin-top: 80px; }
+      .grid { display: grid; grid-template-columns: repeat(3, minmax(220px, 1fr)); gap: 22px; }
+      .card { background: rgba(255,255,255,0.03); border-radius: 12px; padding: 24px; border: 1px solid rgba(255,255,255,0.08); }
+      footer { margin-top: 80px; text-align: center; color: #96b6d5; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <header class="topbar">
+        <div class="brand">BLITZ ACADEMY</div>
+        <nav class="nav">
+          <a href="#features">Features</a>
+          <a href="#labs">Labs</a>
+          <a href="#faq">FAQ</a>
+          <a href="/login/">Login</a>
+        </nav>
+      </header>
+
+      <section class="hero">
+        <div>
+          <p style="color:#7ae7ff; letter-spacing: 2px; text-transform: uppercase;">Cybersecurity training • Bug bounty education</p>
+          <h1>Build elite offensive defense skills through realistic lab-based training.</h1>
+          <p>Blitz Academy helps students master ethical hacking, web application security, API testing, recon, bug bounty workflows, and hands-on exploitation in a secure training environment.</p>
+          <div class="cta">
+            <a class="btn" href="/login/">Student Login</a>
+            <a class="btn secondary" href="/login/">Register</a>
+          </div>
+        </div>
+        <div style="width:100%; max-width:460px; background:#0b1d2f; border:1px solid rgba(122,231,255,0.3); border-radius:20px; padding:25px;">
+          <div style="display:flex;justify-content:space-between;align-items:center; margin-bottom:18px;">
+            <strong>Training Progress</strong>
+            <span style="color:#7ae7ff;">36%</span>
+          </div>
+          <div style="height:12px; background:#12263c; border-radius:999px; overflow:hidden;">
+            <div style="width:36%; height:100%; background:linear-gradient(90deg,#00d1ff,#5d7cff);"></div>
+          </div>
+          <div style="margin-top:24px; display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+            <div class="stat"><div style="font-size:12px; color:#98bce0;">Labs</div><div style="font-size:27px; margin-top:8px;">50</div></div>
+            <div class="stat"><div style="font-size:12px; color:#98bce0;">Points</div><div style="font-size:27px; margin-top:8px;">2450</div></div>
+            <div class="stat"><div style="font-size:12px; color:#98bce0;">Badges</div><div style="font-size:27px; margin-top:8px;">12</div></div>
+            <div class="stat"><div style="font-size:12px; color:#98bce0;">Rank</div><div style="font-size:27px; margin-top:8px;">#7</div></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="stats">
+        <div class="stat"><strong>50+</strong><br>realistic lab challenges</div>
+        <div class="stat"><strong>6</strong><br>specialized training tracks</div>
+        <div class="stat"><strong>24/7</strong><br>hands-on practice</div>
+        <div class="stat"><strong>100%</strong><br>browser-based training flow</div>
+      </section>
+
+      <section id="features" class="panel">
+        <h2>Why students choose Blitz Academy</h2>
+        <div class="grid">
+          <div class="card">
+            <h3>Structured learning</h3>
+            <p>Every challenge progresses from fundamental recon to advanced bug bounty workflows and chained vulnerabilities.</p>
+          </div>
+          <div class="card">
+            <h3>Hands-on labs</h3>
+            <p>Practice against fictional, isolated targets designed for ethical learning without impacting the platform itself.</p>
+          </div>
+          <div class="card">
+            <h3>Career-ready skills</h3>
+            <p>Learn the real techniques used in web security assessments, API testing, and report writing.</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="labs" class="panel">
+        <h2>Curriculum highlights</h2>
+        <div class="grid">
+          <div class="card"><h3>Recon & Enumeration</h3><p>Information gathering and target mapping.</p></div>
+          <div class="card"><h3>Web Exploitation</h3><p>SQLi, XSS, SSRF, file inclusion, and auth flaws.</p></div>
+          <div class="card"><h3>API Security</h3><p>Broken auth, authorization bypass, JWT, and GraphQL abuse.</p></div>
+          <div class="card"><h3>Access Control</h3><p>IDOR, privilege escalation, and tenant isolation.</p></div>
+          <div class="card"><h3>Business Logic</h3><p>Multi-step workflows and request abuse patterns.</p></div>
+          <div class="card"><h3>Bug Bounty Simulation</h3><p>End-to-end assessment with chaining and validation.</p></div>
+        </div>
+      </section>
+
+      <section id="faq" class="panel">
+        <h2>Frequently asked questions</h2>
+        <div class="grid">
+          <div class="card"><h3>Are the labs isolated?</h3><p>Yes. Lab targets run in isolated training environments with strict separation from academy infrastructure.</p></div>
+          <div class="card"><h3>Is there a leaderboard?</h3><p>Yes. Students are ranked using lab completion, points, and achievements.</p></div>
+          <div class="card"><h3>Do I need prior experience?</h3><p>No. The curriculum is structured from beginner to advanced with guided content and labs.</p></div>
+        </div>
+      </section>
+
+      <footer>
+        BLITZ ACADEMY • Cybersecurity training for the next generation of defenders and bug hunters
+      </footer>
+    </div>
+  </body>
+</html>

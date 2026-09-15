@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Student Dashboard | Blitz Academy</title>
+    <style>
+      body { font-family: Arial, sans-serif; background: #07111f; color: #edf7ff; margin: 0; }
+      .container { max-width: 1200px; margin: 0 auto; padding: 30px 20px; }
+      .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
+      .brand { font-weight: bold; letter-spacing: 1.5px; color: #7ae7ff; }
+      .nav a { color: #dfefff; text-decoration: none; margin-left: 22px; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 18px; }
+      .card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 20px; }
+      .progress { background: #12263c; height: 12px; border-radius: 999px; overflow: hidden; }
+      .progress > span { display: block; height: 100%; background: linear-gradient(90deg, #00d1ff, #5d7cff); }
+      table { width: 100%; border-collapse: collapse; margin-top: 18px; }
+      th, td { padding: 12px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.08); }
+      .btn { background: linear-gradient(135deg, #00d1ff, #5d7cff); color: white; padding: 10px 18px; border-radius: 10px; text-decoration: none; display: inline-block; }
+      .muted { color: #9ab6d1; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <header class="topbar">
+        <div class="brand">BLITZ ACADEMY</div>
+        <nav class="nav">
+          <a href="/dashboard/">Dashboard</a>
+          <a href="/labs/">My Labs</a>
+          <a href="/logout/">Logout</a>
+        </nav>
+      </header>
+
+      <h1>Student Dashboard</h1>
+      <p class="muted">{{ student.full_name }} • {{ student.student_id }} • {{ student.academy_class.name }}</p>
+
+      <div class="grid" style="margin-top:25px;">
+        <div class="card"><div class="muted">Fee Status</div><h2>{{ student.fee_status }}</h2></div>
+        <div class="card"><div class="muted">Lab Access</div><h2>{{ student.lab_access }}</h2></div>
+        <div class="card"><div class="muted">Completed Labs</div><h2>{{ completed_count }}</h2></div>
+        <div class="card"><div class="muted">Progress</div><h2>{{ progress }}%</h2></div>
+      </div>
+
+      <div class="card" style="margin-top:24px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+          <strong>Course Progress</strong>
+          <span>{{ progress }}%</span>
+        </div>
+        <div class="progress"><span style="width:{{ progress }}%"></span></div>
+      </div>
+
+      <div class="grid" style="margin-top:24px;">
+        <div class="card">
+          <h3>Recent activity</h3>
+          <table>
+            <thead>
+              <tr><th>Lab</th><th>Status</th></tr>
+            </thead>
+            <tbody>
+              {% for item in recent_activity %}
+                <tr><td>{{ item.lab.name }}</td><td>{{ item.status }}</td></tr>
+              {% empty %}
+                <tr><td colspan="2">No activity yet</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <div class="card">
+          <h3>Study Materials</h3>
+          <ul>
+            {% for material in materials %}
+              <li><a href="/materials/{{ material.pk }}/" style="color:#7ae7ff;">{{ material.title }}</a></li>
+            {% empty %}
+              <li>No materials available yet.</li>
+            {% endfor %}
+          </ul>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:24px;">
+        <h3>My Labs</h3>
+        <a class="btn" href="/labs/">Browse assigned labs</a>
+      </div>
+    </div>
+  </body>
+</html>
