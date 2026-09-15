@@ -17,11 +17,15 @@ def home(request):
 
 
 def login_view(request):
+    if request.user.is_authenticated:
+        return redirect('dashboard')
     if request.method == 'POST':
         username = request.POST.get('username', '').strip()
         password = request.POST.get('password', '')
         user = authenticate(request, username=username, password=password)
-        if user is not None:
+        
+            print(f"User {user.username} authenticated successfully.")
+        if user:
             login(request, user)
             AuditLog.objects.create(
                 actor=user,
