@@ -25,6 +25,7 @@ import Materials from "./src/components/student/Materials";
 import AdminDashboard from "./src/components/admin/AdminDashboard";
 import AdminStudents from "./src/components/admin/AdminStudents";
 import AdminClasses from "./src/components/admin/AdminClasses";
+import AdminSubjects from "./src/components/admin/AdminSubjects";
 
 // Export modular subcomponents for external consumption
 export { default as Sidebar } from "./src/components/layout/Sidebar";
@@ -46,6 +47,7 @@ export { default as Materials } from "./src/components/student/Materials";
 export { default as AdminDashboard } from "./src/components/admin/AdminDashboard";
 export { default as AdminStudents } from "./src/components/admin/AdminStudents";
 export { default as AdminClasses } from "./src/components/admin/AdminClasses";
+export { default as AdminSubjects } from "./src/components/admin/AdminSubjects";
 export * from "./src/constants/theme";
 export * from "./src/data/mockData";
 
@@ -90,6 +92,7 @@ export default function BlitzCyberLab() {
       "a-dashboard": <AdminDashboard />,
       "a-students": <AdminStudents />,
       "a-classes": <AdminClasses />,
+      "a-subjects": <AdminSubjects />,
       "a-labs": <Placeholder title="Labs" blurb="Manage all 50 lab environments, difficulty, points, and availability." icon={FlaskConical} />,
       "a-materials": <Placeholder title="Study Materials" blurb="Upload and organize documents linked to classes and labs." icon={BookOpen} />,
       "a-assignments": <Placeholder title="Assignments" blurb="Assign labs and materials to classes or individual students." icon={ClipboardList} />,

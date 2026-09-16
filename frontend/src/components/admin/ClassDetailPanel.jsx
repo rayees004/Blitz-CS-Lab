@@ -2,10 +2,11 @@ import React, { useState, useEffect, useCallback } from "react";
 import {
   X, BookOpen, Plus, AlertCircle, Loader2, CheckCircle,
   Trash2, GripVertical, Edit2, Clock, DollarSign,
-  Users, Layers, ChevronRight, Save,
+  Users, Layers, ChevronRight, Save, BookMarked
 } from "lucide-react";
 import { C, sans, mono } from "../../constants/theme";
 import { fetchModules, createModule, updateModule, deleteModule } from "../../api/courses";
+import { fetchCourseSubjects } from "../../api/subjects";
 
 /* ── helpers ──────────────────────────────────────────── */
 const inputStyle = (err) => ({
@@ -247,6 +248,7 @@ function AddModuleForm({ courseId, nextOrder, onAdded, onCancel }) {
 /* ── Main Panel ───────────────────────────────────────── */
 export default function ClassDetailPanel({ course, onClose }) {
   const [modules, setModules] = useState([]);
+  const [subjects, setSubjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [showAddForm, setShowAddForm] = useState(false);
@@ -257,8 +259,12 @@ export default function ClassDetailPanel({ course, onClose }) {
     if (!course?.id) return;
     setLoading(true); setError("");
     try {
-      const data = await fetchModules(course.id);
-      setModules(data.results || []);
+      const [modulesData, subjectsData] = await Promise.all([
+        fetchModules(course.id),
+        fetchCourseSubjects(course.id).catch(() => ({ results: [] })),
+      ]);
+      setModules(modulesData.results || []);
+      setSubjects(subjectsData.results || []);
     } catch (err) {
       setError(err.message || "Failed to load modules.");
     } finally {
@@ -327,6 +333,29 @@ export default function ClassDetailPanel({ course, onClose }) {
               </div>
             ))}
           </div>
+
+          {/* Subjects in this class */}
+          {subjects.length > 0 && (
+            <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
+              <div style={{ fontFamily: mono, fontSize: 10, color: C.low, letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: 7 }}>
+                Curriculum Subjects ({subjects.length})
+              </div>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {subjects.map(s => (
+                  <span key={s.id} style={{
+                    background: C.panel2, border: `1px solid ${C.borderLight}`, borderRadius: 5,
+                    padding: "3px 8px", fontFamily: sans, fontSize: 11.5, color: C.amber,
+                    display: "inline-flex", alignItems: "center", gap: 5,
+                  }}>
+                    <BookMarked size={11} color={C.amber} />
+                    {s.code ? <strong>{s.code}: </strong> : null}
+                    {s.name}
+                    <span style={{ fontFamily: mono, fontSize: 10, color: C.low }}>({s.credits_or_hours}h)</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Modules body */}

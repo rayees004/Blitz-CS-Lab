@@ -64,11 +64,42 @@ class Enrollment(models.Model):
         return f"{self.student.username} → {self.course.name} [{self.fee_status}]"
 
 
+class Subject(models.Model):
+    """Academic / curriculum subject belonging to a Course/Class (or standalone)."""
+    course = models.ForeignKey(
+        Course,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='subjects',
+    )
+    name = models.CharField(max_length=200)
+    code = models.CharField(max_length=50, blank=True, default='')  # e.g. "SEC-101"
+    description = models.TextField(blank=True, default='')
+    credits_or_hours = models.PositiveIntegerField(default=30)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['name']
+
+    def __str__(self):
+        return f"{self.name} ({self.code})" if self.code else self.name
+
+
 class Module(models.Model):
-    """Curriculum module (chapter/section) belonging to a Course/Class."""
+    """Curriculum module (chapter/section) belonging to a Course/Class and optionally a Subject."""
     course = models.ForeignKey(
         Course,
         on_delete=models.CASCADE,
+        related_name='modules',
+    )
+    subject = models.ForeignKey(
+        Subject,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
         related_name='modules',
     )
     title = models.CharField(max_length=200)
@@ -84,3 +115,4 @@ class Module(models.Model):
 
     def __str__(self):
         return f"[{self.course.name}] #{self.order} {self.title}"
+

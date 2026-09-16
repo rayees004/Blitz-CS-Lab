@@ -4,12 +4,14 @@ from rest_framework import status
 from django.shortcuts import get_object_or_404
 from accounts.models import User
 from accounts.views import IsAdminOrStaff
-from .models import Course, Enrollment, Module
+from .models import Course, Enrollment, Module, Subject
 from .serializers import (
     CourseSerializer,
     CourseListSerializer,
     CreateCourseSerializer,
     ModuleSerializer,
+    SubjectSerializer,
+    CreateSubjectSerializer,
     EnrollmentSerializer,
     EnrollCreateSerializer,
     EnrollmentUpdateSerializer,
@@ -24,7 +26,7 @@ class CourseListCreateView(APIView):
     permission_classes = [IsAdminOrStaff]
 
     def get(self, request):
-        courses = Course.objects.prefetch_related('modules', 'enrollments').filter(is_active=True)
+        courses = Course.objects.prefetch_related('modules', 'subjects', 'enrollments').filter(is_active=True)
         serializer = CourseListSerializer(courses, many=True)
         return Response({'count': courses.count(), 'results': serializer.data})
 
@@ -101,19 +103,94 @@ class CourseModulesView(APIView):
 
     def post(self, request, pk):
         course = self.get_course(pk)
+        title = request.data.get('title', '').strip()
+        if not title:
+            return Response({'detail': 'Module title is required.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Auto-assign order as next available
-        data = request.data.copy() if hasattr(request.data, 'copy') else dict(request.data)
-        if 'order' not in data or not data.get('order'):
-            last = course.modules.order_by('-order').first()
-            data['order'] = (last.order + 1) if last else 1
+        order = request.data.get('order')
+        if order is None:
+            order = course.modules.count()
 
-        serializer = ModuleSerializer(data=data)
+        subject_id = request.data.get('subject_id')
+        subject = None
+        if subject_id:
+            subject = get_object_or_404(Subject, pk=subject_id)
+
+        module = Module.objects.create(
+            course=course,
+            subject=subject,
+            title=title,
+            description=request.data.get('description', ''),
+            duration_hours=request.data.get('duration_hours', 1.0),
+            order=order,
+        )
+        return Response({
+            'message': f'Module "{title}" added to {course.name}.',
+            'module': ModuleSerializer(module).data,
+        }, status=status.HTTP_201_CREATED)
+
+
+class ModuleDetailView(APIView):
+    """
+    GET    /api/modules/<id>/
+    PATCH  /api/modules/<id>/  — update title, description, duration_hours, order
+    DELETE /api/modules/<id>/  — deactivate module
+    """
+    permission_classes = [IsAdminOrStaff]
+
+    def get_module(self, pk):
+        return get_object_or_404(Module, pk=pk)
+
+    def get(self, request, pk):
+        return Response(ModuleSerializer(self.get_module(pk)).data)
+
+    def patch(self, request, pk):
+        module = self.get_module(pk)
+        for field in ['title', 'description', 'duration_hours', 'order', 'is_active']:
+            if field in request.data:
+                setattr(module, field, request.data[field])
+        if 'subject_id' in request.data:
+            sid = request.data['subject_id']
+            module.subject = get_object_or_404(Subject, pk=sid) if sid else None
+        module.save()
+        return Response({
+            'message': 'Module updated.',
+            'module': ModuleSerializer(module).data,
+        })
+
+    def delete(self, request, pk):
+        module = self.get_module(pk)
+        title = module.title
+        module.delete()
+        return Response({'message': f'Module "{title}" removed.'})
+
+
+# ─── SUBJECTS ──────────────────────────────────────────────────
+class SubjectListCreateView(APIView):
+    """
+    GET  /api/subjects/  — list subjects (optional ?course_id= or ?q=)
+    POST /api/subjects/  — create a new subject
+    """
+    permission_classes = [IsAdminOrStaff]
+
+    def get(self, request):
+        qs = Subject.objects.select_related('course').prefetch_related('modules').filter(is_active=True)
+        course_id = request.query_params.get('course_id')
+        if course_id:
+            qs = qs.filter(course_id=course_id)
+        q = request.query_params.get('q')
+        if q:
+            qs = qs.filter(name__icontains=q) | qs.filter(code__icontains=q) | qs.filter(description__icontains=q)
+        serializer = SubjectSerializer(qs, many=True)
+        return Response({'count': qs.count(), 'results': serializer.data})
+
+    def post(self, request):
+        serializer = CreateSubjectSerializer(data=request.data)
         if serializer.is_valid():
-            module = serializer.save(course=course)
+            subject = serializer.save()
             return Response({
-                'message': f'Module "{module.title}" added to "{course.name}".',
-                'module': ModuleSerializer(module).data,
+                'message': f'Subject "{subject.name}" created successfully.',
+                'subject': SubjectSerializer(subject).data,
             }, status=status.HTTP_201_CREATED)
 
         errors = serializer.errors
@@ -124,34 +201,61 @@ class CourseModulesView(APIView):
         return Response({'detail': str(first_msg), 'errors': errors}, status=status.HTTP_400_BAD_REQUEST)
 
 
-class ModuleDetailView(APIView):
+class SubjectDetailView(APIView):
     """
-    PATCH  /api/modules/<id>/  — update a module
-    DELETE /api/modules/<id>/  — delete a module
+    GET    /api/subjects/<id>/
+    PATCH  /api/subjects/<id>/
+    DELETE /api/subjects/<id>/
     """
     permission_classes = [IsAdminOrStaff]
 
+    def get_subject(self, pk):
+        return get_object_or_404(Subject, pk=pk)
+
+    def get(self, request, pk):
+        subject = self.get_subject(pk)
+        return Response(SubjectSerializer(subject).data)
+
     def patch(self, request, pk):
-        module = get_object_or_404(Module, pk=pk)
-        serializer = ModuleSerializer(module, data=request.data, partial=True)
+        subject = self.get_subject(pk)
+        serializer = CreateSubjectSerializer(subject, data=request.data, partial=True)
         if serializer.is_valid():
-            serializer.save()
+            subject = serializer.save()
             return Response({
-                'message': 'Module updated.',
-                'module': ModuleSerializer(module).data,
+                'message': 'Subject updated successfully.',
+                'subject': SubjectSerializer(subject).data,
             })
         return Response({'detail': 'Update failed.', 'errors': serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
 
     def delete(self, request, pk):
-        module = get_object_or_404(Module, pk=pk)
-        title = module.title
-        module.delete()
-        return Response({'message': f'Module "{title}" deleted.'})
+        subject = self.get_subject(pk)
+        name = subject.name
+        subject.is_active = False
+        subject.save()
+        return Response({'message': f'Subject "{name}" deactivated.'})
 
 
+class CourseSubjectsView(APIView):
+    """
+    GET /api/courses/<id>/subjects/ — list subjects for a class
+    """
+    permission_classes = [IsAdminOrStaff]
+
+    def get(self, request, pk):
+        course = get_object_or_404(Course, pk=pk)
+        subjects = course.subjects.filter(is_active=True)
+        return Response({
+            'course_id': course.id,
+            'course_name': course.name,
+            'count': subjects.count(),
+            'results': SubjectSerializer(subjects, many=True).data,
+        })
+
+
+# ─── ENROLLMENTS ───────────────────────────────────────────────
 class StudentEnrollmentsView(APIView):
     """
-    GET  /api/students/<id>/enrollments/  — list enrollments for a student
+    GET  /api/students/<id>/enrollments/  — list all courses student is enrolled in
     POST /api/students/<id>/enrollments/  — enroll student in a course
     """
     permission_classes = [IsAdminOrStaff]
@@ -161,11 +265,11 @@ class StudentEnrollmentsView(APIView):
 
     def get(self, request, pk):
         student = self.get_student(pk)
-        enrollments = Enrollment.objects.filter(student=student).select_related('course')
+        enrollments = student.enrollments.select_related('course').filter(is_active=True)
         serializer = EnrollmentSerializer(enrollments, many=True)
         return Response({
             'student_id': student.id,
-            'student_name': student.get_full_name() or student.username,
+            'student_name': f"{student.first_name} {student.last_name}".strip() or student.username,
             'count': enrollments.count(),
             'results': serializer.data,
         })
