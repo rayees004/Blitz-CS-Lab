@@ -89,15 +89,17 @@ class Subject(models.Model):
 
 
 class Module(models.Model):
-    """Curriculum module (chapter/section) belonging to a Course/Class and optionally a Subject."""
+    """Curriculum module (chapter/section) belonging to a Course/Class or standalone Subject/Course."""
     course = models.ForeignKey(
         Course,
         on_delete=models.CASCADE,
+        null=True,
+        blank=True,
         related_name='modules',
     )
     subject = models.ForeignKey(
         Subject,
-        on_delete=models.SET_NULL,
+        on_delete=models.CASCADE,
         null=True,
         blank=True,
         related_name='modules',

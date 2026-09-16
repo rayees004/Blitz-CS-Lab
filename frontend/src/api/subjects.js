@@ -75,3 +75,40 @@ export async function fetchCourseSubjects(courseId) {
   });
   return handleResponse(res);
 }
+
+/** Fetch modules belonging to a subject (course) */
+export async function fetchSubjectModules(subjectId) {
+  const res = await fetch(`${API_BASE}/subjects/${subjectId}/modules/`, {
+    headers: authHeaders(),
+  });
+  return handleResponse(res);
+}
+
+/** Add a module to a subject (course) */
+export async function createSubjectModule(subjectId, payload) {
+  const res = await fetch(`${API_BASE}/subjects/${subjectId}/modules/`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(payload),
+  });
+  return handleResponse(res);
+}
+
+/** Update a module */
+export async function updateModule(moduleId, patch) {
+  const res = await fetch(`${API_BASE}/modules/${moduleId}/`, {
+    method: 'PATCH',
+    headers: authHeaders(),
+    body: JSON.stringify(patch),
+  });
+  return handleResponse(res);
+}
+
+/** Delete a module */
+export async function deleteModule(moduleId) {
+  const res = await fetch(`${API_BASE}/modules/${moduleId}/`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+  return handleResponse(res);
+}

@@ -235,6 +235,60 @@ class SubjectDetailView(APIView):
         return Response({'message': f'Subject "{name}" deactivated.'})
 
 
+class SubjectModulesView(APIView):
+    """
+    GET  /api/subjects/<id>/modules/ — list modules for a course (subject)
+    POST /api/subjects/<id>/modules/ — add a module to a course (subject)
+    """
+    permission_classes = [IsAdminOrStaff]
+
+    def get_subject(self, pk):
+        return get_object_or_404(Subject, pk=pk)
+
+    def get(self, request, pk):
+        subject = self.get_subject(pk)
+        modules = subject.modules.filter(is_active=True).order_by('order', 'created_at')
+        return Response({
+            'subject_id': subject.id,
+            'subject_name': subject.name,
+            'count': modules.count(),
+            'results': ModuleSerializer(modules, many=True).data,
+        })
+
+    def post(self, request, pk):
+        subject = self.get_subject(pk)
+        title = request.data.get('title', '').strip()
+        if not title:
+            return Response({'detail': 'Module title is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        order = request.data.get('order')
+        if order is None or order == '':
+            order = subject.modules.filter(is_active=True).count() + 1
+        else:
+            try:
+                order = int(order)
+            except (ValueError, TypeError):
+                order = subject.modules.filter(is_active=True).count() + 1
+
+        try:
+            duration = float(request.data.get('duration_hours', 1.0))
+        except (ValueError, TypeError):
+            duration = 1.0
+
+        module = Module.objects.create(
+            subject=subject,
+            course=subject.course,
+            title=title,
+            description=request.data.get('description', ''),
+            duration_hours=duration,
+            order=order,
+        )
+        return Response({
+            'message': f'Module "{title}" added to {subject.name}.',
+            'module': ModuleSerializer(module).data,
+        }, status=status.HTTP_201_CREATED)
+
+
 class CourseSubjectsView(APIView):
     """
     GET /api/courses/<id>/subjects/ — list subjects for a class

@@ -12,12 +12,13 @@ class ModuleSerializer(serializers.ModelSerializer):
 class SubjectSerializer(serializers.ModelSerializer):
     course_name = serializers.CharField(source='course.name', read_only=True, default=None)
     module_count = serializers.SerializerMethodField()
+    modules = ModuleSerializer(many=True, read_only=True)
 
     class Meta:
         model = Subject
         fields = [
             'id', 'name', 'code', 'description', 'course', 'course_name',
-            'credits_or_hours', 'module_count', 'is_active', 'created_at', 'updated_at'
+            'credits_or_hours', 'module_count', 'modules', 'is_active', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
 

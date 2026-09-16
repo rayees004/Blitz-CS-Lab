@@ -6,6 +6,7 @@ from .views import (
     ModuleDetailView,
     SubjectListCreateView,
     SubjectDetailView,
+    SubjectModulesView,
     CourseSubjectsView,
     StudentEnrollmentsView,
     EnrollmentDetailView,
@@ -24,6 +25,7 @@ urlpatterns = [
     # Subjects
     path('subjects/', SubjectListCreateView.as_view(), name='api_subjects'),
     path('subjects/<int:pk>/', SubjectDetailView.as_view(), name='api_subject_detail'),
+    path('subjects/<int:pk>/modules/', SubjectModulesView.as_view(), name='api_subject_modules'),
 
     # Student enrollments
     path('students/<int:pk>/enrollments/', StudentEnrollmentsView.as_view(), name='api_student_enrollments'),
