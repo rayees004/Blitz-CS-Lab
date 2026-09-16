@@ -1,15 +1,45 @@
 import React, { useState } from "react";
-import { ArrowRight, Shield } from "lucide-react";
+import { ArrowRight, AlertCircle, Loader2, KeyRound } from "lucide-react";
 import Logo from "../layout/Logo";
 import Btn from "../common/Btn";
 import { C, sans, mono } from "../../constants/theme";
+import { loginUser } from "../../api/auth";
 
 export default function Login({ onLogin }) {
-  const [email, setEmail] = useState("rohith@blitzcyberlab.io");
-  const [password, setPassword] = useState("••••••••••••");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  const handleSubmit = async (e) => {
+    if (e) e.preventDefault();
+    if (!email || !password) {
+      setError("Please provide both email and password.");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await loginUser(email, password);
+      const userType = response.user_type || response.user?.user_type || "student";
+
+      if (userType === "admin") {
+        onLogin("admin", response.user);
+      } else {
+        onLogin("student", response.user);
+      }
+    } catch (err) {
+      setError(err.message || "Failed to authenticate. Ensure the backend server is running.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div style={{ minHeight: "100vh", background: C.void, display: "flex" }}>
+      {/* Left Hero section */}
       <div
         style={{
           flex: 1,
@@ -61,83 +91,120 @@ export default function Login({ onLogin }) {
         </div>
       </div>
 
+      {/* Right Login Form section */}
       <div
         style={{
-          width: 440,
+          width: 460,
           flexShrink: 0,
           background: C.panel,
           borderLeft: `1px solid ${C.border}`,
           display: "flex",
           flexDirection: "column",
           justifyContent: "center",
-          padding: "0 48px",
+          padding: "0 44px",
+          boxSizing: "border-box",
         }}
       >
-        <div style={{ fontFamily: mono, fontSize: 11, color: C.low, letterSpacing: "0.05em", marginBottom: 8 }}>
-          STUDENT LOGIN
+        <div style={{ fontFamily: mono, fontSize: 11, color: C.amber, letterSpacing: "0.08em", marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
+          <KeyRound size={13} />
+          AUTHENTICATION GATEWAY
         </div>
-        <h2 style={{ fontFamily: sans, fontSize: 20, fontWeight: 700, color: C.hi, margin: "0 0 26px" }}>
+        <h2 style={{ fontFamily: sans, fontSize: 22, fontWeight: 700, color: C.hi, margin: "0 0 10px" }}>
           Sign in to your account
         </h2>
+        <p style={{ fontFamily: sans, fontSize: 13, color: C.mid, margin: "0 0 20px" }}>
+          Enter your Blitz Cyber Lab credentials to access your dashboard.
+        </p>
 
-        <div style={{ marginBottom: 16 }}>
-          <div style={{ fontFamily: sans, fontSize: 12.5, color: C.mid, marginBottom: 6 }}>Email address</div>
-          <input
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+        {/* Error message banner */}
+        {error && (
+          <div
             style={{
-              width: "100%",
-              boxSizing: "border-box",
-              border: `1px solid ${C.border}`,
-              borderRadius: 7,
-              background: C.panel2,
+              display: "flex",
+              alignItems: "flex-start",
+              gap: 8,
+              background: "rgba(239, 68, 68, 0.12)",
+              border: "1px solid rgba(239, 68, 68, 0.35)",
+              color: "#fca5a5",
               padding: "10px 12px",
-              fontFamily: mono,
-              fontSize: 13,
-              color: C.hi,
-              outline: "none",
+              borderRadius: 6,
+              fontSize: 12.5,
+              fontFamily: sans,
+              lineHeight: 1.45,
+              marginBottom: 16,
             }}
-          />
-        </div>
+          >
+            <AlertCircle size={16} style={{ flexShrink: 0, marginTop: 2 }} />
+            <span>{error}</span>
+          </div>
+        )}
 
-        <div style={{ marginBottom: 16 }}>
-          <div style={{ fontFamily: sans, fontSize: 12.5, color: C.mid, marginBottom: 6 }}>Password</div>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            style={{
-              width: "100%",
-              boxSizing: "border-box",
-              border: `1px solid ${C.border}`,
-              borderRadius: 7,
-              background: C.panel2,
-              padding: "10px 12px",
-              fontFamily: mono,
-              fontSize: 13,
-              color: C.hi,
-              outline: "none",
-            }}
-          />
-        </div>
+        <form onSubmit={handleSubmit}>
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontFamily: sans, fontSize: 12.5, color: C.mid, marginBottom: 6 }}>
+              Email address or Username
+            </div>
+            <input
+              type="text"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="e.g. admin@blitzcyberlab.io"
+              disabled={loading}
+              autoComplete="username"
+              style={{
+                width: "100%",
+                boxSizing: "border-box",
+                border: `1px solid ${C.border}`,
+                borderRadius: 7,
+                background: C.panel2,
+                padding: "10px 12px",
+                fontFamily: mono,
+                fontSize: 13,
+                color: C.hi,
+                outline: "none",
+              }}
+            />
+          </div>
 
-        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 20 }}>
-          <span style={{ fontFamily: sans, fontSize: 12, color: C.cyan, cursor: "pointer" }}>Forgot password?</span>
-        </div>
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontFamily: sans, fontSize: 12.5, color: C.mid, marginBottom: 6 }}>Password</div>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Enter your password"
+              disabled={loading}
+              autoComplete="current-password"
+              style={{
+                width: "100%",
+                boxSizing: "border-box",
+                border: `1px solid ${C.border}`,
+                borderRadius: 7,
+                background: C.panel2,
+                padding: "10px 12px",
+                fontFamily: mono,
+                fontSize: 13,
+                color: C.hi,
+                outline: "none",
+              }}
+            />
+          </div>
 
-        <Btn onClick={() => onLogin("student")} style={{ width: "100%", padding: "11px 0" }} icon={ArrowRight}>
-          Sign in
-        </Btn>
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 20 }}>
+            <span style={{ fontFamily: sans, fontSize: 12, color: C.cyan, cursor: "pointer" }}>
+              Forgot password?
+            </span>
+          </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "22px 0" }}>
-          <div style={{ flex: 1, height: 1, background: C.border }} />
-          <span style={{ fontFamily: mono, fontSize: 10.5, color: C.low }}>OR</span>
-          <div style={{ flex: 1, height: 1, background: C.border }} />
-        </div>
-
-        <Btn onClick={() => onLogin("admin")} variant="outline" style={{ width: "100%", padding: "10px 0" }} icon={Shield}>
-          Sign in to Admin console
-        </Btn>
+          <Btn
+            type="submit"
+            disabled={loading}
+            style={{ width: "100%", padding: "11px 0" }}
+            icon={loading ? Loader2 : ArrowRight}
+          >
+            {loading ? "Verifying..." : "Sign in"}
+          </Btn>
+        </form>
 
         <p style={{ fontFamily: sans, fontSize: 11.5, color: C.low, marginTop: 28, lineHeight: 1.6 }}>
           By signing in you agree to use Blitz Cyber Lab's isolated lab environments only for
