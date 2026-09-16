@@ -62,3 +62,25 @@ class Enrollment(models.Model):
 
     def __str__(self):
         return f"{self.student.username} → {self.course.name} [{self.fee_status}]"
+
+
+class Module(models.Model):
+    """Curriculum module (chapter/section) belonging to a Course/Class."""
+    course = models.ForeignKey(
+        Course,
+        on_delete=models.CASCADE,
+        related_name='modules',
+    )
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True, default='')
+    order = models.PositiveIntegerField(default=0)
+    duration_hours = models.DecimalField(max_digits=5, decimal_places=1, default=1.0)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['order', 'created_at']
+
+    def __str__(self):
+        return f"[{self.course.name}] #{self.order} {self.title}"

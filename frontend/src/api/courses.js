@@ -22,9 +22,79 @@ async function handleResponse(res) {
   return data;
 }
 
-/** Fetch all available active courses */
+/** Fetch all available active courses/classes */
 export async function fetchCourses() {
   const res = await fetch(`${API_BASE}/courses/`, { headers: authHeaders() });
+  return handleResponse(res);
+}
+
+/** Fetch a single course with modules */
+export async function fetchCourse(courseId) {
+  const res = await fetch(`${API_BASE}/courses/${courseId}/`, { headers: authHeaders() });
+  return handleResponse(res);
+}
+
+/** Create a new class */
+export async function createCourse(payload) {
+  const res = await fetch(`${API_BASE}/courses/`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(payload),
+  });
+  return handleResponse(res);
+}
+
+/** Update a class */
+export async function updateCourse(courseId, patch) {
+  const res = await fetch(`${API_BASE}/courses/${courseId}/`, {
+    method: 'PATCH',
+    headers: authHeaders(),
+    body: JSON.stringify(patch),
+  });
+  return handleResponse(res);
+}
+
+/** Deactivate (soft-delete) a class */
+export async function deleteCourse(courseId) {
+  const res = await fetch(`${API_BASE}/courses/${courseId}/`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+  return handleResponse(res);
+}
+
+/** Fetch modules for a class */
+export async function fetchModules(courseId) {
+  const res = await fetch(`${API_BASE}/courses/${courseId}/modules/`, { headers: authHeaders() });
+  return handleResponse(res);
+}
+
+/** Add a module to a class */
+export async function createModule(courseId, payload) {
+  const res = await fetch(`${API_BASE}/courses/${courseId}/modules/`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(payload),
+  });
+  return handleResponse(res);
+}
+
+/** Update a module */
+export async function updateModule(moduleId, patch) {
+  const res = await fetch(`${API_BASE}/modules/${moduleId}/`, {
+    method: 'PATCH',
+    headers: authHeaders(),
+    body: JSON.stringify(patch),
+  });
+  return handleResponse(res);
+}
+
+/** Delete a module */
+export async function deleteModule(moduleId) {
+  const res = await fetch(`${API_BASE}/modules/${moduleId}/`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
   return handleResponse(res);
 }
 
