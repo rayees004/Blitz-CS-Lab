@@ -205,3 +205,80 @@ class QuestionHint(models.Model):
         return f"Hint #{self.order + 1} for {self.question.title}"
 
 
+class LabSubmission(models.Model):
+    STATUS_CHOICES = [
+        ('NOT_STARTED', 'Not Started'),
+        ('IN_PROGRESS', 'In Progress'),
+        ('COMPLETED', 'Completed'),
+    ]
+
+    student = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='lab_submissions',
+    )
+    lab = models.ForeignKey(
+        Lab,
+        on_delete=models.CASCADE,
+        related_name='submissions',
+    )
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='IN_PROGRESS')
+    score = models.IntegerField(default=0)  # marks awarded
+    max_score = models.IntegerField(default=100)  # total possible marks
+    answers = models.JSONField(default=dict, blank=True)
+    started_at = models.DateTimeField(auto_now_add=True)
+    submitted_at = models.DateTimeField(null=True, blank=True)
+    last_activity_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-last_activity_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['student', 'lab'],
+                name='unique_student_lab_submission'
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.student.username} → {self.lab.name} ({self.status}: {self.score}/{self.max_score})"
+
+
+class LabScore(models.Model):
+    """
+    Lab-based score tracking record using Foreign Key to Lab.
+    Ensures that attending the same lab 1 or multiple times will NEVER increase
+    the score artificially. The score is uniquely bound to the specific lab.
+    """
+    student = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='lab_scores',
+    )
+    lab = models.ForeignKey(
+        Lab,
+        on_delete=models.CASCADE,
+        related_name='scores',
+    )
+    score = models.PositiveIntegerField(default=0)  # marks earned for this lab
+    max_score = models.PositiveIntegerField(default=100)
+    attend_count = models.PositiveIntegerField(default=1)  # number of times attended
+    is_completed = models.BooleanField(default=False)
+    solved_questions_count = models.PositiveIntegerField(default=0)
+    total_questions_count = models.PositiveIntegerField(default=0)
+    first_attended_at = models.DateTimeField(auto_now_add=True)
+    last_attended_at = models.DateTimeField(auto_now=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-last_attended_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['student', 'lab'],
+                name='unique_student_lab_score'
+            )
+        ]
+
+    def __str__(self):
+        return f"LabScore: {self.student.username} → {self.lab.name}: {self.score}/{self.max_score} pts (Attended {self.attend_count}x)"
+
+

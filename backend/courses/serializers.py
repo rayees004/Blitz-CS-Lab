@@ -1,6 +1,6 @@
 from django.db import transaction
 from rest_framework import serializers
-from .models import Course, Enrollment, Module, Subject, Lab, LabQuestion, QuestionHint
+from .models import Course, Enrollment, Module, Subject, Lab, LabQuestion, QuestionHint, LabSubmission, LabScore
 
 
 class ModuleSerializer(serializers.ModelSerializer):
@@ -239,4 +239,43 @@ class LabSerializer(serializers.ModelSerializer):
                         QuestionHint.objects.create(question=question, **h_data)
 
             return instance
+
+
+class LabSubmissionSerializer(serializers.ModelSerializer):
+    student_username = serializers.CharField(source='student.username', read_only=True)
+    student_name = serializers.SerializerMethodField()
+    lab_name = serializers.CharField(source='lab.name', read_only=True)
+
+    class Meta:
+        model = LabSubmission
+        fields = [
+            'id', 'student', 'student_username', 'student_name', 'lab', 'lab_name',
+            'status', 'score', 'max_score', 'answers',
+            'started_at', 'submitted_at', 'last_activity_at'
+        ]
+        read_only_fields = ['id', 'started_at', 'last_activity_at']
+
+    def get_student_name(self, obj):
+        full = f"{obj.student.first_name} {obj.student.last_name}".strip()
+        return full or obj.student.username
+
+
+class LabScoreSerializer(serializers.ModelSerializer):
+    lab_id = serializers.IntegerField(source='lab.id', read_only=True)
+    lab_name = serializers.CharField(source='lab.name', read_only=True)
+    lab_category = serializers.CharField(source='lab.category', read_only=True)
+    lab_difficulty = serializers.CharField(source='lab.difficulty', read_only=True)
+    subject_name = serializers.CharField(source='lab.subject.name', read_only=True, default=None)
+    student_username = serializers.CharField(source='student.username', read_only=True)
+
+    class Meta:
+        model = LabScore
+        fields = [
+            'id', 'student', 'student_username', 'lab', 'lab_id', 'lab_name',
+            'lab_category', 'lab_difficulty', 'subject_name',
+            'score', 'max_score', 'attend_count', 'is_completed',
+            'solved_questions_count', 'total_questions_count',
+            'first_attended_at', 'last_attended_at', 'completed_at'
+        ]
+        read_only_fields = ['id', 'first_attended_at', 'last_attended_at']
 

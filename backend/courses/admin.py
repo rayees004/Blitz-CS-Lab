@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Course, Enrollment, Lab, LabQuestion, QuestionHint
+from .models import Course, Enrollment, Lab, LabQuestion, QuestionHint, LabSubmission, LabScore
 
 
 @admin.register(Course)
@@ -41,4 +41,20 @@ class LabAdmin(admin.ModelAdmin):
     list_filter = ('category', 'difficulty', 'is_active')
     search_fields = ('name', 'description', 'org')
     inlines = [LabQuestionInline]
+
+
+@admin.register(LabSubmission)
+class LabSubmissionAdmin(admin.ModelAdmin):
+    list_display = ('student', 'lab', 'status', 'score', 'max_score', 'started_at', 'submitted_at', 'last_activity_at')
+    list_filter = ('status', 'lab')
+    search_fields = ('student__username', 'student__email', 'lab__name')
+    raw_id_fields = ('student', 'lab')
+
+
+@admin.register(LabScore)
+class LabScoreAdmin(admin.ModelAdmin):
+    list_display = ('student', 'lab', 'score', 'max_score', 'attend_count', 'is_completed', 'solved_questions_count', 'last_attended_at')
+    list_filter = ('is_completed', 'lab')
+    search_fields = ('student__username', 'student__email', 'lab__name')
+    raw_id_fields = ('student', 'lab')
 

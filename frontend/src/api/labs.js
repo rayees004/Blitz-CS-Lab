@@ -87,3 +87,87 @@ export async function deleteLab(labId) {
   });
   return handleResponse(res);
 }
+
+/** Seed sample labs into database */
+export async function seedLabs() {
+  const res = await fetch(`${API_BASE}/labs/seed/`, {
+    method: 'POST',
+    headers: authHeaders(),
+  });
+  return handleResponse(res);
+}
+
+/** Fetch student labs with attendance status, scores, and progress statistics */
+export async function fetchStudentLabs() {
+  const res = await fetch(`${API_BASE}/student/labs/`, { headers: authHeaders() });
+  return handleResponse(res);
+}
+
+/** Attend/start lab and get attendee workspace */
+export async function attendStudentLab(labId) {
+  const res = await fetch(`${API_BASE}/student/labs/${labId}/attend/`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({}),
+  });
+  return handleResponse(res);
+}
+
+/** Get attendee workspace for a lab without resetting */
+export async function fetchStudentLabWorkspace(labId) {
+  const res = await fetch(`${API_BASE}/student/labs/${labId}/attend/`, { headers: authHeaders() });
+  return handleResponse(res);
+}
+
+/** Submit a CTF flag or answer for a specific question */
+export async function submitStudentLabFlag(labId, questionId, flag) {
+  const res = await fetch(`${API_BASE}/student/labs/${labId}/submit/`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({
+      action: 'submit_flag',
+      question_id: questionId,
+      flag,
+    }),
+  });
+  return handleResponse(res);
+}
+
+/** Unlock a hint with score deduction */
+export async function unlockStudentLabHint(labId, questionId, hintId) {
+  const res = await fetch(`${API_BASE}/student/labs/${labId}/submit/`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({
+      action: 'unlock_hint',
+      question_id: questionId,
+      hint_id: hintId,
+    }),
+  });
+  return handleResponse(res);
+}
+
+/** Finalize and officially submit lab for final marks */
+export async function finalizeStudentLab(labId) {
+  const res = await fetch(`${API_BASE}/student/labs/${labId}/submit/`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({
+      action: 'finalize_submission',
+    }),
+  });
+  return handleResponse(res);
+}
+
+/** Fetch all student lab submissions (admin view) */
+export async function fetchLabSubmissions() {
+  const res = await fetch(`${API_BASE}/lab-submissions/`, { headers: authHeaders() });
+  return handleResponse(res);
+}
+
+/** Fetch student lab scores list based on Lab Foreign Key */
+export async function fetchStudentLabScores() {
+  const res = await fetch(`${API_BASE}/student/lab-scores/`, { headers: authHeaders() });
+  return handleResponse(res);
+}
+

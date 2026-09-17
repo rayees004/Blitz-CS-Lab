@@ -13,13 +13,28 @@ from .views import (
     LabListCreateView,
     LabDetailView,
     SubjectLabsView,
+    SeedLabsView,
+    StudentLabListView,
+    StudentLabAttendView,
+    StudentLabSubmitMarkView,
+    StudentLabScoreListView,
+    LabSubmissionListView,
 )
 
 urlpatterns = [
+    # Student Labs & Attend / Submit Marks
+    path('student/labs/', StudentLabListView.as_view(), name='api_student_labs'),
+    path('student/lab-scores/', StudentLabScoreListView.as_view(), name='api_student_lab_scores'),
+    path('student/labs/<int:pk>/attend/', StudentLabAttendView.as_view(), name='api_student_lab_attend'),
+    path('student/labs/<int:pk>/submit/', StudentLabSubmitMarkView.as_view(), name='api_student_lab_submit'),
+    path('lab-submissions/', LabSubmissionListView.as_view(), name='api_lab_submissions'),
+
     # Labs, Questions & Hints
     path('labs/', LabListCreateView.as_view(), name='api_labs'),
+    path('labs/seed/', SeedLabsView.as_view(), name='api_labs_seed'),
     path('labs/<int:pk>/', LabDetailView.as_view(), name='api_lab_detail'),
     path('subjects/<int:pk>/labs/', SubjectLabsView.as_view(), name='api_subject_labs'),
+
 
 
     # Classes (Courses)
