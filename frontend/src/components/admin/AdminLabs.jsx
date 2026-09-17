@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import {
   FlaskConical, Plus, Search, Filter, HelpCircle, Lightbulb,
   Trash2, Edit3, CheckCircle, AlertCircle, RefreshCw, Layers,
-  Award, Globe, ExternalLink, Flag
+  Award, Globe, ExternalLink, Flag, BookMarked
 } from "lucide-react";
 import Panel from "../common/Panel";
 import Btn from "../common/Btn";
@@ -11,27 +11,35 @@ import StatCard from "../common/StatCard";
 import { C, sans, mono } from "../../constants/theme";
 import { LABS as MOCK_LABS } from "../../data/mockData";
 import { fetchLabs, createLab, updateLab, deleteLab } from "../../api/labs";
+import { fetchSubjects } from "../../api/subjects";
 import AddLabModal from "./AddLabModal";
 
 export default function AdminLabs({ onOpenAddModal = null }) {
   const [labs, setLabs] = useState([]);
+  const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [search, setSearch] = useState("");
   const [filterCat, setFilterCat] = useState("ALL");
   const [filterDiff, setFilterDiff] = useState("ALL");
+  const [filterCourse, setFilterCourse] = useState("ALL");
   const [modalOpen, setModalOpen] = useState(false);
   const [editingLab, setEditingLab] = useState(null);
   const [actionNotice, setActionNotice] = useState(null);
+
 
   const loadLabs = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchLabs();
+      const [data, subjectsData] = await Promise.all([
+        fetchLabs(),
+        fetchSubjects().catch(() => ({ results: [] })),
+      ]);
       const serverLabs = data.results || [];
+      setCourses(subjectsData.results || []);
+
       // If server has labs, merge or use them; also include mock labs formatted nicely
-      // To ensure user always has the best experience, combine server labs with mock labs (marked as mock)
       const mappedMock = MOCK_LABS.map((m) => ({
         ...m,
         isMock: true,
@@ -119,8 +127,14 @@ export default function AdminLabs({ onOpenAddModal = null }) {
       (l.org || "").toLowerCase().includes(search.toLowerCase());
     const matchesCat = filterCat === "ALL" || (l.category || l.cat) === filterCat;
     const matchesDiff = filterDiff === "ALL" || (l.difficulty || l.diff) === filterDiff;
-    return matchesSearch && matchesCat && matchesDiff;
+    const matchesCourse =
+      filterCourse === "ALL" ||
+      (filterCourse === "STANDALONE" && !l.subject_id && !l.subject && !l.course_id && !l.course) ||
+      (String(l.subject_id || l.subject?.id || l.subject) === String(filterCourse));
+
+    return matchesSearch && matchesCat && matchesDiff && matchesCourse;
   });
+
 
   const totalQuestions = labs.reduce((acc, l) => acc + (l.questions?.length || l.question_count || 1), 0);
   const totalHints = labs.reduce(
@@ -261,6 +275,33 @@ export default function AdminLabs({ onOpenAddModal = null }) {
             <option value="Advanced">Advanced</option>
           </select>
         </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontFamily: mono, fontSize: 11, color: C.low }}>Course:</span>
+          <select
+            value={filterCourse}
+            onChange={(e) => setFilterCourse(e.target.value)}
+            style={{
+              background: C.panel2,
+              border: `1px solid ${filterCourse !== "ALL" ? C.amberDim : C.border}`,
+              borderRadius: 6,
+              padding: "7px 10px",
+              fontFamily: sans,
+              fontSize: 12,
+              color: C.hi,
+              outline: "none",
+              maxWidth: 200,
+            }}
+          >
+            <option value="ALL">All Tracks / Standalone</option>
+            <option value="STANDALONE">Standalone Only</option>
+            {courses.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.code ? `[${c.code}] ` : ""}{c.name}
+              </option>
+            ))}
+          </select>
+        </div>
       </Panel>
 
       {/* Labs List */}
@@ -287,6 +328,7 @@ export default function AdminLabs({ onOpenAddModal = null }) {
             const qList = l.questions || [];
             const qCount = qList.length || l.question_count || 1;
             const hCount = qList.reduce((acc, q) => acc + (q.hints?.length || 0), 0);
+            const matchingCourse = courses.find((c) => String(c.id) === String(l.subject_id || l.subject));
 
             return (
               <Panel
@@ -300,7 +342,7 @@ export default function AdminLabs({ onOpenAddModal = null }) {
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}>
                   {/* Left Column: Lab Info */}
                   <div style={{ flex: 1 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6, flexWrap: "wrap" }}>
                       <span
                         style={{
                           fontFamily: mono,
@@ -319,6 +361,26 @@ export default function AdminLabs({ onOpenAddModal = null }) {
                       </h3>
                       <DiffBadge level={l.difficulty || l.diff || "Beginner"} />
                       <Badge tone="cyan">{l.category || l.cat || "Security"}</Badge>
+                      {(l.subject_name || matchingCourse) && (
+                        <span
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 5,
+                            fontFamily: sans,
+                            fontSize: 11,
+                            color: C.amber,
+                            background: "rgba(245, 166, 35, 0.12)",
+                            padding: "2px 8px",
+                            borderRadius: 4,
+                            border: `1px solid rgba(245, 166, 35, 0.3)`,
+                            fontWeight: 600,
+                          }}
+                        >
+                          <BookMarked size={11} />
+                          Course: {l.subject_name || (matchingCourse?.code ? `[${matchingCourse.code}] ` : '') + matchingCourse?.name}
+                        </span>
+                      )}
                       {!l.isMock && (
                         <span
                           style={{
@@ -337,6 +399,7 @@ export default function AdminLabs({ onOpenAddModal = null }) {
                     </div>
 
                     <p style={{ fontFamily: sans, fontSize: 13, color: C.mid, margin: "6px 0 12px", lineHeight: 1.5 }}>
+
                       {l.description || l.desc || "No description provided."}
                     </p>
 

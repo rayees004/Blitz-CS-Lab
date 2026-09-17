@@ -387,15 +387,23 @@ class LabListCreateView(APIView):
         difficulty = request.query_params.get('difficulty')
         search = request.query_params.get('q')
 
+        subject_id = request.query_params.get('subject_id')
+        course_id = request.query_params.get('course_id')
+
         if category:
             labs = labs.filter(category__iexact=category)
         if difficulty:
             labs = labs.filter(difficulty__iexact=difficulty)
         if search:
             labs = labs.filter(name__icontains=search)
+        if subject_id:
+            labs = labs.filter(subject_id=subject_id)
+        if course_id:
+            labs = labs.filter(course_id=course_id)
 
         serializer = LabSerializer(labs, many=True)
         return Response({'count': labs.count(), 'results': serializer.data})
+
 
     def post(self, request):
         serializer = LabSerializer(data=request.data)
@@ -450,4 +458,46 @@ class LabDetailView(APIView):
         lab.is_active = False
         lab.save()
         return Response({'message': f'Lab "{name}" archived successfully.'})
+
+
+class SubjectLabsView(APIView):
+    """
+    GET  /api/subjects/<id>/labs/ — list active labs for a course/subject
+    POST /api/subjects/<id>/labs/ — create a lab linked to this course/subject
+    """
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return [IsAuthenticated()]
+        return [IsAdminOrStaff()]
+
+    def get(self, request, pk):
+        subject = get_object_or_404(Subject, pk=pk)
+        labs = subject.labs.prefetch_related('questions__hints').filter(is_active=True)
+        return Response({
+            'subject_id': subject.id,
+            'subject_name': subject.name,
+            'count': labs.count(),
+            'results': LabSerializer(labs, many=True).data,
+        })
+
+    def post(self, request, pk):
+        subject = get_object_or_404(Subject, pk=pk)
+        data = request.data.copy()
+        data['subject_id'] = subject.id
+        if subject.course_id and not data.get('course_id'):
+            data['course_id'] = subject.course_id
+        serializer = LabSerializer(data=data)
+        if serializer.is_valid():
+            lab = serializer.save()
+            return Response({
+                'message': f'Lab "{lab.name}" added to course "{subject.name}".',
+                'lab': LabSerializer(lab).data,
+            }, status=status.HTTP_201_CREATED)
+        errors = serializer.errors
+        first_key = next(iter(errors))
+        first_msg = errors[first_key]
+        if isinstance(first_msg, list):
+            first_msg = first_msg[0]
+        return Response({'detail': str(first_msg), 'errors': errors}, status=status.HTTP_400_BAD_REQUEST)
+
 

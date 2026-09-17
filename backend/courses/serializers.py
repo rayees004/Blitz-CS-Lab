@@ -13,18 +13,23 @@ class ModuleSerializer(serializers.ModelSerializer):
 class SubjectSerializer(serializers.ModelSerializer):
     course_name = serializers.CharField(source='course.name', read_only=True, default=None)
     module_count = serializers.SerializerMethodField()
+    lab_count = serializers.SerializerMethodField()
     modules = ModuleSerializer(many=True, read_only=True)
 
     class Meta:
         model = Subject
         fields = [
             'id', 'name', 'code', 'description', 'course', 'course_name',
-            'credits_or_hours', 'module_count', 'modules', 'is_active', 'created_at', 'updated_at'
+            'credits_or_hours', 'module_count', 'lab_count', 'modules', 'is_active', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
 
     def get_module_count(self, obj):
         return obj.modules.filter(is_active=True).count()
+
+    def get_lab_count(self, obj):
+        return obj.labs.filter(is_active=True).count()
+
 
 
 class CreateSubjectSerializer(serializers.ModelSerializer):
@@ -173,15 +178,25 @@ class LabQuestionSerializer(serializers.ModelSerializer):
 class LabSerializer(serializers.ModelSerializer):
     questions = LabQuestionSerializer(many=True, required=False, default=list)
     question_count = serializers.IntegerField(read_only=True)
+    subject_name = serializers.CharField(source='subject.name', read_only=True, default=None)
+    course_name = serializers.CharField(source='course.name', read_only=True, default=None)
+    subject_id = serializers.PrimaryKeyRelatedField(
+        queryset=Subject.objects.all(), source='subject', required=False, allow_null=True
+    )
+    course_id = serializers.PrimaryKeyRelatedField(
+        queryset=Course.objects.all(), source='course', required=False, allow_null=True
+    )
 
     class Meta:
         model = Lab
         fields = [
             'id', 'name', 'description', 'org', 'category', 'difficulty',
-            'points', 'target_url', 'course', 'subject', 'is_active',
+            'points', 'target_url', 'course', 'course_name', 'course_id',
+            'subject', 'subject_name', 'subject_id', 'is_active',
             'question_count', 'questions', 'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at', 'question_count']
+        read_only_fields = ['id', 'created_at', 'updated_at', 'question_count', 'course_name', 'subject_name']
+
 
     def validate_name(self, value):
         val = value.strip()

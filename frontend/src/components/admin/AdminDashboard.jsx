@@ -246,9 +246,18 @@ export default function AdminDashboard({ onNavigate }) {
                       <span style={{ fontFamily: mono, fontSize: 10.5, color: C.amber, display: "flex", alignItems: "center", gap: 3 }}>
                         <Lightbulb size={11} /> {hCount} Hints
                       </span>
+                      {l.subject_name && (
+                        <>
+                          <span style={{ color: C.border }}>·</span>
+                          <span style={{ fontFamily: mono, fontSize: 10.5, color: C.amber, maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {l.subject_name}
+                          </span>
+                        </>
+                      )}
                     </div>
                   </div>
                   <DiffBadge level={l.difficulty || l.diff || "Beginner"} />
+
                 </div>
               );
             })}

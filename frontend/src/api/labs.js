@@ -28,11 +28,30 @@ export async function fetchLabs(params = {}) {
   if (params.category) query.append('category', params.category);
   if (params.difficulty) query.append('difficulty', params.difficulty);
   if (params.q) query.append('q', params.q);
+  if (params.subject_id) query.append('subject_id', params.subject_id);
+  if (params.course_id) query.append('course_id', params.course_id);
 
   const qs = query.toString() ? `?${query.toString()}` : '';
   const res = await fetch(`${API_BASE}/labs/${qs}`, { headers: authHeaders() });
   return handleResponse(res);
 }
+
+/** Fetch labs for a specific Course (Subject) */
+export async function fetchSubjectLabs(subjectId) {
+  const res = await fetch(`${API_BASE}/subjects/${subjectId}/labs/`, { headers: authHeaders() });
+  return handleResponse(res);
+}
+
+/** Create a lab directly assigned to a Course (Subject) */
+export async function createSubjectLab(subjectId, payload) {
+  const res = await fetch(`${API_BASE}/subjects/${subjectId}/labs/`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(payload),
+  });
+  return handleResponse(res);
+}
+
 
 /** Fetch single lab detail */
 export async function fetchLab(labId) {

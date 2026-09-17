@@ -3,11 +3,11 @@ import {
   Plus, Search, X, BookOpen, Layers, Clock, Award,
   Loader2, AlertCircle, CheckCircle, RefreshCw, Trash2, Edit2,
   Bookmark, GraduationCap, BookMarked, ChevronDown, Save,
-  GripVertical, FileText, Sparkles
+  GripVertical, FileText, Sparkles, FlaskConical, Lightbulb, HelpCircle
 } from "lucide-react";
 import Panel from "../common/Panel";
 import Btn from "../common/Btn";
-import Badge from "../common/Badge";
+import Badge, { DiffBadge } from "../common/Badge";
 import { C, sans, mono } from "../../constants/theme";
 import {
   fetchSubjects,
@@ -19,6 +19,15 @@ import {
   updateModule,
   deleteModule,
 } from "../../api/subjects";
+import {
+  fetchLabs,
+  fetchSubjectLabs,
+  createSubjectLab,
+  updateLab,
+  deleteLab,
+} from "../../api/labs";
+import AddLabModal from "./AddLabModal";
+
 
 /* ── Form styling helpers ─────────────────────────────────── */
 const formField = (label, children, required) => (
@@ -817,13 +826,291 @@ function CourseModulesDrawer({ course, onClose, onModulesCountChanged }) {
   );
 }
 
+/* ── Course Labs Management Drawer (Course-based Lab Adding & Management) ── */
+function CourseLabsDrawer({ course, onClose, onLabsCountChanged }) {
+  const [labs, setLabs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingLab, setEditingLab] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
+
+  const loadCourseLabs = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetchSubjectLabs(course.id);
+      const list = res.results || [];
+      setLabs(list);
+      onLabsCountChanged?.(course.id, list.length);
+    } catch (err) {
+      console.warn("Error loading course labs via subject endpoint, trying filter:", err);
+      try {
+        const fallbackRes = await fetchLabs({ subject_id: course.id });
+        const list = fallbackRes.results || [];
+        setLabs(list);
+        onLabsCountChanged?.(course.id, list.length);
+      } catch (fErr) {
+        setError("Failed to load course labs.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [course.id, onLabsCountChanged]);
+
+  useEffect(() => {
+    loadCourseLabs();
+  }, [loadCourseLabs]);
+
+  const handleSaveLab = async (payload, editId) => {
+    payload.subject_id = course.id;
+    if (editId) {
+      await updateLab(editId, payload);
+    } else {
+      await createSubjectLab(course.id, payload);
+    }
+    await loadCourseLabs();
+  };
+
+  const handleDeleteLab = async (labId, labName) => {
+    if (!window.confirm(`Are you sure you want to remove lab "${labName}" from this course?`)) return;
+    setDeletingId(labId);
+    try {
+      await deleteLab(labId);
+      const updated = labs.filter(l => l.id !== labId);
+      setLabs(updated);
+      onLabsCountChanged?.(course.id, updated.length);
+    } catch (err) {
+      alert(err.message || "Failed to remove lab.");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const totalQuestions = labs.reduce((acc, l) => acc + (l.questions?.length || l.question_count || 1), 0);
+  const totalPoints = labs.reduce((acc, l) => acc + (l.points || 0), 0);
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div
+        onClick={onClose}
+        style={{
+          position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)",
+          zIndex: 900, backdropFilter: "blur(2px)",
+        }}
+      />
+
+      {/* Drawer */}
+      <div style={{
+        position: "fixed", top: 0, right: 0, bottom: 0, width: 560,
+        background: C.void, borderLeft: `1px solid ${C.borderLight}`,
+        zIndex: 901, display: "flex", flexDirection: "column",
+        boxShadow: "-16px 0 50px rgba(0,0,0,0.8)",
+        animation: "slideIn 200ms cubic-bezier(0.16,1,0.3,1)",
+      }}>
+        {/* Header */}
+        <div style={{ padding: "20px 24px", borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                {course.code && <Badge tone="cyan">{course.code}</Badge>}
+                <Badge tone="warn">{course.credits_or_hours}h Course</Badge>
+                <Badge tone="cyan">Track Labs</Badge>
+              </div>
+              <h2 style={{ fontFamily: sans, fontSize: 18, fontWeight: 700, color: C.hi, margin: "0 0 6px" }}>
+                {course.name}
+              </h2>
+              <div style={{ fontFamily: sans, fontSize: 12, color: C.mid, lineHeight: 1.45 }}>
+                Hands-on security labs, questions, and progressive hints attached to this course.
+              </div>
+            </div>
+
+            <button
+              onClick={onClose}
+              style={{
+                background: C.panel3, border: `1px solid ${C.border}`, borderRadius: 6,
+                cursor: "pointer", color: C.mid, padding: 6, display: "flex", flexShrink: 0
+              }}
+            >
+              <X size={16} />
+            </button>
+          </div>
+
+          {/* Quick Stats Banner */}
+          <div style={{
+            display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8,
+            marginTop: 16, background: C.panel2, border: `1px solid ${C.border}`,
+            borderRadius: 8, padding: "10px 14px",
+          }}>
+            <div>
+              <div style={{ fontFamily: mono, fontSize: 16, fontWeight: 700, color: C.cyan }}>{labs.length}</div>
+              <div style={{ fontFamily: sans, fontSize: 11, color: C.low }}>Course Labs</div>
+            </div>
+            <div>
+              <div style={{ fontFamily: mono, fontSize: 16, fontWeight: 700, color: C.hi }}>{totalQuestions}</div>
+              <div style={{ fontFamily: sans, fontSize: 11, color: C.low }}>Questions</div>
+            </div>
+            <div>
+              <div style={{ fontFamily: mono, fontSize: 16, fontWeight: 700, color: C.amber }}>{totalPoints} pts</div>
+              <div style={{ fontFamily: sans, fontSize: 11, color: C.low }}>Total Reward</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Labs List & Add Action */}
+        <div style={{ flex: 1, overflowY: "auto", padding: "18px 24px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+            <div style={{ fontFamily: mono, fontSize: 11, color: C.cyan, letterSpacing: "0.06em", fontWeight: 600 }}>
+              COURSE LABS ({labs.length})
+            </div>
+            <Btn
+              small
+              icon={Plus}
+              onClick={() => {
+                setEditingLab(null);
+                setModalOpen(true);
+              }}
+            >
+              Add Lab to Course
+            </Btn>
+          </div>
+
+          {loading ? (
+            <div style={{ textAlign: "center", padding: 40 }}>
+              <Loader2 size={24} color={C.cyan} style={{ animation: "spin 1s linear infinite", marginBottom: 8 }} />
+              <div style={{ fontFamily: sans, fontSize: 12, color: C.mid }}>Loading course labs...</div>
+            </div>
+          ) : labs.length === 0 ? (
+            <div style={{
+              background: C.panel2, border: `1px dashed ${C.borderLight}`,
+              borderRadius: 10, padding: 32, textAlign: "center",
+            }}>
+              <FlaskConical size={32} color={C.mid} style={{ marginBottom: 10 }} />
+              <div style={{ fontFamily: sans, fontSize: 14, fontWeight: 600, color: C.hi }}>
+                No labs assigned to this course yet
+              </div>
+              <p style={{ fontFamily: sans, fontSize: 12, color: C.low, margin: "6px 0 16px" }}>
+                Add interactive challenges, multi-step questions, flags, and progressive hints.
+              </p>
+              <Btn
+                icon={Plus}
+                onClick={() => {
+                  setEditingLab(null);
+                  setModalOpen(true);
+                }}
+              >
+                Add First Lab
+              </Btn>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {labs.map((l, lIdx) => {
+                const qList = l.questions || [];
+                const qCount = qList.length || l.question_count || 1;
+                const hCount = qList.reduce((acc, q) => acc + (q.hints?.length || 0), 0);
+
+                return (
+                  <div
+                    key={l.id || lIdx}
+                    style={{
+                      background: C.panel2,
+                      border: `1px solid ${C.border}`,
+                      borderRadius: 8,
+                      padding: "14px 16px",
+                      position: "relative",
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
+                          <span style={{ fontFamily: mono, fontSize: 10.5, color: C.amber, fontWeight: 700 }}>
+                            LAB #{String(lIdx + 1).padStart(2, "0")}
+                          </span>
+                          <span style={{ fontFamily: sans, fontSize: 13.5, fontWeight: 700, color: C.hi }}>
+                            {l.name}
+                          </span>
+                          <DiffBadge level={l.difficulty || "Beginner"} />
+                        </div>
+                        <p style={{ fontFamily: sans, fontSize: 12, color: C.mid, margin: "4px 0 10px", lineHeight: 1.45 }}>
+                          {l.description || "No description provided."}
+                        </p>
+                        <div style={{ display: "flex", alignItems: "center", gap: 14, fontFamily: mono, fontSize: 11, color: C.low }}>
+                          <span style={{ color: C.amber, fontWeight: 600 }}>{l.points || 100} pts</span>
+                          <span>·</span>
+                          <span style={{ display: "flex", alignItems: "center", gap: 4, color: C.cyan }}>
+                            <HelpCircle size={12} /> {qCount} Questions
+                          </span>
+                          <span>·</span>
+                          <span style={{ display: "flex", alignItems: "center", gap: 4, color: C.warn }}>
+                            <Lightbulb size={12} /> {hCount} Hints
+                          </span>
+                        </div>
+                      </div>
+
+                      <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                        <button
+                          onClick={() => {
+                            setEditingLab(l);
+                            setModalOpen(true);
+                          }}
+                          style={{
+                            background: C.panel3, border: `1px solid ${C.border}`,
+                            color: C.hi, borderRadius: 5, padding: "5px 8px",
+                            cursor: "pointer", display: "flex", alignItems: "center",
+                            fontSize: 11.5, fontFamily: sans,
+                          }}
+                          title="Edit Lab"
+                        >
+                          <Edit2 size={12} />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteLab(l.id, l.name)}
+                          disabled={deletingId === l.id}
+                          style={{
+                            background: "rgba(229,83,75,0.1)", border: `1px solid rgba(229,83,75,0.25)`,
+                            color: C.danger, borderRadius: 5, padding: "5px 8px",
+                            cursor: "pointer", display: "flex", alignItems: "center",
+                            fontSize: 11.5, fontFamily: sans,
+                          }}
+                          title="Remove Lab"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Modal to Add / Edit Lab for this Course */}
+        <AddLabModal
+          isOpen={modalOpen}
+          initialLab={editingLab}
+          initialCourse={course}
+          onClose={() => {
+            setModalOpen(false);
+            setEditingLab(null);
+          }}
+          onLabCreated={handleSaveLab}
+        />
+      </div>
+    </>
+  );
+}
+
 /* ── Main Component (Courses & Modules Management) ────────── */
 export default function AdminSubjects() {
+
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [drawerState, setDrawerState] = useState(null); // null | { mode: 'add' } | { mode: 'edit', course }
   const [modulesDrawerCourse, setModulesDrawerCourse] = useState(null); // null | course object
+  const [labsDrawerCourse, setLabsDrawerCourse] = useState(null); // null | course object
   const [deletingId, setDeletingId] = useState(null);
   const [toast, setToast] = useState(null);
 
@@ -870,6 +1157,9 @@ export default function AdminSubjects() {
       if (modulesDrawerCourse?.id === course.id) {
         setModulesDrawerCourse(null);
       }
+      if (labsDrawerCourse?.id === course.id) {
+        setLabsDrawerCourse(null);
+      }
     } catch (err) {
       showToast(err.message || "Failed to delete course", "error");
     } finally {
@@ -880,6 +1170,11 @@ export default function AdminSubjects() {
   const handleModulesCountChanged = useCallback((courseId, newCount) => {
     setCourses(prev => prev.map(c => c.id === courseId ? { ...c, module_count: newCount } : c));
   }, []);
+
+  const handleLabsCountChanged = useCallback((courseId, newCount) => {
+    setCourses(prev => prev.map(c => c.id === courseId ? { ...c, lab_count: newCount } : c));
+  }, []);
+
 
   // Filtering
   const filtered = courses.filter(c => {
@@ -1116,25 +1411,42 @@ export default function AdminSubjects() {
                   </div>
                 </div>
 
-                {/* Bottom stats & Module Management */}
+                {/* Bottom stats & Module / Lab Management */}
                 <div style={{
                   marginTop: 18, paddingTop: 14, borderTop: `1px solid ${C.border}`,
                   display: "flex", justifyContent: "space-between", alignItems: "center",
                 }}>
-                  <button
-                    onClick={() => setModulesDrawerCourse(c)}
-                    style={{
-                      background: "none", border: "none", padding: 0,
-                      display: "flex", alignItems: "center", gap: 6, cursor: "pointer",
-                    }}
-                  >
-                    <BookOpen size={13} color={C.amber} />
-                    <span style={{ fontFamily: mono, fontSize: 12, color: C.hi, fontWeight: 600 }}>
-                      {c.module_count || 0} module{c.module_count !== 1 ? "s" : ""}
-                    </span>
-                  </button>
+                  <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                    <button
+                      onClick={() => setModulesDrawerCourse(c)}
+                      style={{
+                        background: "none", border: "none", padding: 0,
+                        display: "flex", alignItems: "center", gap: 6, cursor: "pointer",
+                      }}
+                      title="View & manage course modules"
+                    >
+                      <BookOpen size={13} color={C.amber} />
+                      <span style={{ fontFamily: mono, fontSize: 12, color: C.hi, fontWeight: 600 }}>
+                        {c.module_count || 0} module{c.module_count !== 1 ? "s" : ""}
+                      </span>
+                    </button>
 
-                  <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                    <button
+                      onClick={() => setLabsDrawerCourse(c)}
+                      style={{
+                        background: "none", border: "none", padding: 0,
+                        display: "flex", alignItems: "center", gap: 6, cursor: "pointer",
+                      }}
+                      title="View & manage course labs"
+                    >
+                      <FlaskConical size={13} color={C.cyan} />
+                      <span style={{ fontFamily: mono, fontSize: 12, color: C.cyan, fontWeight: 600 }}>
+                        {c.lab_count || 0} lab{c.lab_count !== 1 ? "s" : ""}
+                      </span>
+                    </button>
+                  </div>
+
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                     <button
                       onClick={() => setDrawerState({ mode: "edit", course: c })}
                       style={{
@@ -1146,6 +1458,27 @@ export default function AdminSubjects() {
                       onMouseLeave={e => e.currentTarget.style.color = C.low}
                     >
                       Edit
+                    </button>
+
+                    <button
+                      onClick={() => setLabsDrawerCourse(c)}
+                      style={{
+                        background: C.panel3, border: `1px solid ${C.borderLight}`,
+                        borderRadius: 6, padding: "5px 10px", color: C.cyan,
+                        fontFamily: sans, fontSize: 12, fontWeight: 600, cursor: "pointer",
+                        display: "flex", alignItems: "center", gap: 5,
+                      }}
+                      onMouseEnter={e => {
+                        e.currentTarget.style.borderColor = C.cyan;
+                        e.currentTarget.style.background = "rgba(63,216,200,0.1)";
+                      }}
+                      onMouseLeave={e => {
+                        e.currentTarget.style.borderColor = C.borderLight;
+                        e.currentTarget.style.background = C.panel3;
+                      }}
+                    >
+                      <FlaskConical size={12} />
+                      <span>Labs →</span>
                     </button>
 
                     <button
@@ -1193,6 +1526,16 @@ export default function AdminSubjects() {
           onModulesCountChanged={handleModulesCountChanged}
         />
       )}
+
+      {/* Course Labs Management Drawer */}
+      {labsDrawerCourse && (
+        <CourseLabsDrawer
+          course={labsDrawerCourse}
+          onClose={() => setLabsDrawerCourse(null)}
+          onLabsCountChanged={handleLabsCountChanged}
+        />
+      )}
+
 
       <style>{`
         @keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }

@@ -12,12 +12,15 @@ from .views import (
     EnrollmentDetailView,
     LabListCreateView,
     LabDetailView,
+    SubjectLabsView,
 )
 
 urlpatterns = [
     # Labs, Questions & Hints
     path('labs/', LabListCreateView.as_view(), name='api_labs'),
     path('labs/<int:pk>/', LabDetailView.as_view(), name='api_lab_detail'),
+    path('subjects/<int:pk>/labs/', SubjectLabsView.as_view(), name='api_subject_labs'),
+
 
     # Classes (Courses)
     path('courses/', CourseListCreateView.as_view(), name='api_courses'),

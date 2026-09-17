@@ -1,11 +1,13 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   X, Plus, Trash2, HelpCircle, Lightbulb, AlertCircle,
-  Flag, Award, Globe, Server, CheckCircle2, ChevronDown, Sparkles
+  Flag, Award, Globe, Server, CheckCircle2, ChevronDown, Sparkles,
+  BookMarked
 } from "lucide-react";
 import Btn from "../common/Btn";
 import Badge from "../common/Badge";
 import { C, sans, mono } from "../../constants/theme";
+import { fetchSubjects } from "../../api/subjects";
 
 const CATEGORIES = [
   "Web Security",
@@ -21,10 +23,18 @@ const CATEGORIES = [
 
 const DIFFICULTIES = ["Beginner", "Intermediate", "Advanced"];
 
-export default function AddLabModal({ isOpen, onClose, onLabCreated, initialLab = null }) {
+export default function AddLabModal({ isOpen, onClose, onLabCreated, initialLab = null, initialCourse = null }) {
   if (!isOpen) return null;
 
   const isEdit = Boolean(initialLab?.id && typeof initialLab.id === "number");
+  const [courses, setCourses] = useState([]);
+
+  useEffect(() => {
+    fetchSubjects().then((data) => {
+      setCourses(data.results || []);
+    }).catch((err) => console.warn("Could not load courses for lab modal:", err));
+  }, []);
+
 
   const [form, setForm] = useState(() => {
     if (initialLab) {
@@ -36,7 +46,9 @@ export default function AddLabModal({ isOpen, onClose, onLabCreated, initialLab 
         difficulty: initialLab.diff || initialLab.difficulty || "Beginner",
         points: initialLab.pts || initialLab.points || 100,
         target_url: initialLab.target_url || "",
+        subject_id: initialCourse?.id || initialLab.subject_id || initialLab.subject || "",
         questions: (initialLab.questions && initialLab.questions.length > 0)
+
           ? initialLab.questions.map((q) => ({
               title: q.title || "",
               description: q.description || "",
@@ -71,7 +83,9 @@ export default function AddLabModal({ isOpen, onClose, onLabCreated, initialLab 
       difficulty: "Beginner",
       points: 100,
       target_url: "",
+      subject_id: initialCourse?.id ? String(initialCourse.id) : "",
       questions: [
+
         {
           title: "Vulnerability Discovery & Exploitation",
           description: "Identify the vulnerability and extract the validation flag.",
@@ -198,7 +212,9 @@ export default function AddLabModal({ isOpen, onClose, onLabCreated, initialLab 
         difficulty: form.difficulty,
         points: Number(form.points) || 100,
         target_url: form.target_url.trim(),
+        subject_id: form.subject_id ? Number(form.subject_id) : null,
         questions: form.questions.map((q, qIdx) => ({
+
           title: q.title.trim(),
           description: q.description.trim(),
           flag: q.flag.trim(),
@@ -374,9 +390,45 @@ export default function AddLabModal({ isOpen, onClose, onLabCreated, initialLab 
             </div>
 
             <div style={{ marginBottom: 14 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                <label style={{ fontFamily: sans, fontSize: 12, color: C.mid, display: "flex", alignItems: "center", gap: 5 }}>
+                  <BookMarked size={13} color={C.amber} />
+                  Assigned Course (Curriculum Track)
+                </label>
+                {initialCourse && (
+                  <Badge tone="cyan">Locked to {initialCourse.code || initialCourse.name}</Badge>
+                )}
+              </div>
+              <select
+                value={form.subject_id}
+                onChange={(e) => updateField("subject_id", e.target.value)}
+                style={{
+                  width: "100%",
+                  boxSizing: "border-box",
+                  background: C.panel2,
+                  border: `1px solid ${form.subject_id ? C.amberDim : C.border}`,
+                  borderRadius: 7,
+                  padding: "9px 12px",
+                  fontFamily: sans,
+                  fontSize: 12.5,
+                  color: C.hi,
+                  outline: "none",
+                }}
+              >
+                <option value="">— Standalone Lab (Not assigned to any course) —</option>
+                {courses.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.code ? `[${c.code}] ` : ""}{c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div style={{ marginBottom: 14 }}>
               <label style={{ display: "block", fontFamily: sans, fontSize: 12, color: C.mid, marginBottom: 6 }}>
                 Description / Mission Objective <span style={{ color: C.amber }}>*</span>
               </label>
+
               <textarea
                 placeholder="Describe the environment scenario, exploitation objective, and expected vulnerabilities..."
                 value={form.description}
