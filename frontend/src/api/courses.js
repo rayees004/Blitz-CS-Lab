@@ -134,3 +134,14 @@ export async function removeEnrollment(enrollmentId) {
   });
   return handleResponse(res);
 }
+
+/** Bulk assign multiple courses to a student (with sync option) */
+export async function assignStudentCourses(studentId, courseIds, feeStatus = 'DUE', sync = true) {
+  const res = await fetch(`${API_BASE}/students/${studentId}/assign-courses/`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ course_ids: courseIds, fee_status: feeStatus, sync }),
+  });
+  return handleResponse(res);
+}
+

@@ -2,14 +2,16 @@ import React, { useState, useEffect, useCallback } from "react";
 import {
   Plus, MoreHorizontal, Search, X,
   Eye, EyeOff, Loader2, AlertCircle, CheckCircle,
-  UserPlus, Trash2, RefreshCw, BookOpen,
+  UserPlus, Trash2, RefreshCw, BookOpen, Layers,
 } from "lucide-react";
 import Panel from "../common/Panel";
 import Btn from "../common/Btn";
 import Badge from "../common/Badge";
 import { C, sans, mono } from "../../constants/theme";
 import { fetchStudents, createStudent, deleteStudent } from "../../api/students";
+import { fetchSubjects } from "../../api/subjects";
 import StudentDetailPanel from "./StudentDetailPanel";
+import AssignSubjectsModal from "./AssignSubjectsModal";
 
 /* ─── small field helpers ───────────────────────────────── */
 const formField = (label, children, required) => (
@@ -60,6 +62,7 @@ const EMPTY = {
   first_name: "", last_name: "", username: "", email: "",
   phone_number: "", organization: "Blitz Cyber Lab",
   password: "", confirm_password: "",
+  subject_ids: [],
 };
 
 function AddStudentDrawer({ onClose, onCreated }) {
@@ -67,8 +70,26 @@ function AddStudentDrawer({ onClose, onCreated }) {
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
   const [globalError, setGlobalError] = useState("");
+  const [availableSubjects, setAvailableSubjects] = useState([]);
+  const [loadingSubjects, setLoadingSubjects] = useState(true);
+
+  useEffect(() => {
+    fetchSubjects()
+      .then(res => setAvailableSubjects(res.results || []))
+      .catch(() => {})
+      .finally(() => setLoadingSubjects(false));
+  }, []);
 
   const set = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.value }));
+
+  const toggleSubject = (id) => {
+    setForm(f => ({
+      ...f,
+      subject_ids: f.subject_ids.includes(id)
+        ? f.subject_ids.filter(x => x !== id)
+        : [...f.subject_ids, id]
+    }));
+  };
 
   const validate = () => {
     const e = {};
@@ -142,6 +163,61 @@ function AddStudentDrawer({ onClose, onCreated }) {
           <FieldInput label="Username" required placeholder="e.g. rohith_k" value={form.username} onChange={set("username")} error={errors.username} />
           <FieldInput label="Phone Number" placeholder="+91 98765 43210" value={form.phone_number} onChange={set("phone_number")} error={errors.phone_number} />
           <FieldInput label="Organization / Batch" placeholder="Blitz Cyber Lab" value={form.organization} onChange={set("organization")} error={errors.organization} />
+
+          {/* Initial Subjects Selection */}
+          <div style={{ fontFamily: mono, fontSize: 10, color: C.low, letterSpacing: "0.05em", marginBottom: 10, marginTop: 6, paddingTop: 16, borderTop: `1px solid ${C.border}` }}>
+            ASSIGN SUBJECTS (OPTIONAL)
+          </div>
+          <div style={{ marginBottom: 18 }}>
+            <div style={{ fontFamily: sans, fontSize: 11.5, color: C.mid, marginBottom: 8 }}>
+              Select subjects to assign this student immediately (controls lab access):
+            </div>
+            {loadingSubjects ? (
+              <div style={{ color: C.low, fontFamily: sans, fontSize: 12 }}>Loading subjects...</div>
+            ) : availableSubjects.length === 0 ? (
+              <div style={{ color: C.low, fontFamily: sans, fontSize: 12 }}>No subjects available.</div>
+            ) : (
+              <div style={{ maxHeight: 140, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6, padding: "4px 2px" }}>
+                {availableSubjects.map((s) => {
+                  const isChecked = form.subject_ids.includes(s.id);
+                  return (
+                    <div
+                      key={s.id}
+                      onClick={() => toggleSubject(s.id)}
+                      style={{
+                        display: "flex", alignItems: "center", justifyContent: "space-between",
+                        padding: "7px 10px", borderRadius: 6, cursor: "pointer",
+                        background: isChecked ? "rgba(240, 180, 41, 0.08)" : C.panel2,
+                        border: `1px solid ${isChecked ? C.amber : C.border}`,
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => {}}
+                          style={{ accentColor: C.amber, cursor: "pointer" }}
+                        />
+                        <span style={{ fontFamily: sans, fontSize: 12, color: isChecked ? C.hi : C.mid, fontWeight: isChecked ? 600 : 400 }}>
+                          {s.name}
+                        </span>
+                        {s.code && (
+                          <span style={{ fontFamily: mono, fontSize: 10, color: C.cyan, background: "rgba(63,216,200,0.1)", padding: "1px 5px", borderRadius: 3 }}>
+                            {s.code}
+                          </span>
+                        )}
+                      </div>
+                      {s.credits_or_hours ? (
+                        <span style={{ fontFamily: mono, fontSize: 10, color: C.low }}>
+                          {s.credits_or_hours} hrs
+                        </span>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
 
           <div style={{ fontFamily: mono, fontSize: 10, color: C.low, letterSpacing: "0.05em", marginBottom: 14, marginTop: 6, paddingTop: 16, borderTop: `1px solid ${C.border}` }}>SET PASSWORD</div>
           <FieldPassword label="Password" required placeholder="Min. 8 characters" value={form.password} onChange={set("password")} error={errors.password} />
@@ -226,6 +302,7 @@ export default function AdminStudents() {
   const [menuOpen, setMenuOpen] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [selectedStudent, setSelectedStudent] = useState(null);
+  const [assignSubjectsStudent, setAssignSubjectsStudent] = useState(null);
   const [toast, setToast] = useState(null);
 
   const load = useCallback(async () => {
@@ -325,10 +402,10 @@ export default function AdminStudents() {
       {!error && (
         <Panel style={{ overflow: "hidden" }}>
           {/* Column headers */}
-          <div style={{ display: "grid", gridTemplateColumns: "1.8fr 1.6fr 1fr 0.8fr 0.8fr 0.4fr", padding: "10px 18px", borderBottom: `1px solid ${C.border}`, fontFamily: mono, fontSize: 10.5, color: C.low, letterSpacing: "0.04em" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1.7fr 1.5fr 1.7fr 0.8fr 0.8fr 0.4fr", padding: "10px 18px", borderBottom: `1px solid ${C.border}`, fontFamily: mono, fontSize: 10.5, color: C.low, letterSpacing: "0.04em" }}>
             <div>NAME</div>
             <div>EMAIL</div>
-            <div>COURSES</div>
+            <div>SUBJECTS</div>
             <div>STATUS</div>
             <div>JOINED</div>
             <div />
@@ -343,8 +420,8 @@ export default function AdminStudents() {
 
           {/* Loading skeletons */}
           {loading && [1, 2, 3].map(i => (
-            <div key={i} style={{ display: "grid", gridTemplateColumns: "1.8fr 1.6fr 1fr 0.8fr 0.8fr 0.4fr", padding: "13px 18px", alignItems: "center", borderTop: `1px solid ${C.border}`, gap: 12 }}>
-              {[120, 160, 70, 60, 50, 20].map((w, j) => (
+            <div key={i} style={{ display: "grid", gridTemplateColumns: "1.7fr 1.5fr 1.7fr 0.8fr 0.8fr 0.4fr", padding: "13px 18px", alignItems: "center", borderTop: `1px solid ${C.border}`, gap: 12 }}>
+              {[120, 160, 110, 60, 50, 20].map((w, j) => (
                 <div key={j} style={{ height: 12, width: w, borderRadius: 4, background: C.panel3, animation: "pulse 1.4s ease infinite" }} />
               ))}
             </div>
@@ -359,6 +436,7 @@ export default function AdminStudents() {
               : "—";
             const isMenuOpen = menuOpen === s.id;
             const isSelected = selectedStudent?.id === s.id;
+            const enrolledSubjects = s.enrolled_subjects || [];
 
             return (
               <div
@@ -366,7 +444,7 @@ export default function AdminStudents() {
                 onClick={() => setSelectedStudent(s)}
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "1.8fr 1.6fr 1fr 0.8fr 0.8fr 0.4fr",
+                  gridTemplateColumns: "1.7fr 1.5fr 1.7fr 0.8fr 0.8fr 0.4fr",
                   padding: "13px 18px",
                   alignItems: "center",
                   borderTop: i === 0 ? "none" : `1px solid ${C.border}`,
@@ -397,10 +475,75 @@ export default function AdminStudents() {
                 {/* Email */}
                 <span style={{ fontFamily: mono, fontSize: 11.5, color: C.mid }}>{s.email || "—"}</span>
 
-                {/* Courses count */}
-                <div style={{ display: "flex", alignItems: "center", gap: 6, color: C.mid, fontFamily: sans, fontSize: 12 }}>
-                  <BookOpen size={12} color={C.low} />
-                  View courses
+                {/* Subjects pills with click to assign */}
+                <div
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setAssignSubjectsStudent(s);
+                  }}
+                  title="Click to assign or manage multiple subjects (controls lab access)"
+                  style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}
+                >
+                  {enrolledSubjects.length > 0 ? (
+                    <>
+                      {enrolledSubjects.slice(0, 2).map((subj) => (
+                        <span
+                          key={subj.id}
+                          style={{
+                            fontFamily: sans,
+                            fontSize: 11,
+                            fontWeight: 600,
+                            color: C.amber,
+                            background: "rgba(240,180,41,0.1)",
+                            border: "1px solid rgba(240,180,41,0.25)",
+                            padding: "2px 7px",
+                            borderRadius: 4,
+                            whiteSpace: "nowrap",
+                            maxWidth: 115,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                          }}
+                        >
+                          {subj.code || subj.name}
+                        </span>
+                      ))}
+                      {enrolledSubjects.length > 2 && (
+                        <span
+                          style={{
+                            fontFamily: mono,
+                            fontSize: 10,
+                            color: C.mid,
+                            background: C.panel3,
+                            padding: "2px 5px",
+                            borderRadius: 4,
+                            border: `1px solid ${C.border}`,
+                          }}
+                        >
+                          +{enrolledSubjects.length - 2}
+                        </span>
+                      )}
+                    </>
+                  ) : (
+                    <span
+                      style={{
+                        fontFamily: mono,
+                        fontSize: 11,
+                        color: C.low,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 4,
+                        background: C.panel3,
+                        padding: "3px 8px",
+                        borderRadius: 4,
+                        border: `1px dashed ${C.border}`,
+                        transition: "all 120ms ease",
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.color = C.amber; e.currentTarget.style.borderColor = C.amber; }}
+                      onMouseLeave={e => { e.currentTarget.style.color = C.low; e.currentTarget.style.borderColor = C.border; }}
+                    >
+                      <Plus size={11} /> Assign
+                    </span>
+                  )}
                 </div>
 
                 {/* Status */}
@@ -420,16 +563,24 @@ export default function AdminStudents() {
 
                   {isMenuOpen && (
                     <div
-                      style={{ position: "absolute", right: 0, top: "calc(100% + 4px)", background: C.panel, border: `1px solid ${C.border}`, borderRadius: 8, padding: 4, minWidth: 160, zIndex: 50, boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}
+                      style={{ position: "absolute", right: 0, top: "calc(100% + 4px)", background: C.panel, border: `1px solid ${C.border}`, borderRadius: 8, padding: 4, minWidth: 165, zIndex: 50, boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}
                       onClick={e => e.stopPropagation()}
                     >
+                      <button
+                        onClick={() => { setMenuOpen(null); setAssignSubjectsStudent(s); }}
+                        style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "8px 10px", background: "none", border: "none", color: C.amber, fontFamily: sans, fontSize: 12.5, cursor: "pointer", borderRadius: 5, textAlign: "left", fontWeight: 600 }}
+                        onMouseEnter={e => e.currentTarget.style.background = "rgba(240,180,41,0.1)"}
+                        onMouseLeave={e => e.currentTarget.style.background = "none"}
+                      >
+                        <Layers size={13} color={C.amber} /> Assign Subjects
+                      </button>
                       <button
                         onClick={() => { setMenuOpen(null); setSelectedStudent(s); }}
                         style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "8px 10px", background: "none", border: "none", color: C.mid, fontFamily: sans, fontSize: 12.5, cursor: "pointer", borderRadius: 5, textAlign: "left" }}
                         onMouseEnter={e => e.currentTarget.style.background = C.panel2}
                         onMouseLeave={e => e.currentTarget.style.background = "none"}
                       >
-                        <BookOpen size={13} /> View Details
+                        <Eye size={13} /> View Details
                       </button>
                       <button
                         onClick={() => { setMenuOpen(null); setConfirmDelete(s); }}
@@ -450,6 +601,23 @@ export default function AdminStudents() {
 
       {/* ── Modals & Panels ── */}
       {showAddDrawer && <AddStudentDrawer onClose={() => setShowAddDrawer(false)} onCreated={handleCreated} />}
+
+      {assignSubjectsStudent && (
+        <AssignSubjectsModal
+          student={assignSubjectsStudent}
+          onClose={() => setAssignSubjectsStudent(null)}
+          onUpdated={(updatedStudent) => {
+            setStudents(prev => prev.map(s => s.id === updatedStudent.id ? updatedStudent : s));
+            if (selectedStudent?.id === updatedStudent.id) {
+              setSelectedStudent(updatedStudent);
+            }
+            setToast({
+              message: `Subjects updated for ${updatedStudent.full_name || updatedStudent.username}!`,
+              type: "success",
+            });
+          }}
+        />
+      )}
 
       {selectedStudent && (
         <StudentDetailPanel

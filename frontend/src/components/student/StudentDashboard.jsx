@@ -21,7 +21,8 @@ export default function StudentDashboard({ go }) {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState("ALL"); // ALL | IN_PROGRESS | COMPLETED | NOT_STARTED
+  const [statusFilter, setStatusFilter] = useState("ALL"); // ALL | MY_COURSES | IN_PROGRESS | COMPLETED | LOCKED
+  const [lockedLabNotice, setLockedLabNotice] = useState(null);
 
   // Lab modal state for attending and submitting marks
   const [attendingLab, setAttendingLab] = useState(null);
@@ -44,9 +45,9 @@ export default function StudentDashboard({ go }) {
     loadData();
   }, [loadData]);
 
-  // Find most relevant lab to continue
-  const inProgressLab = labs.find((l) => l.submission_status === "IN_PROGRESS");
-  const heroLab = inProgressLab || labs[0];
+  // Find most relevant lab to continue (must be attendable, not locked!)
+  const inProgressLab = labs.find((l) => l.submission_status === "IN_PROGRESS" && !l.is_locked);
+  const heroLab = inProgressLab || labs.find((l) => !l.is_locked) || labs[0];
 
   // Filtering labs for the Attend section
   const filteredLabs = labs.filter((lab) => {
@@ -54,13 +55,16 @@ export default function StudentDashboard({ go }) {
       searchQuery === "" ||
       lab.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       lab.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (lab.subject_name && lab.subject_name.toLowerCase().includes(searchQuery.toLowerCase()));
+      (lab.subject_name && lab.subject_name.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (lab.subject_code && lab.subject_code.toLowerCase().includes(searchQuery.toLowerCase()));
 
     if (!matchSearch) return false;
 
-    if (statusFilter === "IN_PROGRESS") return lab.submission_status === "IN_PROGRESS";
+    if (statusFilter === "MY_SUBJECTS") return !lab.is_locked;
+    if (statusFilter === "LOCKED") return Boolean(lab.is_locked);
+    if (statusFilter === "IN_PROGRESS") return lab.submission_status === "IN_PROGRESS" && !lab.is_locked;
     if (statusFilter === "COMPLETED") return lab.submission_status === "COMPLETED";
-    if (statusFilter === "NOT_STARTED") return lab.submission_status === "NOT_STARTED";
+    if (statusFilter === "NOT_STARTED") return lab.submission_status === "NOT_STARTED" && !lab.is_locked;
     return true;
   });
 
@@ -418,7 +422,7 @@ export default function StudentDashboard({ go }) {
               <Search size={14} color={C.low} />
               <input
                 type="text"
-                placeholder="Search labs or courses..."
+                placeholder="Search labs or subjects..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 style={{
@@ -434,12 +438,13 @@ export default function StudentDashboard({ go }) {
             </div>
 
             {/* Status Filter Chips */}
-            <div style={{ display: "flex", background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 6, padding: 2 }}>
+            <div style={{ display: "flex", background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 6, padding: 2, flexWrap: "wrap" }}>
               {[
                 { id: "ALL", label: "All Labs" },
+                { id: "MY_SUBJECTS", label: "My Subjects" },
                 { id: "IN_PROGRESS", label: "In Progress" },
                 { id: "COMPLETED", label: "Completed" },
-                { id: "NOT_STARTED", label: "Available" },
+                { id: "LOCKED", label: "Locked" },
               ].map((tab) => (
                 <button
                   key={tab.id}
@@ -479,6 +484,7 @@ export default function StudentDashboard({ go }) {
             {filteredLabs.map((lab) => {
               const isCompleted = lab.submission_status === "COMPLETED";
               const isInProgress = lab.submission_status === "IN_PROGRESS";
+              const isLocked = Boolean(lab.is_locked);
 
               return (
                 <Panel
@@ -488,13 +494,16 @@ export default function StudentDashboard({ go }) {
                     display: "flex",
                     flexDirection: "column",
                     justifyContent: "space-between",
-                    border: isCompleted
+                    border: isLocked
+                      ? `1px dashed rgba(229, 83, 75, 0.35)`
+                      : isCompleted
                       ? `1px solid rgba(0, 230, 118, 0.35)`
                       : isInProgress
                       ? `1px solid rgba(245, 166, 35, 0.35)`
                       : `1px solid ${C.border}`,
-                    background: C.panel,
+                    background: isLocked ? "rgba(18, 18, 24, 0.7)" : C.panel,
                     transition: "border-color 0.2s ease",
+                    opacity: isLocked ? 0.88 : 1,
                   }}
                 >
                   <div>
@@ -518,7 +527,25 @@ export default function StudentDashboard({ go }) {
                       </div>
 
                       {/* Status Tag */}
-                      {isCompleted ? (
+                      {isLocked ? (
+                        <span
+                          style={{
+                            fontFamily: mono,
+                            fontSize: 10.5,
+                            color: C.danger,
+                            background: "rgba(229, 83, 75, 0.12)",
+                            padding: "2px 7px",
+                            borderRadius: 4,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 4,
+                            fontWeight: 600,
+                            border: "1px solid rgba(229, 83, 75, 0.3)",
+                          }}
+                        >
+                          <Lock size={11} /> LOCKED
+                        </span>
+                      ) : isCompleted ? (
                         <span
                           style={{
                             fontFamily: mono,
@@ -568,21 +595,21 @@ export default function StudentDashboard({ go }) {
                       )}
                     </div>
 
-                    {/* Course Badge if available */}
+                    {/* Subject Badge if available */}
                     {lab.subject_name && (
                       <div style={{ marginBottom: 6 }}>
                         <span
                           style={{
                             fontFamily: mono,
                             fontSize: 10.5,
-                            color: C.mid,
-                            background: C.void,
+                            color: isLocked ? C.low : C.cyan,
+                            background: isLocked ? "rgba(255,255,255,0.03)" : "rgba(0, 229, 255, 0.08)",
                             padding: "2px 6px",
                             borderRadius: 4,
-                            border: `1px solid ${C.border}`,
+                            border: `1px solid ${isLocked ? C.border : "rgba(0, 229, 255, 0.2)"}`,
                           }}
                         >
-                          Course: {lab.subject_name}
+                          Subject: {lab.subject_name}{lab.subject_code ? ` (${lab.subject_code})` : ""}
                         </span>
                       </div>
                     )}
@@ -607,11 +634,36 @@ export default function StudentDashboard({ go }) {
                       {lab.description || "Hands-on challenge testing vulnerability assessment, exploitation, and mitigation verification."}
                     </p>
 
+                    {/* Locked Notice Banner */}
+                    {isLocked && (
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "flex-start",
+                          gap: 7,
+                          background: "rgba(229, 83, 75, 0.08)",
+                          border: "1px solid rgba(229, 83, 75, 0.25)",
+                          borderRadius: 6,
+                          padding: "7px 10px",
+                          marginTop: 10,
+                          fontFamily: sans,
+                          fontSize: 11.5,
+                          color: "#fca5a5",
+                          lineHeight: 1.4,
+                        }}
+                      >
+                        <Lock size={12} style={{ flexShrink: 0, marginTop: 2, color: C.danger }} />
+                        <span>{lab.lock_reason || `Requires assignment to subject ${lab.subject_name || 'assigned subject'}.`}</span>
+                      </div>
+                    )}
+
                     {/* Target and Questions Info */}
                     <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 12, fontFamily: mono, fontSize: 11, color: C.low }}>
                       <span>{lab.question_count || 0} Questions</span>
                       <span>·</span>
-                      <span style={{ color: C.cyan }}>Target Active</span>
+                      <span style={{ color: isLocked ? C.low : C.cyan }}>
+                        {isLocked ? "Access Locked" : "Target Active"}
+                      </span>
                       <span>·</span>
                       <span style={{ color: lab.attend_count > 1 ? C.amber : C.low }}>
                         Attended {lab.attend_count || 0}x
@@ -619,7 +671,7 @@ export default function StudentDashboard({ go }) {
                     </div>
 
                     {/* Progress Bar for In Progress or Completed */}
-                    {(isInProgress || isCompleted) && (
+                    {!isLocked && (isInProgress || isCompleted) && (
                       <div style={{ marginTop: 12 }}>
                         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4, fontFamily: mono, fontSize: 10.5, color: C.mid }}>
                           <span>{lab.solved_questions_count || 0}/{lab.question_count || 0} Questions Solved</span>
@@ -632,18 +684,41 @@ export default function StudentDashboard({ go }) {
 
                   {/* Card Bottom CTA Button */}
                   <div style={{ marginTop: 16, paddingTop: 12, borderTop: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <span style={{ fontFamily: mono, fontSize: 11, color: C.mid }}>
-                      {isCompleted ? "Completed" : isInProgress ? "In Progress" : "Not Started"}
+                    <span style={{ fontFamily: mono, fontSize: 11, color: isLocked ? C.danger : C.mid }}>
+                      {isLocked ? "Enrollment Required" : isCompleted ? "Completed" : isInProgress ? "In Progress" : "Not Started"}
                     </span>
 
-                    <Btn
-                      sm
-                      icon={isCompleted ? Check : Play}
-                      onClick={() => setAttendingLab(lab)}
-                      tone={isCompleted ? "ghost" : isInProgress ? "primary" : "default"}
-                    >
-                      {isCompleted ? "Review Lab" : isInProgress ? "Continue & Submit" : "Attend Lab"}
-                    </Btn>
+                    {isLocked ? (
+                      <button
+                        type="button"
+                        onClick={() => setLockedLabNotice(lab)}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 6,
+                          padding: "6px 12px",
+                          borderRadius: 6,
+                          border: `1px solid rgba(229, 83, 75, 0.35)`,
+                          background: "rgba(229, 83, 75, 0.1)",
+                          color: "#fca5a5",
+                          fontFamily: sans,
+                          fontSize: 12,
+                          fontWeight: 600,
+                          cursor: "pointer",
+                        }}
+                      >
+                        <Lock size={12} /> Locked
+                      </button>
+                    ) : (
+                      <Btn
+                        sm
+                        icon={isCompleted ? Check : Play}
+                        onClick={() => setAttendingLab(lab)}
+                        tone={isCompleted ? "ghost" : isInProgress ? "primary" : "default"}
+                      >
+                        {isCompleted ? "Review Lab" : isInProgress ? "Continue & Submit" : "Attend Lab"}
+                      </Btn>
+                    )}
                   </div>
                 </Panel>
               );
@@ -651,6 +726,92 @@ export default function StudentDashboard({ go }) {
           </div>
         )}
       </div>
+
+      {/* Locked Lab Notice Modal */}
+      {lockedLabNotice && (
+        <>
+          <div
+            onClick={() => setLockedLabNotice(null)}
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(0,0,0,0.72)",
+              backdropFilter: "blur(4px)",
+              zIndex: 1200,
+            }}
+          />
+          <div
+            style={{
+              position: "fixed",
+              top: "50%",
+              left: "50%",
+              transform: "translate(-50%, -50%)",
+              width: 440,
+              maxWidth: "92vw",
+              background: C.panel,
+              border: `1px solid ${C.border}`,
+              borderRadius: 12,
+              padding: 24,
+              zIndex: 1201,
+              boxShadow: "0 24px 70px rgba(0,0,0,0.7)",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+              <div
+                style={{
+                  width: 42,
+                  height: 42,
+                  borderRadius: 10,
+                  background: "rgba(229, 83, 75, 0.12)",
+                  border: "1px solid rgba(229, 83, 75, 0.3)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                }}
+              >
+                <Lock size={20} color={C.danger} />
+              </div>
+              <div>
+                <div style={{ fontFamily: sans, fontSize: 16, fontWeight: 700, color: C.hi }}>
+                  Lab Access Locked
+                </div>
+                <div style={{ fontFamily: mono, fontSize: 11, color: C.low }}>
+                  {lockedLabNotice.name}
+                </div>
+              </div>
+            </div>
+
+            <p style={{ fontFamily: sans, fontSize: 13, color: C.mid, lineHeight: 1.55, margin: "0 0 16px" }}>
+              {lockedLabNotice.lock_reason || `You must be assigned to subject '${lockedLabNotice.subject_name}' to access and attend this practical lab session.`}
+            </p>
+
+            <div
+              style={{
+                background: C.panel2,
+                border: `1px solid ${C.border}`,
+                borderRadius: 8,
+                padding: "10px 14px",
+                marginBottom: 20,
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <span style={{ fontFamily: sans, fontSize: 12, color: C.low }}>Required Subject:</span>
+              <span style={{ fontFamily: mono, fontSize: 12, color: C.amber, fontWeight: 600 }}>
+                {lockedLabNotice.subject_name || "Assigned Subject"} {lockedLabNotice.subject_code ? `(${lockedLabNotice.subject_code})` : ""}
+              </span>
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              <Btn onClick={() => setLockedLabNotice(null)} style={{ padding: "8px 20px" }}>
+                Understood
+              </Btn>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Interactive Lab Attendee & Mark Submitting Modal */}
       {attendingLab && (

@@ -4,7 +4,7 @@ import LabCard from "./LabCard";
 import Btn from "../common/Btn";
 import { C, sans, mono } from "../../constants/theme";
 import { LABS as MOCK_LABS } from "../../data/mockData";
-import { fetchLabs } from "../../api/labs";
+import { fetchLabs, fetchStudentLabs } from "../../api/labs";
 
 export default function LabExplorer({ go }) {
   const [labs, setLabs] = useState([]);
@@ -14,10 +14,10 @@ export default function LabExplorer({ go }) {
 
   useEffect(() => {
     let isMounted = true;
-    fetchLabs()
+    fetchStudentLabs()
       .then((data) => {
         if (!isMounted) return;
-        const results = data.results || [];
+        const results = data.labs || [];
         if (results.length > 0) {
           setLabs(results);
         } else {
@@ -25,8 +25,15 @@ export default function LabExplorer({ go }) {
         }
       })
       .catch((err) => {
-        console.warn("Could not fetch server labs, fallback to mock labs:", err);
-        if (isMounted) setLabs(MOCK_LABS);
+        console.warn("Could not fetch student labs, fallback to public labs:", err);
+        fetchLabs()
+          .then((data) => {
+            if (!isMounted) return;
+            setLabs(data.results || MOCK_LABS);
+          })
+          .catch(() => {
+            if (isMounted) setLabs(MOCK_LABS);
+          });
       })
       .finally(() => {
         if (isMounted) setLoading(false);

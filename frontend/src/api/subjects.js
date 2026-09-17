@@ -112,3 +112,25 @@ export async function deleteModule(moduleId) {
   });
   return handleResponse(res);
 }
+
+/** Bulk assign/sync multiple subjects for a student */
+export async function assignStudentSubjects(studentId, subjectIds, sync = true) {
+  const res = await fetch(`${API_BASE}/students/${studentId}/assign-subjects/`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({
+      subject_ids: subjectIds,
+      sync,
+    }),
+  });
+  return handleResponse(res);
+}
+
+/** Fetch subjects assigned to a student */
+export async function fetchStudentSubjects(studentId) {
+  const res = await fetch(`${API_BASE}/students/${studentId}/subjects/`, {
+    headers: authHeaders(),
+  });
+  return handleResponse(res);
+}
+

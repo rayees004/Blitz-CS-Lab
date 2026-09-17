@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import {
   X, BookOpen, Plus, AlertCircle, Loader2, CheckCircle,
   PauseCircle, PlayCircle, Trash2, ChevronDown, Mail,
-  Phone, Building2, Calendar, User, Shield,
+  Phone, Building2, Calendar, User, Shield, Layers,
 } from "lucide-react";
 import Btn from "../common/Btn";
 import Badge from "../common/Badge";
@@ -609,6 +609,66 @@ export default function StudentDetailPanel({ student, onClose, onStudentUpdate }
               <InfoRow icon={Calendar} label="Enrolled On" value={joinedDate} />
               <InfoRow icon={Shield} label="Account Type" value="Student" />
             </div>
+          </div>
+
+          {/* Assigned Subjects (Lab Access Gate) */}
+          <div style={{ marginBottom: 24 }}>
+            <div style={{
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              marginBottom: 10,
+            }}>
+              <div>
+                <div style={{ fontFamily: sans, fontSize: 14, fontWeight: 700, color: C.hi, display: "flex", alignItems: "center", gap: 6 }}>
+                  <Layers size={14} color={C.amber} /> Assigned Subjects (Lab Access)
+                </div>
+                <div style={{ fontFamily: mono, fontSize: 10.5, color: C.low, marginTop: 2 }}>
+                  Controls practical lab access — student can only attend labs in assigned subjects
+                </div>
+              </div>
+            </div>
+
+            {(student?.enrolled_subjects || []).length === 0 ? (
+              <div style={{
+                background: C.panel,
+                border: `1px dashed ${C.border}`,
+                borderRadius: 8,
+                padding: "16px",
+                textAlign: "center",
+                fontFamily: sans,
+                fontSize: 12,
+                color: C.low,
+              }}>
+                No subjects assigned yet. Use <strong>Assign Subjects</strong> from the students list to grant lab access.
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                {student.enrolled_subjects.map((subj) => (
+                  <div
+                    key={subj.id}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "10px 12px",
+                      background: C.panel,
+                      border: `1px solid ${C.border}`,
+                      borderRadius: 8,
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontFamily: sans, fontSize: 13, fontWeight: 600, color: C.hi }}>
+                        {subj.name}
+                      </div>
+                      <div style={{ fontFamily: mono, fontSize: 10.5, color: C.low, marginTop: 2 }}>
+                        {subj.code && <span style={{ color: C.cyan, marginRight: 8 }}>{subj.code}</span>}
+                        {subj.course_name && <span>Class: {subj.course_name}</span>}
+                      </div>
+                    </div>
+                    <Badge tone="cyan">LAB ACCESS ACTIVE</Badge>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Enrollments section */}

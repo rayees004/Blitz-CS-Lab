@@ -9,6 +9,9 @@ from .views import (
     SubjectModulesView,
     CourseSubjectsView,
     StudentEnrollmentsView,
+    StudentBulkEnrollView,
+    StudentBulkAssignSubjectsView,
+    StudentSubjectEnrollmentsView,
     EnrollmentDetailView,
     LabListCreateView,
     LabDetailView,
@@ -51,7 +54,10 @@ urlpatterns = [
     path('subjects/<int:pk>/', SubjectDetailView.as_view(), name='api_subject_detail'),
     path('subjects/<int:pk>/modules/', SubjectModulesView.as_view(), name='api_subject_modules'),
 
-    # Student enrollments
+    # Student enrollments & Subject assignments
     path('students/<int:pk>/enrollments/', StudentEnrollmentsView.as_view(), name='api_student_enrollments'),
+    path('students/<int:pk>/assign-courses/', StudentBulkEnrollView.as_view(), name='api_student_bulk_enroll'),
+    path('students/<int:pk>/assign-subjects/', StudentBulkAssignSubjectsView.as_view(), name='api_student_bulk_assign_subjects'),
+    path('students/<int:pk>/subjects/', StudentSubjectEnrollmentsView.as_view(), name='api_student_subjects'),
     path('enrollments/<int:pk>/', EnrollmentDetailView.as_view(), name='api_enrollment_detail'),
 ]

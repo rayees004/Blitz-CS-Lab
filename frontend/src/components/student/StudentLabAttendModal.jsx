@@ -313,19 +313,35 @@ export default function StudentLabAttendModal({ lab, onClose, onUpdated }) {
           ) : error ? (
             <div
               style={{
-                padding: 18,
-                borderRadius: 8,
-                background: "rgba(255, 77, 77, 0.1)",
-                border: "1px solid rgba(255, 77, 77, 0.3)",
-                color: C.danger,
+                padding: 28,
+                borderRadius: 10,
+                background: "rgba(229, 83, 75, 0.08)",
+                border: "1px solid rgba(229, 83, 75, 0.3)",
                 display: "flex",
+                flexDirection: "column",
                 alignItems: "center",
+                textAlign: "center",
                 gap: 12,
+                margin: "20px 0",
               }}
             >
-              <AlertCircle size={20} />
-              <div style={{ flex: 1 }}>{error}</div>
-              <Btn onClick={loadWorkspace} tone="danger" sm>Retry</Btn>
+              <div style={{
+                width: 48, height: 48, borderRadius: 10,
+                background: "rgba(229, 83, 75, 0.15)",
+                display: "flex", alignItems: "center", justifyContent: "center"
+              }}>
+                <Lock size={24} color={C.danger} />
+              </div>
+              <div style={{ fontFamily: sans, fontSize: 16, fontWeight: 700, color: C.hi }}>
+                Lab Attendance Restricted
+              </div>
+              <div style={{ fontFamily: sans, fontSize: 13, maxWidth: 460, lineHeight: 1.5, color: "#fca5a5" }}>
+                {error}
+              </div>
+              <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+                <Btn onClick={onClose} variant="outline" sm>Return to Dashboard</Btn>
+                <Btn onClick={loadWorkspace} tone="ghost" sm>Retry</Btn>
+              </div>
             </div>
           ) : (
             <>

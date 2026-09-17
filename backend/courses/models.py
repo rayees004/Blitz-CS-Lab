@@ -87,6 +87,40 @@ class Subject(models.Model):
     def __str__(self):
         return f"{self.name} ({self.code})" if self.code else self.name
 
+    @property
+    def enrolled_count(self):
+        return self.enrollments.filter(is_active=True).count()
+
+
+class SubjectEnrollment(models.Model):
+    """Enrollment / assignment linking a student to a specific Subject."""
+    student = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='subject_enrollments',
+        limit_choices_to={'user_type': 'student'},
+    )
+    subject = models.ForeignKey(
+        Subject,
+        on_delete=models.CASCADE,
+        related_name='enrollments',
+    )
+    is_active = models.BooleanField(default=True)
+    enrolled_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-enrolled_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['student', 'subject'],
+                name='unique_student_subject_enrollment'
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.student.username} → {self.subject.name} (active={self.is_active})"
+
 
 class Module(models.Model):
     """Curriculum module (chapter/section) belonging to a Course/Class or standalone Subject/Course."""

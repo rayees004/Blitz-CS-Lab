@@ -8,6 +8,10 @@ from .models import User
 class UserSerializer(serializers.ModelSerializer):
     is_admin = serializers.BooleanField(read_only=True)
     full_name = serializers.SerializerMethodField()
+    enrolled_courses = serializers.SerializerMethodField()
+    courses_count = serializers.SerializerMethodField()
+    enrolled_subjects = serializers.SerializerMethodField()
+    subjects_count = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -24,12 +28,73 @@ class UserSerializer(serializers.ModelSerializer):
             'phone_number',
             'is_active',
             'date_joined',
+            'enrolled_courses',
+            'courses_count',
+            'enrolled_subjects',
+            'subjects_count',
         ]
-        read_only_fields = ['id', 'is_admin', 'full_name', 'date_joined']
+        read_only_fields = [
+            'id', 'is_admin', 'full_name', 'date_joined',
+            'enrolled_courses', 'courses_count',
+            'enrolled_subjects', 'subjects_count'
+        ]
 
     def get_full_name(self, obj):
         name = f"{obj.first_name} {obj.last_name}".strip()
         return name or obj.username
+
+    def get_enrolled_courses(self, obj):
+        if obj.user_type != 'student':
+            return []
+        from courses.models import Enrollment
+        enrollments = Enrollment.objects.filter(student=obj, is_active=True).select_related('course')
+        return [
+            {
+                'id': e.course.id,
+                'enrollment_id': e.id,
+                'name': e.course.name,
+                'price': float(e.course.price),
+                'duration_weeks': e.course.duration_weeks,
+                'fee_status': e.fee_status,
+                'fee_status_display': e.get_fee_status_display(),
+                'is_on_hold': e.is_on_hold,
+                'hold_reason': e.hold_reason,
+                'enrolled_at': e.enrolled_at,
+            }
+            for e in enrollments
+        ]
+
+    def get_courses_count(self, obj):
+        if obj.user_type != 'student':
+            return 0
+        from courses.models import Enrollment
+        return Enrollment.objects.filter(student=obj, is_active=True).count()
+
+    def get_enrolled_subjects(self, obj):
+        if obj.user_type != 'student':
+            return []
+        from courses.models import SubjectEnrollment
+        enrollments = SubjectEnrollment.objects.filter(student=obj, is_active=True).select_related('subject', 'subject__course')
+        return [
+            {
+                'id': e.subject.id,
+                'enrollment_id': e.id,
+                'name': e.subject.name,
+                'code': e.subject.code,
+                'credits_or_hours': e.subject.credits_or_hours,
+                'course_id': e.subject.course_id if e.subject else None,
+                'course_name': e.subject.course.name if e.subject and e.subject.course else None,
+                'enrolled_at': e.enrolled_at,
+                'is_active': e.is_active,
+            }
+            for e in enrollments
+        ]
+
+    def get_subjects_count(self, obj):
+        if obj.user_type != 'student':
+            return 0
+        from courses.models import SubjectEnrollment
+        return SubjectEnrollment.objects.filter(student=obj, is_active=True).count()
 
 
 class CreateStudentSerializer(serializers.ModelSerializer):
@@ -46,6 +111,18 @@ class CreateStudentSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(required=True)
     first_name = serializers.CharField(required=True, max_length=50)
     last_name = serializers.CharField(required=False, allow_blank=True, max_length=50)
+    course_ids = serializers.ListField(
+        child=serializers.IntegerField(),
+        required=False,
+        write_only=True,
+        default=list
+    )
+    subject_ids = serializers.ListField(
+        child=serializers.IntegerField(),
+        required=False,
+        write_only=True,
+        default=list
+    )
 
     class Meta:
         model = User
@@ -58,6 +135,8 @@ class CreateStudentSerializer(serializers.ModelSerializer):
             'organization',
             'password',
             'confirm_password',
+            'course_ids',
+            'subject_ids',
         ]
 
     def validate_email(self, value):
@@ -80,12 +159,34 @@ class CreateStudentSerializer(serializers.ModelSerializer):
         return attrs
 
     def create(self, validated_data):
+        course_ids = validated_data.pop('course_ids', [])
+        subject_ids = validated_data.pop('subject_ids', [])
         validated_data.pop('confirm_password')
         password = validated_data.pop('password')
         user = User(**validated_data)
         user.user_type = 'student'
         user.set_password(password)
         user.save()
+
+        if subject_ids:
+            from courses.models import Subject, SubjectEnrollment
+            valid_subjects = Subject.objects.filter(id__in=subject_ids, is_active=True)
+            for sub in valid_subjects:
+                SubjectEnrollment.objects.get_or_create(
+                    student=user,
+                    subject=sub,
+                    defaults={'is_active': True}
+                )
+
+        if course_ids:
+            from courses.models import Course, Enrollment
+            valid_courses = Course.objects.filter(id__in=course_ids, is_active=True)
+            for course in valid_courses:
+                Enrollment.objects.get_or_create(
+                    student=user,
+                    course=course,
+                    defaults={'fee_status': 'DUE', 'is_active': True}
+                )
         return user
 
 

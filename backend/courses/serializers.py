@@ -1,6 +1,9 @@
 from django.db import transaction
 from rest_framework import serializers
-from .models import Course, Enrollment, Module, Subject, Lab, LabQuestion, QuestionHint, LabSubmission, LabScore
+from .models import (
+    Course, Enrollment, Module, Subject, SubjectEnrollment,
+    Lab, LabQuestion, QuestionHint, LabSubmission, LabScore
+)
 
 
 class ModuleSerializer(serializers.ModelSerializer):
@@ -156,6 +159,28 @@ class EnrollmentUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Enrollment
         fields = ['fee_status', 'is_on_hold', 'hold_reason', 'notes', 'is_active']
+
+
+class SubjectEnrollmentSerializer(serializers.ModelSerializer):
+    student_username = serializers.CharField(source='student.username', read_only=True)
+    student_full_name = serializers.SerializerMethodField()
+    subject_name = serializers.CharField(source='subject.name', read_only=True)
+    subject_code = serializers.CharField(source='subject.code', read_only=True)
+    credits_or_hours = serializers.IntegerField(source='subject.credits_or_hours', read_only=True)
+    course_name = serializers.CharField(source='subject.course.name', read_only=True, default=None)
+
+    class Meta:
+        model = SubjectEnrollment
+        fields = [
+            'id', 'student', 'student_username', 'student_full_name',
+            'subject', 'subject_name', 'subject_code', 'credits_or_hours',
+            'course_name', 'is_active', 'enrolled_at', 'updated_at',
+        ]
+        read_only_fields = ['id', 'enrolled_at', 'updated_at']
+
+    def get_student_full_name(self, obj):
+        name = f"{obj.student.first_name} {obj.student.last_name}".strip()
+        return name or obj.student.username
 
 
 class QuestionHintSerializer(serializers.ModelSerializer):

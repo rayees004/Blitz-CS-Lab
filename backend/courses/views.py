@@ -4,9 +4,10 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from django.db import transaction
 from accounts.models import User
 from accounts.views import IsAdminOrStaff
-from .models import Course, Enrollment, Module, Subject, Lab, LabQuestion, QuestionHint, LabSubmission, LabScore
+from .models import Course, Enrollment, Module, Subject, SubjectEnrollment, Lab, LabQuestion, QuestionHint, LabSubmission, LabScore
 from .serializers import (
     CourseSerializer,
     CourseListSerializer,
@@ -17,6 +18,7 @@ from .serializers import (
     EnrollmentSerializer,
     EnrollCreateSerializer,
     EnrollmentUpdateSerializer,
+    SubjectEnrollmentSerializer,
     LabSerializer,
     LabSubmissionSerializer,
     LabScoreSerializer,
@@ -352,6 +354,139 @@ class StudentEnrollmentsView(APIView):
         return Response({'detail': str(first_msg), 'errors': errors}, status=status.HTTP_400_BAD_REQUEST)
 
 
+class StudentBulkEnrollView(APIView):
+    """
+    POST /api/students/<id>/assign-courses/
+    Bulk assign/manage multiple courses for a student.
+    Body:
+      - course_ids: list of int IDs (e.g. [1, 2, 4])
+      - fee_status: 'PAID' | 'DUE' | 'PARTIAL' (default: 'DUE')
+      - sync: bool (if True, unrolls courses not in course_ids; if False, adds without removing)
+    """
+    permission_classes = [IsAdminOrStaff]
+
+    def post(self, request, pk):
+        student = get_object_or_404(User, pk=pk, user_type='student')
+        course_ids = request.data.get('course_ids', [])
+        fee_status = request.data.get('fee_status', 'DUE')
+        sync = request.data.get('sync', True)
+
+        if not isinstance(course_ids, list):
+            return Response({'detail': 'course_ids must be a list of course IDs.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        valid_courses = Course.objects.filter(id__in=course_ids, is_active=True)
+        valid_course_ids = set(valid_courses.values_list('id', flat=True))
+
+        with transaction.atomic():
+            if sync:
+                # Remove active enrollments not in selected course list
+                Enrollment.objects.filter(student=student, is_active=True).exclude(course_id__in=valid_course_ids).delete()
+
+            # Ensure all chosen courses are actively enrolled
+            for course in valid_courses:
+                enrollment, created = Enrollment.objects.get_or_create(
+                    student=student,
+                    course=course,
+                    defaults={'fee_status': fee_status, 'is_active': True}
+                )
+                if not created and not enrollment.is_active:
+                    enrollment.is_active = True
+                    enrollment.save(update_fields=['is_active'])
+
+        enrollments = student.enrollments.select_related('course').filter(is_active=True)
+        from accounts.serializers import UserSerializer
+        return Response({
+            'message': f'Successfully updated course assignments for "{student.get_full_name() or student.username}".',
+            'student': UserSerializer(student).data,
+            'count': enrollments.count(),
+            'enrollments': EnrollmentSerializer(enrollments, many=True).data,
+        }, status=status.HTTP_200_OK)
+
+
+class StudentBulkAssignSubjectsView(APIView):
+    """
+    POST /api/students/<id>/assign-subjects/
+    Bulk assign/manage multiple subjects for a student.
+    Body:
+      - subject_ids: list of int IDs (e.g. [1, 2, 9, 10])
+      - sync: bool (default: True - syncs assigned subjects)
+    """
+    permission_classes = [IsAdminOrStaff]
+
+    def post(self, request, pk):
+        student = get_object_or_404(User, pk=pk, user_type='student')
+        subject_ids = request.data.get('subject_ids', [])
+        sync = request.data.get('sync', True)
+
+        if not isinstance(subject_ids, list):
+            return Response({'detail': 'subject_ids must be a list of subject IDs.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        valid_subjects = Subject.objects.filter(id__in=subject_ids, is_active=True)
+        valid_subject_ids = set(valid_subjects.values_list('id', flat=True))
+
+        with transaction.atomic():
+            if sync:
+                # Remove active subject enrollments not in selected list
+                SubjectEnrollment.objects.filter(student=student, is_active=True).exclude(subject_id__in=valid_subject_ids).delete()
+
+            # Ensure all chosen subjects are actively enrolled
+            for subj in valid_subjects:
+                enrollment, created = SubjectEnrollment.objects.get_or_create(
+                    student=student,
+                    subject=subj,
+                    defaults={'is_active': True}
+                )
+                if not created and not enrollment.is_active:
+                    enrollment.is_active = True
+                    enrollment.save(update_fields=['is_active'])
+
+        enrollments = student.subject_enrollments.select_related('subject', 'subject__course').filter(is_active=True)
+        from accounts.serializers import UserSerializer
+        return Response({
+            'message': f'Successfully updated subject assignments for "{student.get_full_name() or student.username}".',
+            'student': UserSerializer(student).data,
+            'count': enrollments.count(),
+            'subjects': SubjectEnrollmentSerializer(enrollments, many=True).data,
+        }, status=status.HTTP_200_OK)
+
+
+class StudentSubjectEnrollmentsView(APIView):
+    """
+    GET  /api/students/<id>/subjects/ — list subjects assigned to a student
+    POST /api/students/<id>/subjects/ — assign a single subject to a student
+    """
+    permission_classes = [IsAdminOrStaff]
+
+    def get(self, request, pk):
+        student = get_object_or_404(User, pk=pk, user_type='student')
+        enrollments = student.subject_enrollments.select_related('subject', 'subject__course').filter(is_active=True)
+        return Response({
+            'student_id': student.id,
+            'student_name': f"{student.first_name} {student.last_name}".strip() or student.username,
+            'count': enrollments.count(),
+            'results': SubjectEnrollmentSerializer(enrollments, many=True).data,
+        })
+
+    def post(self, request, pk):
+        student = get_object_or_404(User, pk=pk, user_type='student')
+        subject_id = request.data.get('subject_id')
+        if not subject_id:
+            return Response({'detail': 'subject_id is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        subject = get_object_or_404(Subject, pk=subject_id, is_active=True)
+        enrollment, created = SubjectEnrollment.objects.get_or_create(
+            student=student,
+            subject=subject,
+            defaults={'is_active': True}
+        )
+        if not created and not enrollment.is_active:
+            enrollment.is_active = True
+            enrollment.save(update_fields=['is_active'])
+        return Response({
+            'message': f'Subject "{subject.name}" assigned successfully.',
+            'enrollment': SubjectEnrollmentSerializer(enrollment).data,
+        }, status=status.HTTP_201_CREATED)
+
+
 class EnrollmentDetailView(APIView):
     """PATCH /api/enrollments/<id>/  DELETE /api/enrollments/<id>/"""
     permission_classes = [IsAdminOrStaff]
@@ -641,18 +776,60 @@ def get_current_student(request):
     return User.objects.filter(user_type='student').first() or User.objects.first()
 
 
+def get_lab_effective_course(lab):
+    """Resolve the Course this lab belongs to (directly or through subject)."""
+    if lab.course:
+        return lab.course
+    if lab.subject and lab.subject.course:
+        return lab.subject.course
+    return None
+
+
+def can_student_attend_lab(student, lab):
+    """
+    Check if a student can attend a lab.
+    Rules:
+      - Admin / Staff can always attend.
+      - A student must be actively assigned/enrolled in the lab's Subject.
+      - If the lab has no assigned subject, or student is not assigned to that subject, attending is NOT possible.
+    Returns: (can_attend: bool, lock_reason: str or None, effective_subject: Subject or None)
+    """
+    if not student:
+        return False, "Authentication required to attend this lab.", None
+
+    # Admins and staff have unrestricted lab access
+    if student.is_staff or student.is_superuser or getattr(student, 'user_type', None) == 'admin':
+        return True, None, lab.subject
+
+    if not lab.subject:
+        return False, "This lab has not been assigned to any subject yet. Attendance is not available.", None
+
+    # Check student active subject enrollments
+    is_enrolled = SubjectEnrollment.objects.filter(
+        student=student,
+        subject=lab.subject,
+        is_active=True
+    ).exists()
+
+    if not is_enrolled:
+        subj_name = lab.subject.name
+        subj_code = f" ({lab.subject.code})" if lab.subject.code else ""
+        return False, f"Access restricted. You must be assigned to subject '{subj_name}{subj_code}' to attend this lab.", lab.subject
+
+    return True, None, lab.subject
+
+
 class StudentLabListView(APIView):
     """
     GET /api/student/labs/
-    Returns active labs enriched with the current student's lab score (ForeignKey based),
-    attend count, and submission status.
-    Guarantees that attending a lab multiple times does NOT increase the score.
+    Returns active labs enriched with subject-based access locking,
+    the current student's lab score (ForeignKey based), attend count, and submission status.
     """
     permission_classes = [AllowAny]
 
     def get(self, request):
         student = get_current_student(request)
-        labs = Lab.objects.prefetch_related('questions__hints').filter(is_active=True).order_by('-created_at')
+        labs = Lab.objects.select_related('course', 'subject', 'subject__course').prefetch_related('questions__hints').filter(is_active=True).order_by('-created_at')
 
         lab_scores_by_lab = {}
         if student:
@@ -670,8 +847,13 @@ class StudentLabListView(APIView):
         labs_completed_count = 0
         labs_in_progress_count = 0
         total_attendances = 0
+        enrolled_labs_count = 0
 
         for lab in labs:
+            can_attend, lock_reason, lab_subject = can_student_attend_lab(student, lab)
+            if can_attend:
+                enrolled_labs_count += 1
+
             ls = lab_scores_by_lab.get(lab.id)
             sub = submissions.get(lab.id)
 
@@ -706,6 +888,9 @@ class StudentLabListView(APIView):
             elif sub_status == 'COMPLETED':
                 progress_pct = 100
 
+            resolved_course_name = lab.course.name if lab.course else (lab.subject.course.name if lab.subject and lab.subject.course else None)
+            resolved_course_id = lab.course_id or (lab.subject.course_id if lab.subject else None)
+
             enriched_labs.append({
                 'id': lab.id,
                 'name': lab.name,
@@ -717,7 +902,13 @@ class StudentLabListView(APIView):
                 'target_url': lab.target_url,
                 'subject_id': lab.subject_id,
                 'subject_name': lab.subject.name if lab.subject else None,
-                'course_name': lab.course.name if lab.course else None,
+                'subject_code': lab.subject.code if lab.subject else None,
+                'course_id': resolved_course_id,
+                'course_name': resolved_course_name,
+                'is_locked': not can_attend,
+                'can_attend': can_attend,
+                'lock_reason': lock_reason,
+                'is_enrolled': can_attend,
                 'question_count': q_count,
                 'submission_status': sub_status,
                 'score': score,
@@ -777,11 +968,20 @@ class StudentLabAttendView(APIView):
         return get_object_or_404(Lab.objects.prefetch_related('questions__hints'), pk=pk)
 
     def get(self, request, pk):
+        student = get_current_student(request)
+        lab = self.get_lab(pk)
+        can_attend, lock_reason, _ = can_student_attend_lab(student, lab)
+        if not can_attend:
+            return Response({'detail': lock_reason, 'is_locked': True, 'lock_reason': lock_reason}, status=status.HTTP_403_FORBIDDEN)
         return self._render_attend_workspace(request, pk)
 
     def post(self, request, pk):
         student = get_current_student(request)
         lab = self.get_lab(pk)
+        can_attend, lock_reason, _ = can_student_attend_lab(student, lab)
+        if not can_attend:
+            return Response({'detail': lock_reason, 'is_locked': True, 'lock_reason': lock_reason}, status=status.HTTP_403_FORBIDDEN)
+
         if student:
             # 1. Update or create LabScore (ForeignKey)
             lab_score, score_created = LabScore.objects.get_or_create(
@@ -859,6 +1059,8 @@ class StudentLabAttendView(APIView):
         current_score = lab_score.score if lab_score else (submission.score if submission else 0)
         current_score = min(lab.points, max(0, current_score))
 
+        effective_course = get_lab_effective_course(lab)
+
         return Response({
             'lab': {
                 'id': lab.id,
@@ -870,7 +1072,8 @@ class StudentLabAttendView(APIView):
                 'points': lab.points,
                 'target_url': lab.target_url,
                 'subject_name': lab.subject.name if lab.subject else None,
-                'course_name': lab.course.name if lab.course else None,
+                'course_id': effective_course.id if effective_course else None,
+                'course_name': effective_course.name if effective_course else None,
             },
             'questions': questions_payload,
             'lab_score': {
@@ -909,6 +1112,9 @@ class StudentLabSubmitMarkView(APIView):
             return Response({'detail': 'No active student found.'}, status=status.HTTP_400_BAD_REQUEST)
 
         lab = get_object_or_404(Lab.objects.prefetch_related('questions__hints'), pk=pk)
+        can_attend, lock_reason, _ = can_student_attend_lab(student, lab)
+        if not can_attend:
+            return Response({'detail': lock_reason, 'is_locked': True, 'lock_reason': lock_reason}, status=status.HTTP_403_FORBIDDEN)
         submission, _ = LabSubmission.objects.get_or_create(
             student=student,
             lab=lab,

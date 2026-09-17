@@ -125,6 +125,41 @@ export default function LabDetail({ lab, back }) {
     }
   };
 
+  if (error) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", height: "100%", background: C.void, color: C.hi }}>
+        <div style={{ height: 54, borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", padding: "0 22px", gap: 12, background: C.panel2 }}>
+          <span onClick={back} style={{ cursor: "pointer", color: C.low, display: "flex", alignItems: "center", padding: "4px 8px", borderRadius: 4, background: C.panel }}>
+            <ChevronRight size={15} style={{ transform: "rotate(180deg)" }} />
+            <span style={{ fontFamily: sans, fontSize: 12, marginLeft: 4 }}>Back to Labs</span>
+          </span>
+        </div>
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+          <div style={{
+            maxWidth: 480, width: "100%", background: C.panel, border: `1px solid ${C.border}`,
+            borderRadius: 12, padding: 32, textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center"
+          }}>
+            <div style={{
+              width: 54, height: 54, borderRadius: 12, background: "rgba(229, 83, 75, 0.12)",
+              border: "1px solid rgba(229, 83, 75, 0.3)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16
+            }}>
+              <Lock size={26} color={C.danger} />
+            </div>
+            <h2 style={{ fontFamily: sans, fontSize: 18, fontWeight: 700, color: C.hi, margin: "0 0 10px" }}>
+              Lab Access Restricted
+            </h2>
+            <p style={{ fontFamily: sans, fontSize: 13.5, color: "#fca5a5", lineHeight: 1.6, margin: "0 0 24px" }}>
+              {error}
+            </p>
+            <Btn onClick={back} style={{ padding: "9px 24px" }}>
+              Back to Labs
+            </Btn>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", background: C.void, color: C.hi }}>
       {/* Top Header */}
