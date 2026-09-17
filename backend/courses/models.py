@@ -118,3 +118,90 @@ class Module(models.Model):
     def __str__(self):
         return f"[{self.course.name}] #{self.order} {self.title}"
 
+
+class Lab(models.Model):
+    DIFFICULTY_CHOICES = [
+        ('Beginner', 'Beginner'),
+        ('Intermediate', 'Intermediate'),
+        ('Advanced', 'Advanced'),
+    ]
+
+    name = models.CharField(max_length=200)
+    description = models.TextField(blank=True, default='')
+    org = models.CharField(max_length=150, blank=True, default='BlitzLab')
+    category = models.CharField(max_length=100, default='Web Security')
+    difficulty = models.CharField(max_length=20, choices=DIFFICULTY_CHOICES, default='Beginner')
+    points = models.PositiveIntegerField(default=100)
+    target_url = models.CharField(max_length=300, blank=True, default='')
+    course = models.ForeignKey(
+        Course,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='labs',
+    )
+    subject = models.ForeignKey(
+        Subject,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='labs',
+    )
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return self.name
+
+    @property
+    def question_count(self):
+        return self.questions.count()
+
+
+class LabQuestion(models.Model):
+    lab = models.ForeignKey(
+        Lab,
+        on_delete=models.CASCADE,
+        related_name='questions',
+    )
+    title = models.CharField(max_length=300)
+    description = models.TextField(blank=True, default='')
+    flag = models.CharField(max_length=200, blank=True, default='')
+    points = models.PositiveIntegerField(default=50)
+    order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['order', 'created_at']
+
+    def __str__(self):
+        return f"[{self.lab.name}] Q: {self.title}"
+
+    @property
+    def hint_count(self):
+        return self.hints.count()
+
+
+class QuestionHint(models.Model):
+    question = models.ForeignKey(
+        LabQuestion,
+        on_delete=models.CASCADE,
+        related_name='hints',
+    )
+    hint_text = models.TextField()
+    cost = models.PositiveIntegerField(default=10)
+    order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['order', 'created_at']
+
+    def __str__(self):
+        return f"Hint #{self.order + 1} for {self.question.title}"
+
+

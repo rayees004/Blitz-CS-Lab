@@ -1,5 +1,6 @@
+from django.db import transaction
 from rest_framework import serializers
-from .models import Course, Enrollment, Module, Subject
+from .models import Course, Enrollment, Module, Subject, Lab, LabQuestion, QuestionHint
 
 
 class ModuleSerializer(serializers.ModelSerializer):
@@ -150,3 +151,77 @@ class EnrollmentUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Enrollment
         fields = ['fee_status', 'is_on_hold', 'hold_reason', 'notes', 'is_active']
+
+
+class QuestionHintSerializer(serializers.ModelSerializer):
+    id = serializers.IntegerField(required=False)
+
+    class Meta:
+        model = QuestionHint
+        fields = ['id', 'hint_text', 'cost', 'order']
+
+
+class LabQuestionSerializer(serializers.ModelSerializer):
+    id = serializers.IntegerField(required=False)
+    hints = QuestionHintSerializer(many=True, required=False, default=list)
+
+    class Meta:
+        model = LabQuestion
+        fields = ['id', 'title', 'description', 'flag', 'points', 'order', 'hints']
+
+
+class LabSerializer(serializers.ModelSerializer):
+    questions = LabQuestionSerializer(many=True, required=False, default=list)
+    question_count = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = Lab
+        fields = [
+            'id', 'name', 'description', 'org', 'category', 'difficulty',
+            'points', 'target_url', 'course', 'subject', 'is_active',
+            'question_count', 'questions', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at', 'question_count']
+
+    def validate_name(self, value):
+        val = value.strip()
+        if not val:
+            raise serializers.ValidationError('Lab name is required.')
+        return val
+
+    def create(self, validated_data):
+        questions_data = validated_data.pop('questions', [])
+        with transaction.atomic():
+            lab = Lab.objects.create(**validated_data)
+            for q_idx, q_data in enumerate(questions_data):
+                hints_data = q_data.pop('hints', [])
+                q_data.pop('id', None)
+                q_data['order'] = q_data.get('order', q_idx)
+                question = LabQuestion.objects.create(lab=lab, **q_data)
+                for h_idx, h_data in enumerate(hints_data):
+                    h_data.pop('id', None)
+                    h_data['order'] = h_data.get('order', h_idx)
+                    QuestionHint.objects.create(question=question, **h_data)
+            return lab
+
+    def update(self, instance, validated_data):
+        questions_data = validated_data.pop('questions', None)
+        with transaction.atomic():
+            for attr, val in validated_data.items():
+                setattr(instance, attr, val)
+            instance.save()
+
+            if questions_data is not None:
+                instance.questions.all().delete()
+                for q_idx, q_data in enumerate(questions_data):
+                    hints_data = q_data.pop('hints', [])
+                    q_data.pop('id', None)
+                    q_data['order'] = q_data.get('order', q_idx)
+                    question = LabQuestion.objects.create(lab=instance, **q_data)
+                    for h_idx, h_data in enumerate(hints_data):
+                        h_data.pop('id', None)
+                        h_data['order'] = h_data.get('order', h_idx)
+                        QuestionHint.objects.create(question=question, **h_data)
+
+            return instance
+

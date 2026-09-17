@@ -21,11 +21,12 @@ import LabExplorer from "./src/components/student/LabExplorer";
 import LabDetail from "./src/components/student/LabDetail";
 import Materials from "./src/components/student/Materials";
 
-// Admin Views
 import AdminDashboard from "./src/components/admin/AdminDashboard";
 import AdminStudents from "./src/components/admin/AdminStudents";
 import AdminClasses from "./src/components/admin/AdminClasses";
 import AdminSubjects from "./src/components/admin/AdminSubjects";
+import AdminLabs from "./src/components/admin/AdminLabs";
+
 
 // Export modular subcomponents for external consumption
 export { default as Sidebar } from "./src/components/layout/Sidebar";
@@ -48,6 +49,7 @@ export { default as AdminDashboard } from "./src/components/admin/AdminDashboard
 export { default as AdminStudents } from "./src/components/admin/AdminStudents";
 export { default as AdminClasses } from "./src/components/admin/AdminClasses";
 export { default as AdminSubjects } from "./src/components/admin/AdminSubjects";
+export { default as AdminLabs } from "./src/components/admin/AdminLabs";
 export * from "./src/constants/theme";
 export * from "./src/data/mockData";
 
@@ -89,11 +91,12 @@ export default function BlitzCyberLab() {
 
   if (stage === "admin") {
     const pages = {
-      "a-dashboard": <AdminDashboard />,
+      "a-dashboard": <AdminDashboard onNavigate={setAdminPage} />,
       "a-students": <AdminStudents />,
       "a-classes": <AdminClasses />,
       "a-subjects": <AdminSubjects />,
-      "a-labs": <Placeholder title="Labs" blurb="Manage all 50 lab environments, difficulty, points, and availability." icon={FlaskConical} />,
+      "a-labs": <AdminLabs onOpenAddModal={() => setAdminPage("a-dashboard")} />,
+
       "a-materials": <Placeholder title="Study Materials" blurb="Upload and organize documents linked to classes and labs." icon={BookOpen} />,
       "a-assignments": <Placeholder title="Assignments" blurb="Assign labs and materials to classes or individual students." icon={ClipboardList} />,
       "a-fees": <Placeholder title="Fees" blurb="Track payment status across every enrolled student." icon={Wallet} />,

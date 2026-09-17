@@ -1,10 +1,11 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
 from accounts.models import User
 from accounts.views import IsAdminOrStaff
-from .models import Course, Enrollment, Module, Subject
+from .models import Course, Enrollment, Module, Subject, Lab, LabQuestion, QuestionHint
 from .serializers import (
     CourseSerializer,
     CourseListSerializer,
@@ -15,7 +16,9 @@ from .serializers import (
     EnrollmentSerializer,
     EnrollCreateSerializer,
     EnrollmentUpdateSerializer,
+    LabSerializer,
 )
+
 
 
 class CourseListCreateView(APIView):
@@ -366,3 +369,85 @@ class EnrollmentDetailView(APIView):
         course_name = enrollment.course.name
         enrollment.delete()
         return Response({'message': f'Removed from "{course_name}".'})
+
+
+class LabListCreateView(APIView):
+    """
+    GET  /api/labs/  - List all active labs with nested questions and hints
+    POST /api/labs/  - Create a new lab with questions and hints (Admin/Staff only)
+    """
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return [IsAuthenticated()]
+        return [IsAdminOrStaff()]
+
+    def get(self, request):
+        labs = Lab.objects.prefetch_related('questions__hints').filter(is_active=True)
+        category = request.query_params.get('category')
+        difficulty = request.query_params.get('difficulty')
+        search = request.query_params.get('q')
+
+        if category:
+            labs = labs.filter(category__iexact=category)
+        if difficulty:
+            labs = labs.filter(difficulty__iexact=difficulty)
+        if search:
+            labs = labs.filter(name__icontains=search)
+
+        serializer = LabSerializer(labs, many=True)
+        return Response({'count': labs.count(), 'results': serializer.data})
+
+    def post(self, request):
+        serializer = LabSerializer(data=request.data)
+        if serializer.is_valid():
+            lab = serializer.save()
+            return Response({
+                'message': f'Lab "{lab.name}" created successfully.',
+                'lab': LabSerializer(lab).data,
+            }, status=status.HTTP_201_CREATED)
+
+        errors = serializer.errors
+        first_key = next(iter(errors))
+        first_msg = errors[first_key]
+        if isinstance(first_msg, list):
+            first_msg = first_msg[0]
+        return Response({'detail': str(first_msg), 'errors': errors}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class LabDetailView(APIView):
+    """
+    GET    /api/labs/<id>/  - Lab detail with questions & hints
+    PATCH  /api/labs/<id>/  - Update lab, questions, hints (Admin/Staff only)
+    DELETE /api/labs/<id>/  - Soft-delete or delete lab (Admin/Staff only)
+    """
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return [IsAuthenticated()]
+        return [IsAdminOrStaff()]
+
+    def get_object(self, pk):
+        return get_object_or_404(Lab.objects.prefetch_related('questions__hints'), pk=pk)
+
+    def get(self, request, pk):
+        lab = self.get_object(pk)
+        serializer = LabSerializer(lab)
+        return Response(serializer.data)
+
+    def patch(self, request, pk):
+        lab = self.get_object(pk)
+        serializer = LabSerializer(lab, data=request.data, partial=True)
+        if serializer.is_valid():
+            updated_lab = serializer.save()
+            return Response({
+                'message': f'Lab "{updated_lab.name}" updated successfully.',
+                'lab': LabSerializer(updated_lab).data,
+            })
+        return Response({'detail': 'Update failed.', 'errors': serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, pk):
+        lab = self.get_object(pk)
+        name = lab.name
+        lab.is_active = False
+        lab.save()
+        return Response({'message': f'Lab "{name}" archived successfully.'})
+
