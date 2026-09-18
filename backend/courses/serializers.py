@@ -2,7 +2,8 @@ from django.db import transaction
 from rest_framework import serializers
 from .models import (
     Course, Enrollment, Module, Subject, SubjectEnrollment,
-    Lab, LabQuestion, QuestionHint, LabSubmission, LabScore
+    Lab, LabQuestion, QuestionHint, LabSubmission, LabScore,
+    StudyMaterial
 )
 
 
@@ -303,4 +304,95 @@ class LabScoreSerializer(serializers.ModelSerializer):
             'first_attended_at', 'last_attended_at', 'completed_at'
         ]
         read_only_fields = ['id', 'first_attended_at', 'last_attended_at']
+
+
+class StudyMaterialSerializer(serializers.ModelSerializer):
+    subject_name = serializers.CharField(source='subject.name', read_only=True)
+    subject_code = serializers.CharField(source='subject.code', read_only=True, default='')
+    lab_name = serializers.CharField(source='lab.name', read_only=True, default=None)
+    course_name = serializers.CharField(source='subject.course.name', read_only=True, default=None)
+    uploaded_by_name = serializers.SerializerMethodField()
+    file_url = serializers.SerializerMethodField()
+    file_size_formatted = serializers.SerializerMethodField()
+
+    class Meta:
+        model = StudyMaterial
+        fields = [
+            'id', 'title', 'description', 'subject', 'subject_name', 'subject_code',
+            'course_name', 'lab', 'lab_name', 'file', 'file_url', 'file_type',
+            'file_size_bytes', 'file_size_formatted', 'uploaded_by', 'uploaded_by_name',
+            'is_active', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at', 'file_size_bytes', 'uploaded_by']
+
+    def get_uploaded_by_name(self, obj):
+        if not obj.uploaded_by:
+            return "Administrator"
+        full = f"{obj.uploaded_by.first_name} {obj.uploaded_by.last_name}".strip()
+        return full or obj.uploaded_by.username
+
+    def get_file_url(self, obj):
+        if not obj.file:
+            return None
+        request = self.context.get('request')
+        if request:
+            try:
+                return request.build_absolute_uri(obj.file.url)
+            except Exception:
+                pass
+        return obj.file.url
+
+    def get_file_size_formatted(self, obj):
+        bytes_val = obj.file_size_bytes
+        if not bytes_val and obj.file:
+            try:
+                bytes_val = obj.file.size
+            except Exception:
+                bytes_val = 0
+        if bytes_val < 1024:
+            return f"{bytes_val} B"
+        elif bytes_val < 1024 * 1024:
+            return f"{bytes_val / 1024:.1f} KB"
+        else:
+            return f"{bytes_val / (1024 * 1024):.2f} MB"
+
+
+class CreateStudyMaterialSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = StudyMaterial
+        fields = ['title', 'description', 'subject', 'lab', 'file']
+
+    def validate_file(self, value):
+        if not value:
+            raise serializers.ValidationError("A study material file is required.")
+        filename = value.name.lower()
+        allowed_exts = ('.pdf', '.doc', '.docx', '.ppt', '.pptx')
+        if not any(filename.endswith(ext) for ext in allowed_exts):
+            raise serializers.ValidationError(
+                "Unsupported file type. Please upload a PDF, Word (.doc, .docx), or PowerPoint (.ppt, .pptx) file."
+            )
+        # Limit file size to 50MB
+        if value.size > 50 * 1024 * 1024:
+            raise serializers.ValidationError("File size exceeds 50MB limit.")
+        return value
+
+    def create(self, validated_data):
+        file_obj = validated_data.get('file')
+        file_type = 'OTHER'
+        if file_obj:
+            fname = file_obj.name.lower()
+            if fname.endswith('.pdf'):
+                file_type = 'PDF'
+            elif fname.endswith(('.doc', '.docx')):
+                file_type = 'WORD'
+            elif fname.endswith(('.ppt', '.pptx')):
+                file_type = 'PPTX'
+            validated_data['file_type'] = file_type
+            validated_data['file_size_bytes'] = file_obj.size
+
+        user = self.context.get('user')
+        if user and user.is_authenticated:
+            validated_data['uploaded_by'] = user
+
+        return super().create(validated_data)
 

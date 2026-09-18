@@ -1,5 +1,8 @@
 from django.contrib import admin
-from .models import Course, Enrollment, Lab, LabQuestion, QuestionHint, LabSubmission, LabScore
+from .models import (
+    Course, Enrollment, Lab, LabQuestion, QuestionHint,
+    LabSubmission, LabScore, StudyMaterial
+)
 
 
 @admin.register(Course)
@@ -61,4 +64,12 @@ class LabScoreAdmin(admin.ModelAdmin):
     list_filter = ('is_completed', 'lab')
     search_fields = ('student__username', 'student__email', 'lab__name')
     raw_id_fields = ('student', 'lab')
+
+
+@admin.register(StudyMaterial)
+class StudyMaterialAdmin(admin.ModelAdmin):
+    list_display = ('title', 'subject', 'lab', 'file_type', 'file_size_bytes', 'is_active', 'created_at')
+    list_filter = ('file_type', 'is_active', 'subject')
+    search_fields = ('title', 'description', 'subject__name', 'lab__name')
+    raw_id_fields = ('subject', 'lab', 'uploaded_by')
 

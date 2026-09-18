@@ -9,7 +9,11 @@ from django.utils import timezone
 from django.db import transaction
 from accounts.models import User
 from accounts.views import IsAdminOrStaff
-from .models import Course, Enrollment, Module, Subject, SubjectEnrollment, Lab, LabQuestion, QuestionHint, LabSubmission, LabScore
+from .models import (
+    Course, Enrollment, Module, Subject, SubjectEnrollment,
+    Lab, LabQuestion, QuestionHint, LabSubmission, LabScore,
+    StudyMaterial
+)
 from .serializers import (
     CourseSerializer,
     CourseListSerializer,
@@ -24,6 +28,8 @@ from .serializers import (
     LabSerializer,
     LabSubmissionSerializer,
     LabScoreSerializer,
+    StudyMaterialSerializer,
+    CreateStudyMaterialSerializer,
 )
 
 
@@ -1352,6 +1358,173 @@ class LabSubmissionListView(APIView):
         submissions = LabSubmission.objects.select_related('student', 'lab').all()
         serializer = LabSubmissionSerializer(submissions, many=True)
         return Response({'count': submissions.count(), 'results': serializer.data})
+
+
+# ─── STUDY MATERIALS ──────────────────────────────────────────
+class StudyMaterialListCreateView(APIView):
+    """
+    GET  /api/materials/  — list study materials with filters:
+         ?subject_id=<id>  Filter by Subject
+         ?lab_id=<id>      Filter by optional linked Lab
+         ?file_type=<type> Filter by file type (PDF, WORD, PPTX)
+         ?q=<search>       Search in title/description
+    POST /api/materials/  — upload a new study material (Admin only, multipart/form-data)
+    """
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return [AllowAny()]
+        return [IsAdminOrStaff()]
+
+    def get(self, request):
+        qs = StudyMaterial.objects.select_related('subject', 'subject__course', 'lab', 'uploaded_by').filter(is_active=True)
+        
+        subject_id = request.query_params.get('subject_id')
+        if subject_id:
+            qs = qs.filter(subject_id=subject_id)
+
+        lab_id = request.query_params.get('lab_id')
+        if lab_id:
+            qs = qs.filter(lab_id=lab_id)
+
+        file_type = request.query_params.get('file_type')
+        if file_type:
+            qs = qs.filter(file_type__iexact=file_type.strip())
+
+        q = request.query_params.get('q')
+        if q:
+            qs = qs.filter(title__icontains=q) | qs.filter(description__icontains=q)
+
+        serializer = StudyMaterialSerializer(qs, many=True, context={'request': request})
+        return Response({'count': qs.count(), 'results': serializer.data})
+
+    def post(self, request):
+        serializer = CreateStudyMaterialSerializer(
+            data=request.data,
+            context={'request': request, 'user': request.user}
+        )
+        if serializer.is_valid():
+            material = serializer.save()
+            return Response({
+                'message': f'Study material "{material.title}" uploaded successfully.',
+                'material': StudyMaterialSerializer(material, context={'request': request}).data,
+            }, status=status.HTTP_201_CREATED)
+
+        errors = serializer.errors
+        first_key = next(iter(errors))
+        first_msg = errors[first_key]
+        if isinstance(first_msg, list):
+            first_msg = first_msg[0]
+        return Response({'detail': str(first_msg), 'errors': errors}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class StudyMaterialDetailView(APIView):
+    """
+    GET    /api/materials/<id>/ — retrieve material
+    PATCH  /api/materials/<id>/ — update material details (Admin only)
+    DELETE /api/materials/<id>/ — delete material (Admin only)
+    """
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return [AllowAny()]
+        return [IsAdminOrStaff()]
+
+    def get_material(self, pk):
+        return get_object_or_404(StudyMaterial, pk=pk)
+
+    def get(self, request, pk):
+        material = self.get_material(pk)
+        return Response(StudyMaterialSerializer(material, context={'request': request}).data)
+
+    def patch(self, request, pk):
+        material = self.get_material(pk)
+        title = request.data.get('title')
+        description = request.data.get('description')
+        subject_id = request.data.get('subject_id')
+        lab_id = request.data.get('lab_id')
+
+        if title is not None:
+            material.title = title.strip()
+        if description is not None:
+            material.description = description.strip()
+        if subject_id is not None:
+            material.subject = get_object_or_404(Subject, pk=subject_id)
+        if lab_id is not None:
+            material.lab = get_object_or_404(Lab, pk=lab_id) if lab_id else None
+
+        if 'file' in request.FILES:
+            file_obj = request.FILES['file']
+            fname = file_obj.name.lower()
+            allowed = ('.pdf', '.doc', '.docx', '.ppt', '.pptx')
+            if not any(fname.endswith(ext) for ext in allowed):
+                return Response({'detail': 'Unsupported file format.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            file_type = 'OTHER'
+            if fname.endswith('.pdf'):
+                file_type = 'PDF'
+            elif fname.endswith(('.doc', '.docx')):
+                file_type = 'WORD'
+            elif fname.endswith(('.ppt', '.pptx')):
+                file_type = 'PPTX'
+            
+            material.file = file_obj
+            material.file_type = file_type
+            material.file_size_bytes = file_obj.size
+
+        material.save()
+        return Response({
+            'message': 'Study material updated successfully.',
+            'material': StudyMaterialSerializer(material, context={'request': request}).data
+        })
+
+    def delete(self, request, pk):
+        material = self.get_material(pk)
+        title = material.title
+        material.delete()
+        return Response({'message': f'Study material "{title}" deleted successfully.'})
+
+
+class StudentMaterialsView(APIView):
+    """
+    GET /api/student/materials/
+    Returns active study materials accessible to the student.
+    Enforces that the student is actively enrolled in the subject.
+    Admins/staff see all active materials.
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        student = get_current_student(request)
+        qs = StudyMaterial.objects.select_related('subject', 'subject__course', 'lab', 'uploaded_by').filter(is_active=True)
+
+        if student and not (student.is_staff or student.is_superuser or getattr(student, 'user_type', None) == 'admin'):
+            # Filter by subjects the student is actively enrolled in
+            enrolled_subject_ids = SubjectEnrollment.objects.filter(
+                student=student, is_active=True
+            ).values_list('subject_id', flat=True)
+            qs = qs.filter(subject_id__in=enrolled_subject_ids)
+
+        subject_id = request.query_params.get('subject_id')
+        if subject_id:
+            qs = qs.filter(subject_id=subject_id)
+
+        lab_id = request.query_params.get('lab_id')
+        if lab_id:
+            qs = qs.filter(lab_id=lab_id)
+
+        file_type = request.query_params.get('file_type')
+        if file_type:
+            qs = qs.filter(file_type__iexact=file_type.strip())
+
+        q = request.query_params.get('q')
+        if q:
+            qs = qs.filter(title__icontains=q) | qs.filter(description__icontains=q)
+
+        serializer = StudyMaterialSerializer(qs, many=True, context={'request': request})
+        return Response({'count': qs.count(), 'results': serializer.data})
 
 
 

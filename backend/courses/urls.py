@@ -22,6 +22,9 @@ from .views import (
     StudentLabSubmitMarkView,
     StudentLabScoreListView,
     LabSubmissionListView,
+    StudyMaterialListCreateView,
+    StudyMaterialDetailView,
+    StudentMaterialsView,
 )
 
 urlpatterns = [
@@ -37,6 +40,11 @@ urlpatterns = [
     path('labs/seed/', SeedLabsView.as_view(), name='api_labs_seed'),
     path('labs/<int:pk>/', LabDetailView.as_view(), name='api_lab_detail'),
     path('subjects/<int:pk>/labs/', SubjectLabsView.as_view(), name='api_subject_labs'),
+
+    # Study Materials (Subject-based with optional Lab)
+    path('materials/', StudyMaterialListCreateView.as_view(), name='api_materials'),
+    path('materials/<int:pk>/', StudyMaterialDetailView.as_view(), name='api_material_detail'),
+    path('student/materials/', StudentMaterialsView.as_view(), name='api_student_materials'),
 
 
 

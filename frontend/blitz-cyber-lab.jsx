@@ -26,6 +26,7 @@ import AdminStudents from "./src/components/admin/AdminStudents";
 import AdminClasses from "./src/components/admin/AdminClasses";
 import AdminSubjects from "./src/components/admin/AdminSubjects";
 import AdminLabs from "./src/components/admin/AdminLabs";
+import AdminMaterials from "./src/components/admin/AdminMaterials";
 
 
 // Export modular subcomponents for external consumption
@@ -50,6 +51,7 @@ export { default as AdminStudents } from "./src/components/admin/AdminStudents";
 export { default as AdminClasses } from "./src/components/admin/AdminClasses";
 export { default as AdminSubjects } from "./src/components/admin/AdminSubjects";
 export { default as AdminLabs } from "./src/components/admin/AdminLabs";
+export { default as AdminMaterials } from "./src/components/admin/AdminMaterials";
 export * from "./src/constants/theme";
 export * from "./src/data/mockData";
 
@@ -96,8 +98,7 @@ export default function BlitzCyberLab() {
       "a-classes": <AdminClasses />,
       "a-subjects": <AdminSubjects />,
       "a-labs": <AdminLabs onOpenAddModal={() => setAdminPage("a-dashboard")} />,
-
-      "a-materials": <Placeholder title="Study Materials" blurb="Upload and organize documents linked to classes and labs." icon={BookOpen} />,
+      "a-materials": <AdminMaterials />,
       "a-assignments": <Placeholder title="Assignments" blurb="Assign labs and materials to classes or individual students." icon={ClipboardList} />,
       "a-fees": <Placeholder title="Fees" blurb="Track payment status across every enrolled student." icon={Wallet} />,
       "a-activity": <Placeholder title="Activity" blurb="Live feed of lab attempts, completions, and logins." icon={Activity} />,

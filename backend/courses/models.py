@@ -318,3 +318,60 @@ class LabScore(models.Model):
         return f"LabScore: {self.student.username} → {self.lab.name}: {self.score}/{self.max_score} pts (Attended {self.attend_count}x)"
 
 
+class StudyMaterial(models.Model):
+    """
+    Study materials / reference documents linked to a Subject (mandatory),
+    with an optional linkage to a specific Lab.
+    Supports PDF, Word (.doc, .docx), and PowerPoint (.ppt, .pptx).
+    """
+    FILE_TYPE_CHOICES = [
+        ('PDF', 'PDF Document'),
+        ('WORD', 'Word Document'),
+        ('PPTX', 'PowerPoint Presentation'),
+        ('OTHER', 'Other Document'),
+    ]
+
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True, default='')
+    subject = models.ForeignKey(
+        Subject,
+        on_delete=models.CASCADE,
+        related_name='materials',
+        help_text='The subject this material belongs to (mandatory).'
+    )
+    lab = models.ForeignKey(
+        Lab,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='materials',
+        help_text='Optional related lab for this material.'
+    )
+    file = models.FileField(
+        upload_to='study_materials/',
+        help_text='Uploaded study material file (PDF, Word, or PPTX).'
+    )
+    file_type = models.CharField(
+        max_length=10,
+        choices=FILE_TYPE_CHOICES,
+        default='PDF'
+    )
+    file_size_bytes = models.PositiveIntegerField(default=0)
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='uploaded_materials'
+    )
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"[{self.subject.name}] {self.title} ({self.file_type})"
+
+
