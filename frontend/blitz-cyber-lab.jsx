@@ -123,7 +123,7 @@ export default function BlitzCyberLab() {
   // student stage
   const pages = {
     dashboard: <StudentDashboard go={goLab} />,
-    learning: <Learning />,
+    learning: <Learning go={goLab} onSelect={setStudentPage} />,
     labs: <LabExplorer go={goLab} />,
     "lab-detail": <LabDetail lab={activeLab} back={() => setStudentPage("labs")} />,
     materials: <Materials />,

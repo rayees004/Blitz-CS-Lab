@@ -909,6 +909,13 @@ class StudentLabListView(APIView):
             resolved_course_name = lab.course.name if lab.course else (lab.subject.course.name if lab.subject and lab.subject.course else None)
             resolved_course_id = lab.course_id or (lab.subject.course_id if lab.subject else None)
 
+            video_file_url = None
+            if lab.video_file:
+                try:
+                    video_file_url = request.build_absolute_uri(lab.video_file.url)
+                except Exception:
+                    video_file_url = lab.video_file.url
+
             enriched_labs.append({
                 'id': lab.id,
                 'name': lab.name,
@@ -918,6 +925,8 @@ class StudentLabListView(APIView):
                 'difficulty': lab.difficulty,
                 'points': lab.points,
                 'target_url': lab.target_url,
+                'video_url': lab.video_url,
+                'video_file': video_file_url,
                 'subject_id': lab.subject_id,
                 'subject_name': lab.subject.name if lab.subject else None,
                 'subject_code': lab.subject.code if lab.subject else None,
