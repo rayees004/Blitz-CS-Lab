@@ -110,7 +110,7 @@ export default function BlitzCyberLab() {
         <Sidebar items={NAV_ADMIN} active={adminPage} onSelect={setAdminPage} onSwitch={handleLogout} switchLabel="Sign out" />
         <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, height: "100%" }}>
           <Topbar
-            placeholder="Search students, classes, labs..."
+            placeholder="Search students, courses, labs..."
             name={currentUser?.first_name ? `${currentUser.first_name} ${currentUser.last_name || ''}`.trim() : (currentUser?.username || "Admin")}
             role="Platform Administrator"
           />

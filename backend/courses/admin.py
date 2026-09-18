@@ -37,10 +37,14 @@ class LabQuestionInline(admin.StackedInline):
 
 @admin.register(Lab)
 class LabAdmin(admin.ModelAdmin):
-    list_display = ('name', 'category', 'difficulty', 'points', 'org', 'question_count', 'is_active', 'created_at')
+    list_display = ('name', 'category', 'difficulty', 'points', 'org', 'has_video', 'question_count', 'is_active', 'created_at')
     list_filter = ('category', 'difficulty', 'is_active')
-    search_fields = ('name', 'description', 'org')
+    search_fields = ('name', 'description', 'org', 'video_url')
     inlines = [LabQuestionInline]
+
+    @admin.display(boolean=True, description='Video')
+    def has_video(self, obj):
+        return bool(obj.video_url or obj.video_file)
 
 
 @admin.register(LabSubmission)

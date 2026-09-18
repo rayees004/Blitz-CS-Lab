@@ -59,22 +59,42 @@ export async function fetchLab(labId) {
   return handleResponse(res);
 }
 
-/** Create a new lab with nested questions and hints */
+/** Create a new lab with nested questions, hints, and optional video file/URL */
 export async function createLab(payload) {
+  const isForm = typeof FormData !== 'undefined' && payload instanceof FormData;
+  const token = getStoredToken();
+  const headers = {};
+  if (!isForm) {
+    headers['Content-Type'] = 'application/json';
+  }
+  if (token) {
+    headers['Authorization'] = `Token ${token}`;
+  }
+
   const res = await fetch(`${API_BASE}/labs/`, {
     method: 'POST',
-    headers: authHeaders(),
-    body: JSON.stringify(payload),
+    headers,
+    body: isForm ? payload : JSON.stringify(payload),
   });
   return handleResponse(res);
 }
 
-/** Update an existing lab, including questions and hints */
+/** Update an existing lab, including questions, hints, and video file/URL */
 export async function updateLab(labId, payload) {
+  const isForm = typeof FormData !== 'undefined' && payload instanceof FormData;
+  const token = getStoredToken();
+  const headers = {};
+  if (!isForm) {
+    headers['Content-Type'] = 'application/json';
+  }
+  if (token) {
+    headers['Authorization'] = `Token ${token}`;
+  }
+
   const res = await fetch(`${API_BASE}/labs/${labId}/`, {
     method: 'PATCH',
-    headers: authHeaders(),
-    body: JSON.stringify(payload),
+    headers,
+    body: isForm ? payload : JSON.stringify(payload),
   });
   return handleResponse(res);
 }

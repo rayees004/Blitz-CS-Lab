@@ -216,7 +216,7 @@ class LabSerializer(serializers.ModelSerializer):
         model = Lab
         fields = [
             'id', 'name', 'description', 'org', 'category', 'difficulty',
-            'points', 'target_url', 'course', 'course_name', 'course_id',
+            'points', 'target_url', 'video_url', 'video_file', 'course', 'course_name', 'course_id',
             'subject', 'subject_name', 'subject_id', 'is_active',
             'question_count', 'questions', 'created_at', 'updated_at'
         ]

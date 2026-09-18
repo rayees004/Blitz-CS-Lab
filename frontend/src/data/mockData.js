@@ -54,7 +54,6 @@ export const NAV_STUDENT = [
 export const NAV_ADMIN = [
   { label: "Dashboard", icon: LayoutGrid, key: "a-dashboard" },
   { label: "Students", icon: Users, key: "a-students" },
-  { label: "Classes", icon: Layers, key: "a-classes" },
   { label: "Courses", icon: BookMarked, key: "a-subjects" },
   { label: "Labs", icon: FlaskConical, key: "a-labs" },
   { label: "Study Materials", icon: BookOpen, key: "a-materials" },

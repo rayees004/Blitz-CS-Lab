@@ -3,7 +3,8 @@ import {
   FlaskConical, Plus, Search, Filter, HelpCircle, Lightbulb,
   Trash2, Edit3, CheckCircle, AlertCircle, RefreshCw, Layers,
   Award, Globe, ExternalLink, Flag, BookMarked, Eye, EyeOff,
-  ChevronDown, ChevronUp, Database, Sparkles, X, Terminal
+  ChevronDown, ChevronUp, Database, Sparkles, X, Terminal,
+  Video, Play, Film
 } from "lucide-react";
 import Panel from "../common/Panel";
 import Btn from "../common/Btn";
@@ -213,6 +214,75 @@ function LabViewDrawer({ lab, courses, onClose, onEdit, onDelete }) {
               )}
             </div>
           </div>
+
+          {/* Lab Teaching Video */}
+          {(lab.video_file || lab.video_url) && (
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontFamily: mono, fontSize: 11, color: C.amber, letterSpacing: "0.06em", marginBottom: 8, display: "flex", alignItems: "center", gap: 5 }}>
+                <Video size={13} /> TEACHING & WALKTHROUGH VIDEO
+              </div>
+              <div
+                style={{
+                  background: C.panel2,
+                  border: `1px solid rgba(245, 166, 35, 0.3)`,
+                  borderRadius: 8,
+                  padding: "14px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 10,
+                }}
+              >
+                {lab.video_file ? (
+                  <div style={{ borderRadius: 6, overflow: "hidden", background: "#000", border: `1px solid ${C.border}` }}>
+                    <video
+                      controls
+                      src={lab.video_file}
+                      style={{ width: "100%", maxHeight: 240, display: "block" }}
+                    >
+                      Your browser does not support video playback.
+                    </video>
+                  </div>
+                ) : lab.video_url?.includes("youtube.com") || lab.video_url?.includes("youtu.be") ? (
+                  <div style={{ position: "relative", paddingBottom: "56.25%", height: 0, overflow: "hidden", borderRadius: 6 }}>
+                    <iframe
+                      src={
+                        lab.video_url.includes("watch?v=")
+                          ? lab.video_url.replace("watch?v=", "embed/")
+                          : lab.video_url.includes("youtu.be/")
+                          ? `https://www.youtube.com/embed/${lab.video_url.split("youtu.be/")[1]}`
+                          : lab.video_url
+                      }
+                      title="Teaching Video"
+                      style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: "none" }}
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                    />
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <span style={{ fontFamily: sans, fontSize: 12.5, color: C.mid }}>External Video Link:</span>
+                    <a
+                      href={lab.video_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{
+                        fontFamily: mono,
+                        fontSize: 12,
+                        color: C.amber,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 5,
+                        textDecoration: "none",
+                      }}
+                    >
+                      {lab.video_url}
+                      <ExternalLink size={12} />
+                    </a>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Scenario & Description */}
           <div style={{ marginBottom: 24 }}>
@@ -853,6 +923,26 @@ export default function AdminLabs({ onOpenAddModal = null }) {
                         >
                           <BookMarked size={11} />
                           Course: {l.subject_name || (matchingCourse?.code ? `[${matchingCourse.code}] ` : "") + matchingCourse?.name}
+                        </span>
+                      )}
+
+                      {(l.video_file || l.video_url) && (
+                        <span
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 4,
+                            fontFamily: sans,
+                            fontSize: 11,
+                            color: C.hi,
+                            background: "rgba(245, 166, 35, 0.16)",
+                            padding: "2px 7px",
+                            borderRadius: 4,
+                            border: `1px solid ${C.amber}`,
+                            fontWeight: 600,
+                          }}
+                        >
+                          <Video size={11} color={C.amber} /> Teaching Video
                         </span>
                       )}
 

@@ -2,6 +2,8 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
+import json
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.db import transaction
@@ -514,6 +516,8 @@ class LabListCreateView(APIView):
     GET  /api/labs/  - List all active labs with nested questions and hints
     POST /api/labs/  - Create a new lab with questions and hints (Admin/Staff only)
     """
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+
     def get_permissions(self):
         if self.request.method == 'GET':
             return [IsAuthenticated()]
@@ -544,7 +548,13 @@ class LabListCreateView(APIView):
 
 
     def post(self, request):
-        serializer = LabSerializer(data=request.data)
+        data = request.data.copy() if hasattr(request.data, 'copy') else dict(request.data)
+        if 'questions' in data and isinstance(data['questions'], str):
+            try:
+                data['questions'] = json.loads(data['questions'])
+            except Exception:
+                pass
+        serializer = LabSerializer(data=data)
         if serializer.is_valid():
             lab = serializer.save()
             return Response({
@@ -566,6 +576,8 @@ class LabDetailView(APIView):
     PATCH  /api/labs/<id>/  - Update lab, questions, hints (Admin/Staff only)
     DELETE /api/labs/<id>/  - Soft-delete or delete lab (Admin/Staff only)
     """
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+
     def get_permissions(self):
         if self.request.method == 'GET':
             return [IsAuthenticated()]
@@ -581,7 +593,13 @@ class LabDetailView(APIView):
 
     def patch(self, request, pk):
         lab = self.get_object(pk)
-        serializer = LabSerializer(lab, data=request.data, partial=True)
+        data = request.data.copy() if hasattr(request.data, 'copy') else dict(request.data)
+        if 'questions' in data and isinstance(data['questions'], str):
+            try:
+                data['questions'] = json.loads(data['questions'])
+            except Exception:
+                pass
+        serializer = LabSerializer(lab, data=data, partial=True)
         if serializer.is_valid():
             updated_lab = serializer.save()
             return Response({
@@ -1071,6 +1089,8 @@ class StudentLabAttendView(APIView):
                 'difficulty': lab.difficulty,
                 'points': lab.points,
                 'target_url': lab.target_url,
+                'video_url': lab.video_url,
+                'video_file': request.build_absolute_uri(lab.video_file.url) if lab.video_file else None,
                 'subject_name': lab.subject.name if lab.subject else None,
                 'course_id': effective_course.id if effective_course else None,
                 'course_name': effective_course.name if effective_course else None,

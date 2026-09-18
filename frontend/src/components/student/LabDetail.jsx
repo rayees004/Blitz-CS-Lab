@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import {
   ChevronRight, Wifi, Clock, AlertTriangle, FileText, Globe,
   Terminal as TerminalIcon, Flag, Play, CheckCircle2, Lock,
-  Unlock, Lightbulb, Trophy, Send, AlertCircle, RefreshCw, ExternalLink
+  Unlock, Lightbulb, Trophy, Send, AlertCircle, RefreshCw, ExternalLink, Video
 } from "lucide-react";
 import Panel from "../common/Panel";
 import Btn from "../common/Btn";
@@ -285,6 +285,60 @@ export default function LabDetail({ lab, back }) {
               <ExternalLink size={11} />
             </a>
           </Panel>
+
+          {/* Teaching Video for Students */}
+          {(l.video_file || l.video_url) && (
+            <div style={{ marginTop: 20 }}>
+              <div style={{ fontFamily: mono, fontSize: 10.5, color: C.amber, letterSpacing: "0.04em", marginBottom: 8, display: "flex", alignItems: "center", gap: 5 }}>
+                <Video size={13} /> TEACHING & TUTORIAL VIDEO
+              </div>
+              <Panel style={{ padding: 10, background: C.panel2, border: `1px solid rgba(245, 166, 35, 0.3)` }}>
+                {l.video_file ? (
+                  <video
+                    controls
+                    src={l.video_file}
+                    style={{ width: "100%", borderRadius: 6, maxHeight: 180, display: "block", background: "#000" }}
+                  >
+                    Your browser does not support HTML5 video.
+                  </video>
+                ) : l.video_url?.includes("youtube.com") || l.video_url?.includes("youtu.be") ? (
+                  <div style={{ position: "relative", paddingBottom: "56.25%", height: 0, overflow: "hidden", borderRadius: 6 }}>
+                    <iframe
+                      src={
+                        l.video_url.includes("watch?v=")
+                          ? l.video_url.replace("watch?v=", "embed/")
+                          : l.video_url.includes("youtu.be/")
+                          ? `https://www.youtube.com/embed/${l.video_url.split("youtu.be/")[1]}`
+                          : l.video_url
+                      }
+                      title="Teaching Video"
+                      style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: "none" }}
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                    />
+                  </div>
+                ) : (
+                  <a
+                    href={l.video_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{
+                      fontFamily: mono,
+                      fontSize: 11.5,
+                      color: C.amber,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 4,
+                      wordBreak: "break-all",
+                      textDecoration: "none",
+                    }}
+                  >
+                    Watch Tutorial Video <ExternalLink size={11} />
+                  </a>
+                )}
+              </Panel>
+            </div>
+          )}
         </div>
 
         {/* Center: Live Questions & Flag Submission */}

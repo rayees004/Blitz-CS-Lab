@@ -1,5 +1,5 @@
 import React from "react";
-import { Play, Lock } from "lucide-react";
+import { Play, Lock, Video } from "lucide-react";
 import Panel from "../common/Panel";
 import Btn from "../common/Btn";
 import Badge, { DiffBadge } from "../common/Badge";
@@ -55,9 +55,28 @@ export default function LabCard({ lab, onOpen }) {
           <span>{lab.lock_reason || `Requires assignment to subject ${lab.subject_name || 'subject'}`}</span>
         </div>
       )}
-      <div style={{ display: "flex", gap: 8 }}>
+      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
         <DiffBadge level={lab.diff} />
         <Badge>{lab.pts} PTS</Badge>
+        {(lab.video_file || lab.video_url) && (
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
+              fontFamily: sans,
+              fontSize: 10.5,
+              color: C.amber,
+              background: "rgba(245, 166, 35, 0.12)",
+              padding: "2px 6px",
+              borderRadius: 4,
+              border: `1px solid rgba(245, 166, 35, 0.3)`,
+              fontWeight: 600,
+            }}
+          >
+            <Video size={11} /> Video
+          </span>
+        )}
       </div>
       {started && !isLocked && <ProgressBar value={lab.pct} h={5} />}
       <Btn

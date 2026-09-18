@@ -167,6 +167,8 @@ class Lab(models.Model):
     difficulty = models.CharField(max_length=20, choices=DIFFICULTY_CHOICES, default='Beginner')
     points = models.PositiveIntegerField(default=100)
     target_url = models.CharField(max_length=300, blank=True, default='')
+    video_url = models.URLField(max_length=500, blank=True, default='', help_text='External teaching video URL (e.g. YouTube, Vimeo, MP4 stream)')
+    video_file = models.FileField(upload_to='lab_videos/', blank=True, null=True, help_text='Uploaded lab teaching video file')
     course = models.ForeignKey(
         Course,
         on_delete=models.SET_NULL,

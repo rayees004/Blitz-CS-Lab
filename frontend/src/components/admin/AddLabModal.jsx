@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import {
   X, Plus, Trash2, HelpCircle, Lightbulb, AlertCircle,
   Flag, Award, Globe, Server, CheckCircle2, ChevronDown, Sparkles,
-  BookMarked
+  BookMarked, Video, UploadCloud, Film, PlayCircle
 } from "lucide-react";
 import Btn from "../common/Btn";
 import Badge from "../common/Badge";
@@ -46,6 +46,7 @@ export default function AddLabModal({ isOpen, onClose, onLabCreated, initialLab 
         difficulty: initialLab.diff || initialLab.difficulty || "Beginner",
         points: initialLab.pts || initialLab.points || 100,
         target_url: initialLab.target_url || "",
+        video_url: initialLab.video_url || "",
         subject_id: initialCourse?.id || initialLab.subject_id || initialLab.subject || "",
         questions: (initialLab.questions && initialLab.questions.length > 0)
 
@@ -83,6 +84,7 @@ export default function AddLabModal({ isOpen, onClose, onLabCreated, initialLab 
       difficulty: "Beginner",
       points: 100,
       target_url: "",
+      video_url: "",
       subject_id: initialCourse?.id ? String(initialCourse.id) : "",
       questions: [
 
@@ -98,6 +100,10 @@ export default function AddLabModal({ isOpen, onClose, onLabCreated, initialLab 
       ],
     };
   });
+
+  const [videoFile, setVideoFile] = useState(null);
+  const [videoFilePreview, setVideoFilePreview] = useState(initialLab?.video_file || null);
+  const [videoMode, setVideoMode] = useState(() => (initialLab?.video_url ? "url" : (initialLab?.video_file ? "upload" : "upload")));
 
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
@@ -204,31 +210,51 @@ export default function AddLabModal({ isOpen, onClose, onLabCreated, initialLab 
 
     setSubmitting(true);
     try {
-      const payload = {
-        name: form.name.trim(),
-        description: form.description.trim(),
-        org: form.org.trim() || "BlitzLab",
-        category: form.category,
-        difficulty: form.difficulty,
-        points: Number(form.points) || 100,
-        target_url: form.target_url.trim(),
-        subject_id: form.subject_id ? Number(form.subject_id) : null,
-        questions: form.questions.map((q, qIdx) => ({
+      const cleanQuestions = form.questions.map((q, qIdx) => ({
+        title: q.title.trim(),
+        description: q.description.trim(),
+        flag: q.flag.trim(),
+        points: Number(q.points) || 50,
+        order: qIdx,
+        hints: (q.hints || [])
+          .filter((h) => h.hint_text.trim().length > 0)
+          .map((h, hIdx) => ({
+            hint_text: h.hint_text.trim(),
+            cost: Number(h.cost) || 0,
+            order: hIdx,
+          })),
+      }));
 
-          title: q.title.trim(),
-          description: q.description.trim(),
-          flag: q.flag.trim(),
-          points: Number(q.points) || 50,
-          order: qIdx,
-          hints: (q.hints || [])
-            .filter((h) => h.hint_text.trim().length > 0)
-            .map((h, hIdx) => ({
-              hint_text: h.hint_text.trim(),
-              cost: Number(h.cost) || 0,
-              order: hIdx,
-            })),
-        })),
-      };
+      let payload;
+      if (videoFile) {
+        payload = new FormData();
+        payload.append("name", form.name.trim());
+        payload.append("description", form.description.trim());
+        payload.append("org", form.org.trim() || "BlitzLab");
+        payload.append("category", form.category);
+        payload.append("difficulty", form.difficulty);
+        payload.append("points", String(Number(form.points) || 100));
+        payload.append("target_url", form.target_url.trim());
+        payload.append("video_url", form.video_url.trim());
+        if (form.subject_id) {
+          payload.append("subject_id", String(form.subject_id));
+        }
+        payload.append("video_file", videoFile);
+        payload.append("questions", JSON.stringify(cleanQuestions));
+      } else {
+        payload = {
+          name: form.name.trim(),
+          description: form.description.trim(),
+          org: form.org.trim() || "BlitzLab",
+          category: form.category,
+          difficulty: form.difficulty,
+          points: Number(form.points) || 100,
+          target_url: form.target_url.trim(),
+          video_url: form.video_url.trim(),
+          subject_id: form.subject_id ? Number(form.subject_id) : null,
+          questions: cleanQuestions,
+        };
+      }
 
       if (onLabCreated) {
         await onLabCreated(payload, initialLab?.id);
@@ -552,6 +578,172 @@ export default function AddLabModal({ isOpen, onClose, onLabCreated, initialLab 
                   }}
                 />
               </div>
+            </div>
+
+            {/* Teaching Video Upload / Link Sub-section */}
+            <div
+              style={{
+                marginTop: 18,
+                padding: "16px 18px",
+                background: "rgba(245, 166, 35, 0.04)",
+                border: `1px solid rgba(245, 166, 35, 0.25)`,
+                borderRadius: 8,
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <Video size={16} color={C.amber} />
+                  <span style={{ fontFamily: sans, fontSize: 13, fontWeight: 700, color: C.hi }}>
+                    Lab Teaching & Walkthrough Video
+                  </span>
+                  <Badge tone="amber">Optional</Badge>
+                </div>
+
+                <div style={{ display: "flex", gap: 4, background: C.panel2, padding: 3, borderRadius: 6, border: `1px solid ${C.border}` }}>
+                  <button
+                    type="button"
+                    onClick={() => setVideoMode("upload")}
+                    style={{
+                      background: videoMode === "upload" ? C.amber : "transparent",
+                      color: videoMode === "upload" ? "#1A1200" : C.mid,
+                      border: "none",
+                      borderRadius: 4,
+                      padding: "4px 9px",
+                      fontFamily: sans,
+                      fontSize: 11,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 4,
+                    }}
+                  >
+                    <UploadCloud size={12} /> Upload File
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setVideoMode("url")}
+                    style={{
+                      background: videoMode === "url" ? C.amber : "transparent",
+                      color: videoMode === "url" ? "#1A1200" : C.mid,
+                      border: "none",
+                      borderRadius: 4,
+                      padding: "4px 9px",
+                      fontFamily: sans,
+                      fontSize: 11,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 4,
+                    }}
+                  >
+                    <Film size={12} /> Video URL
+                  </button>
+                </div>
+              </div>
+
+              {videoMode === "upload" ? (
+                <div>
+                  <div
+                    style={{
+                      border: `1.5px dashed ${videoFile ? C.amber : C.border}`,
+                      borderRadius: 8,
+                      padding: "16px 20px",
+                      textAlign: "center",
+                      background: C.panel2,
+                      cursor: "pointer",
+                      position: "relative",
+                      transition: "border-color 150ms",
+                    }}
+                  >
+                    <input
+                      type="file"
+                      accept="video/mp4,video/webm,video/ogg,video/quicktime,video/mkv"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          setVideoFile(file);
+                          setVideoFilePreview(URL.createObjectURL(file));
+                        }
+                      }}
+                      style={{
+                        position: "absolute",
+                        inset: 0,
+                        opacity: 0,
+                        cursor: "pointer",
+                        width: "100%",
+                        height: "100%",
+                      }}
+                    />
+                    <UploadCloud size={28} color={videoFile ? C.amber : C.cyan} style={{ marginBottom: 6 }} />
+                    <div style={{ fontFamily: sans, fontSize: 13, color: C.hi, fontWeight: 600 }}>
+                      {videoFile ? videoFile.name : (videoFilePreview ? "Replace current uploaded video" : "Click or drag teaching video file here")}
+                    </div>
+                    <div style={{ fontFamily: mono, fontSize: 11, color: C.low, marginTop: 4 }}>
+                      {videoFile
+                        ? `${(videoFile.size / (1024 * 1024)).toFixed(2)} MB · Selected`
+                        : "Supports MP4, WebM, MKV, QuickTime (up to 500MB)"}
+                    </div>
+                  </div>
+
+                  {videoFilePreview && (
+                    <div style={{ marginTop: 12, display: "flex", alignItems: "center", justifyContent: "space-between", background: C.panel3, padding: "8px 12px", borderRadius: 6 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <PlayCircle size={15} color={C.amber} />
+                        <span style={{ fontFamily: mono, fontSize: 11.5, color: C.hi, maxWidth: 300, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {videoFile ? videoFile.name : (typeof videoFilePreview === "string" ? videoFilePreview.split("/").pop() : "Teaching Video")}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setVideoFile(null);
+                          setVideoFilePreview(null);
+                        }}
+                        style={{
+                          background: "transparent",
+                          border: "none",
+                          color: C.danger,
+                          cursor: "pointer",
+                          fontFamily: sans,
+                          fontSize: 11.5,
+                          fontWeight: 600,
+                        }}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div>
+                  <label style={{ display: "block", fontFamily: sans, fontSize: 12, color: C.mid, marginBottom: 6 }}>
+                    Direct Video Stream / YouTube / Vimeo URL
+                  </label>
+                  <input
+                    type="url"
+                    placeholder="e.g. https://www.youtube.com/watch?v=... or https://cdn.blitzlab.io/videos/lab1.mp4"
+                    value={form.video_url}
+                    onChange={(e) => updateField("video_url", e.target.value)}
+                    style={{
+                      width: "100%",
+                      boxSizing: "border-box",
+                      background: C.panel2,
+                      border: `1px solid ${C.border}`,
+                      borderRadius: 7,
+                      padding: "9px 12px",
+                      fontFamily: mono,
+                      fontSize: 12.5,
+                      color: C.hi,
+                      outline: "none",
+                    }}
+                  />
+                  <div style={{ fontFamily: sans, fontSize: 11, color: C.low, marginTop: 4 }}>
+                    Embed YouTube, Vimeo, or direct .mp4/.webm video link for teaching students how to solve this lab.
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

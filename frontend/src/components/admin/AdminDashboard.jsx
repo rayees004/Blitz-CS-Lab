@@ -9,7 +9,7 @@ import Badge, { DiffBadge } from "../common/Badge";
 import Btn from "../common/Btn";
 import ProgressBar from "../common/ProgressBar";
 import { C, sans, mono } from "../../constants/theme";
-import { LABS as MOCK_LABS, CLASSES } from "../../data/mockData";
+import { LABS as MOCK_LABS } from "../../data/mockData";
 import { fetchLabs, createLab } from "../../api/labs";
 import AddLabModal from "./AddLabModal";
 
@@ -80,7 +80,7 @@ export default function AdminDashboard({ onNavigate }) {
             Admin Dashboard
           </h1>
           <p style={{ fontFamily: sans, fontSize: 13.5, color: C.mid, marginTop: 6 }}>
-            Overview across all classes, curriculum, and interactive labs.
+            Overview across courses, students, and interactive labs.
           </p>
         </div>
 
@@ -285,38 +285,6 @@ export default function AdminDashboard({ onNavigate }) {
             </div>
           )}
         </Panel>
-      </div>
-
-      {/* Classes Section */}
-      <div style={{ marginTop: 24 }}>
-        <div style={{ fontFamily: sans, fontSize: 14, fontWeight: 700, color: C.hi, marginBottom: 12 }}>
-          Classes
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 14 }}>
-          {CLASSES.map((c) => (
-            <Panel key={c.name} style={{ padding: 18 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                <div style={{ fontFamily: sans, fontSize: 14.5, fontWeight: 700, color: C.hi }}>{c.name}</div>
-                <Badge tone={c.fee === "PAID" ? "cyan" : c.fee === "DUE" ? "danger" : "warn"}>{c.fee}</Badge>
-              </div>
-              <div style={{ display: "flex", gap: 18, marginTop: 12 }}>
-                {[["Students", c.students], ["Labs", c.labs], ["Materials", c.materials]].map(([k, v]) => (
-                  <div key={k}>
-                    <div style={{ fontFamily: mono, fontSize: 16, fontWeight: 600, color: C.hi }}>{v}</div>
-                    <div style={{ fontFamily: sans, fontSize: 11, color: C.low }}>{k}</div>
-                  </div>
-                ))}
-              </div>
-              <div style={{ marginTop: 14 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
-                  <span style={{ fontFamily: sans, fontSize: 11.5, color: C.mid }}>Progress</span>
-                  <span style={{ fontFamily: mono, fontSize: 11, color: C.hi }}>{c.pct}%</span>
-                </div>
-                <ProgressBar value={c.pct} />
-              </div>
-            </Panel>
-          ))}
-        </div>
       </div>
 
       {/* Add Lab Modal */}
