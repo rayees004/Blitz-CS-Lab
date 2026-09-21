@@ -699,12 +699,13 @@ export default function AdminLabs({ onOpenAddModal = null }) {
   };
 
   const handleSaveLab = async (payload, editId) => {
+    const labName = payload instanceof FormData ? payload.get("name") : payload.name;
     if (editId) {
       await updateLab(editId, payload);
-      setActionNotice({ type: "success", text: `Lab "${payload.name}" updated successfully!` });
+      setActionNotice({ type: "success", text: `Lab "${labName}" updated successfully!` });
     } else {
       await createLab(payload);
-      setActionNotice({ type: "success", text: `Lab "${payload.name}" created successfully!` });
+      setActionNotice({ type: "success", text: `Lab "${labName}" created successfully!` });
     }
     await loadLabs();
     setTimeout(() => setActionNotice(null), 4000);

@@ -44,10 +44,20 @@ export async function fetchSubjectLabs(subjectId) {
 
 /** Create a lab directly assigned to a Course (Subject) */
 export async function createSubjectLab(subjectId, payload) {
+  const isForm = typeof FormData !== 'undefined' && payload instanceof FormData;
+  const token = getStoredToken();
+  const headers = {};
+  if (!isForm) {
+    headers['Content-Type'] = 'application/json';
+  }
+  if (token) {
+    headers['Authorization'] = `Token ${token}`;
+  }
+
   const res = await fetch(`${API_BASE}/subjects/${subjectId}/labs/`, {
     method: 'POST',
-    headers: authHeaders(),
-    body: JSON.stringify(payload),
+    headers,
+    body: isForm ? payload : JSON.stringify(payload),
   });
   return handleResponse(res);
 }

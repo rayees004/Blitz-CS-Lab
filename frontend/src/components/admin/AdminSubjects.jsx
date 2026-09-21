@@ -863,7 +863,11 @@ function CourseLabsDrawer({ course, onClose, onLabsCountChanged }) {
   }, [loadCourseLabs]);
 
   const handleSaveLab = async (payload, editId) => {
-    payload.subject_id = course.id;
+    if (payload instanceof FormData) {
+      payload.set("subject_id", String(course.id));
+    } else {
+      payload.subject_id = course.id;
+    }
     if (editId) {
       await updateLab(editId, payload);
     } else {
