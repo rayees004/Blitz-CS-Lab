@@ -114,7 +114,7 @@ export default function AddLabModal({ isOpen, onClose, onLabCreated, initialLab 
 
   const [sourceFile, setSourceFile] = useState(null);
   const [sourceFilePreview, setSourceFilePreview] = useState(initialLab?.source_file || null);
-  const [sourceMode, setSourceMode] = useState(() => (initialLab?.source_link ? "link" : (initialLab?.source_file ? "upload" : "upload")));
+  const [sourceMode, setSourceMode] = useState(() => (initialLab?.target_url ? "site" : (initialLab?.source_link ? "link" : (initialLab?.source_file ? "upload" : "upload"))));
 
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
@@ -778,10 +778,30 @@ export default function AddLabModal({ isOpen, onClose, onLabCreated, initialLab 
                   >
                     <Link2 size={12} /> Repo Link (GitHub)
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setSourceMode("site")}
+                    style={{
+                      background: sourceMode === "site" ? C.cyan : "transparent",
+                      color: sourceMode === "site" ? "#0A0D12" : C.mid,
+                      border: "none",
+                      borderRadius: 4,
+                      padding: "4px 9px",
+                      fontFamily: sans,
+                      fontSize: 11,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 4,
+                    }}
+                  >
+                    <Globe size={12} /> Vulnerable Website Link
+                  </button>
                 </div>
               </div>
 
-              {sourceMode === "upload" ? (
+              {sourceMode === "upload" && (
                 <div style={{ marginBottom: 16 }}>
                   <div
                     style={{
@@ -854,7 +874,9 @@ export default function AddLabModal({ isOpen, onClose, onLabCreated, initialLab 
                     </div>
                   )}
                 </div>
-              ) : (
+              )}
+
+              {sourceMode === "link" && (
                 <div style={{ marginBottom: 16 }}>
                   <label style={{ display: "block", fontFamily: sans, fontSize: 12, color: C.mid, marginBottom: 6 }}>
                     Source Code Repository / Container URL
@@ -879,6 +901,36 @@ export default function AddLabModal({ isOpen, onClose, onLabCreated, initialLab 
                   />
                   <div style={{ fontFamily: sans, fontSize: 11, color: C.low, marginTop: 4 }}>
                     GitHub, GitLab, Docker Hub, or repository URL for students to clone or pull.
+                  </div>
+                </div>
+              )}
+
+              {sourceMode === "site" && (
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: sans, fontSize: 12, color: C.mid, marginBottom: 6 }}>
+                    <Globe size={13} color={C.cyan} />
+                    <span>Vulnerable Website / Target URL</span>
+                  </label>
+                  <input
+                    type="url"
+                    placeholder="e.g. https://vulnerable-site.com or http://target-app.internal:8080"
+                    value={form.target_url}
+                    onChange={(e) => updateField("target_url", e.target.value)}
+                    style={{
+                      width: "100%",
+                      boxSizing: "border-box",
+                      background: C.panel2,
+                      border: `1px solid ${C.border}`,
+                      borderRadius: 7,
+                      padding: "9px 12px",
+                      fontFamily: mono,
+                      fontSize: 12.5,
+                      color: C.hi,
+                      outline: "none",
+                    }}
+                  />
+                  <div style={{ fontFamily: sans, fontSize: 11, color: C.low, marginTop: 4 }}>
+                    Live URL of the vulnerable target website. Students will be given an "Open Target" link in their lab environment.
                   </div>
                 </div>
               )}
