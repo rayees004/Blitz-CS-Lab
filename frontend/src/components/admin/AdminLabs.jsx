@@ -4,7 +4,7 @@ import {
   Trash2, Edit3, CheckCircle, AlertCircle, RefreshCw, Layers,
   Award, Globe, ExternalLink, Flag, BookMarked, Eye, EyeOff,
   ChevronDown, ChevronUp, Database, Sparkles, X, Terminal,
-  Video, Play, Film
+  Video, Play, Film, FolderArchive, Download, Copy, Check, Code, FileCode
 } from "lucide-react";
 import Panel from "../common/Panel";
 import Btn from "../common/Btn";
@@ -18,6 +18,7 @@ import AddLabModal from "./AddLabModal";
 /* ── Lab Detailed View Drawer ─────────────────────────────────────────── */
 function LabViewDrawer({ lab, courses, onClose, onEdit, onDelete }) {
   const [showFlags, setShowFlags] = useState({});
+  const [copiedCommands, setCopiedCommands] = useState(false);
 
   if (!lab) return null;
 
@@ -278,6 +279,133 @@ function LabViewDrawer({ lab, courses, onClose, onEdit, onDelete }) {
                       {lab.video_url}
                       <ExternalLink size={12} />
                     </a>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Lab Source Code & Local Setup Guide */}
+          {(lab.source_file || lab.source_link || lab.setup_commands || lab.setup_guide) && (
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontFamily: mono, fontSize: 11, color: C.cyan, letterSpacing: "0.06em", marginBottom: 8, display: "flex", alignItems: "center", gap: 5 }}>
+                <FolderArchive size={13} /> SOURCE CODE & LOCAL ENVIRONMENT SETUP
+              </div>
+              <div
+                style={{
+                  background: C.panel2,
+                  border: `1px solid rgba(0, 229, 255, 0.25)`,
+                  borderRadius: 8,
+                  padding: "14px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 12,
+                }}
+              >
+                {/* Source File & Source Link Row */}
+                <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                  {lab.source_file && (
+                    <a
+                      href={lab.source_file}
+                      download
+                      style={{
+                        background: "rgba(0, 229, 255, 0.12)",
+                        border: "1px solid rgba(0, 229, 255, 0.35)",
+                        color: C.cyan,
+                        padding: "6px 12px",
+                        borderRadius: 6,
+                        fontFamily: sans,
+                        fontSize: 12,
+                        fontWeight: 600,
+                        textDecoration: "none",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 6,
+                      }}
+                    >
+                      <Download size={13} />
+                      Download Lab Source Archive
+                      {lab.source_file_size > 0 && (
+                        <span style={{ fontFamily: mono, fontSize: 10.5, color: C.mid }}>
+                          ({(lab.source_file_size / (1024 * 1024)).toFixed(2)} MB)
+                        </span>
+                      )}
+                    </a>
+                  )}
+
+                  {lab.source_link && (
+                    <a
+                      href={lab.source_link}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{
+                        background: C.panel3,
+                        border: `1px solid ${C.border}`,
+                        color: C.hi,
+                        padding: "6px 12px",
+                        borderRadius: 6,
+                        fontFamily: sans,
+                        fontSize: 12,
+                        fontWeight: 600,
+                        textDecoration: "none",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 6,
+                      }}
+                    >
+                      <ExternalLink size={13} color={C.cyan} />
+                      Open Source Repository
+                    </a>
+                  )}
+                </div>
+
+                {/* Local Setup Commands */}
+                {lab.setup_commands && (
+                  <div style={{ background: "#080c10", border: `1px solid ${C.border}`, borderRadius: 6, padding: "10px 12px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                      <span style={{ fontFamily: mono, fontSize: 11, color: C.cyan, display: "flex", alignItems: "center", gap: 5 }}>
+                        <Terminal size={12} /> Local Run Commands:
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(lab.setup_commands);
+                          setCopiedCommands(true);
+                          setTimeout(() => setCopiedCommands(false), 2000);
+                        }}
+                        style={{
+                          background: C.panel2,
+                          border: `1px solid ${C.border}`,
+                          color: copiedCommands ? C.green : C.mid,
+                          padding: "2px 8px",
+                          borderRadius: 4,
+                          cursor: "pointer",
+                          fontFamily: sans,
+                          fontSize: 11,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 4,
+                        }}
+                      >
+                        {copiedCommands ? <Check size={11} /> : <Copy size={11} />}
+                        {copiedCommands ? "Copied!" : "Copy"}
+                      </button>
+                    </div>
+                    <pre style={{ margin: 0, fontFamily: mono, fontSize: 11.5, color: "#79c0ff", whiteSpace: "pre-wrap", lineHeight: 1.5 }}>
+                      {lab.setup_commands}
+                    </pre>
+                  </div>
+                )}
+
+                {/* Step-by-Step Setup Guide */}
+                {lab.setup_guide && (
+                  <div>
+                    <div style={{ fontFamily: mono, fontSize: 10.5, color: C.low, letterSpacing: "0.04em", marginBottom: 4 }}>
+                      STEP-BY-STEP SETUP GUIDE
+                    </div>
+                    <div style={{ fontFamily: sans, fontSize: 12.5, color: C.mid, whiteSpace: "pre-wrap", lineHeight: 1.6 }}>
+                      {lab.setup_guide}
+                    </div>
                   </div>
                 )}
               </div>

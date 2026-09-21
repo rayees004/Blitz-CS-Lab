@@ -2,7 +2,8 @@ import React, { useState, useEffect } from "react";
 import {
   X, FlaskConical, CheckCircle2, AlertCircle, HelpCircle,
   Lightbulb, ExternalLink, Copy, Check, Send, Trophy,
-  Terminal, ShieldCheck, Clock, Lock, Unlock, RefreshCw
+  Terminal, ShieldCheck, Clock, Lock, Unlock, RefreshCw,
+  FolderArchive, Download, Code
 } from "lucide-react";
 import Panel from "../common/Panel";
 import Btn from "../common/Btn";
@@ -31,6 +32,7 @@ export default function StudentLabAttendModal({ lab, onClose, onUpdated }) {
   const [finalizing, setFinalizing] = useState(false);
   const [finalSuccess, setFinalSuccess] = useState(null);
   const [copiedUrl, setCopiedUrl] = useState(false);
+  const [copiedSetupCommands, setCopiedSetupCommands] = useState(false);
 
   // Load / Start attendance session
   const loadWorkspace = async () => {
@@ -430,6 +432,134 @@ export default function StudentLabAttendModal({ lab, onClose, onUpdated }) {
                   {lab.description || "In this challenge, your objective is to analyze the target environment, discover security flaws, and capture the proof-of-concept flags to earn marks."}
                 </p>
               </div>
+
+              {/* Local Environment Setup & Source Code */}
+              {(lab.source_file || lab.source_link || lab.setup_commands || lab.setup_guide) && (
+                <div
+                  style={{
+                    background: "rgba(0, 229, 255, 0.03)",
+                    border: `1px solid rgba(0, 229, 255, 0.25)`,
+                    borderRadius: 8,
+                    padding: 16,
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, flexWrap: "wrap", gap: 8 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <FolderArchive size={16} color={C.cyan} />
+                      <span style={{ fontFamily: sans, fontSize: 13, fontWeight: 700, color: C.hi }}>
+                        Local Lab Setup & Source Code
+                      </span>
+                      <Badge tone="cyan">Run Locally</Badge>
+                    </div>
+
+                    <div style={{ display: "flex", gap: 8 }}>
+                      {lab.source_file && (
+                        <a
+                          href={lab.source_file}
+                          download
+                          style={{
+                            background: "rgba(0, 229, 255, 0.12)",
+                            border: "1px solid rgba(0, 229, 255, 0.35)",
+                            color: C.cyan,
+                            padding: "6px 12px",
+                            borderRadius: 6,
+                            fontFamily: sans,
+                            fontSize: 12,
+                            fontWeight: 600,
+                            textDecoration: "none",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 6,
+                          }}
+                        >
+                          <Download size={13} />
+                          Download Source Archive
+                          {lab.source_file_size > 0 && (
+                            <span style={{ fontFamily: mono, fontSize: 10.5, color: C.mid }}>
+                              ({(lab.source_file_size / (1024 * 1024)).toFixed(2)} MB)
+                            </span>
+                          )}
+                        </a>
+                      )}
+
+                      {lab.source_link && (
+                        <a
+                          href={lab.source_link}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={{
+                            background: C.panel,
+                            border: `1px solid ${C.border}`,
+                            color: C.hi,
+                            padding: "6px 12px",
+                            borderRadius: 6,
+                            fontFamily: sans,
+                            fontSize: 12,
+                            fontWeight: 600,
+                            textDecoration: "none",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 6,
+                          }}
+                        >
+                          <ExternalLink size={13} color={C.cyan} />
+                          View Source Repository
+                        </a>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Run Commands snippet */}
+                  {lab.setup_commands && (
+                    <div style={{ background: "#060a0f", border: `1px solid ${C.border}`, borderRadius: 6, padding: "10px 14px", marginTop: 10 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                        <span style={{ fontFamily: mono, fontSize: 11, color: C.cyan, display: "flex", alignItems: "center", gap: 6 }}>
+                          <Terminal size={12} /> Local Run / Docker Commands:
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(lab.setup_commands);
+                            setCopiedSetupCommands(true);
+                            setTimeout(() => setCopiedSetupCommands(false), 2000);
+                          }}
+                          style={{
+                            background: C.panel,
+                            border: `1px solid ${C.border}`,
+                            color: copiedSetupCommands ? C.green : C.mid,
+                            padding: "3px 8px",
+                            borderRadius: 4,
+                            cursor: "pointer",
+                            fontFamily: sans,
+                            fontSize: 11,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 4,
+                          }}
+                        >
+                          {copiedSetupCommands ? <Check size={11} /> : <Copy size={11} />}
+                          {copiedSetupCommands ? "Copied" : "Copy"}
+                        </button>
+                      </div>
+                      <pre style={{ margin: 0, fontFamily: mono, fontSize: 12, color: "#79c0ff", whiteSpace: "pre-wrap", lineHeight: 1.5 }}>
+                        {lab.setup_commands}
+                      </pre>
+                    </div>
+                  )}
+
+                  {/* Step-by-Step Instructions */}
+                  {lab.setup_guide && (
+                    <div style={{ marginTop: 12 }}>
+                      <div style={{ fontFamily: mono, fontSize: 10.5, color: C.low, letterSpacing: "0.04em", marginBottom: 4 }}>
+                        STEP-BY-STEP SETUP INSTRUCTIONS
+                      </div>
+                      <div style={{ fontFamily: sans, fontSize: 13, color: C.mid, whiteSpace: "pre-wrap", lineHeight: 1.6 }}>
+                        {lab.setup_guide}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Progress Bar Header */}
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "4px 0 -8px" }}>

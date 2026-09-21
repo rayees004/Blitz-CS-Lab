@@ -922,6 +922,13 @@ class StudentLabListView(APIView):
                 except Exception:
                     video_file_url = lab.video_file.url
 
+            source_file_url = None
+            if lab.source_file:
+                try:
+                    source_file_url = request.build_absolute_uri(lab.source_file.url)
+                except Exception:
+                    source_file_url = lab.source_file.url
+
             enriched_labs.append({
                 'id': lab.id,
                 'name': lab.name,
@@ -933,6 +940,11 @@ class StudentLabListView(APIView):
                 'target_url': lab.target_url,
                 'video_url': lab.video_url,
                 'video_file': video_file_url,
+                'source_link': lab.source_link,
+                'source_file': source_file_url,
+                'source_file_size': lab.source_file_size,
+                'setup_guide': lab.setup_guide,
+                'setup_commands': lab.setup_commands,
                 'subject_id': lab.subject_id,
                 'subject_name': lab.subject.name if lab.subject else None,
                 'subject_code': lab.subject.code if lab.subject else None,
@@ -1106,6 +1118,11 @@ class StudentLabAttendView(APIView):
                 'target_url': lab.target_url,
                 'video_url': lab.video_url,
                 'video_file': request.build_absolute_uri(lab.video_file.url) if lab.video_file else None,
+                'source_link': lab.source_link,
+                'source_file': request.build_absolute_uri(lab.source_file.url) if lab.source_file else None,
+                'source_file_size': lab.source_file_size,
+                'setup_guide': lab.setup_guide,
+                'setup_commands': lab.setup_commands,
                 'subject_name': lab.subject.name if lab.subject else None,
                 'course_id': effective_course.id if effective_course else None,
                 'course_name': effective_course.name if effective_course else None,

@@ -2,7 +2,8 @@ import React, { useState, useEffect } from "react";
 import {
   X, Plus, Trash2, HelpCircle, Lightbulb, AlertCircle,
   Flag, Award, Globe, Server, CheckCircle2, ChevronDown, Sparkles,
-  BookMarked, Video, UploadCloud, Film, PlayCircle
+  BookMarked, Video, UploadCloud, Film, PlayCircle,
+  Terminal, Code, FolderArchive, Download, Link2, FileCode
 } from "lucide-react";
 import Btn from "../common/Btn";
 import Badge from "../common/Badge";
@@ -47,6 +48,9 @@ export default function AddLabModal({ isOpen, onClose, onLabCreated, initialLab 
         points: initialLab.pts || initialLab.points || 100,
         target_url: initialLab.target_url || "",
         video_url: initialLab.video_url || "",
+        source_link: initialLab.source_link || "",
+        setup_guide: initialLab.setup_guide || "",
+        setup_commands: initialLab.setup_commands || "",
         subject_id: initialCourse?.id || initialLab.subject_id || initialLab.subject || "",
         questions: (initialLab.questions && initialLab.questions.length > 0)
 
@@ -85,6 +89,9 @@ export default function AddLabModal({ isOpen, onClose, onLabCreated, initialLab 
       points: 100,
       target_url: "",
       video_url: "",
+      source_link: "",
+      setup_guide: "",
+      setup_commands: "",
       subject_id: initialCourse?.id ? String(initialCourse.id) : "",
       questions: [
 
@@ -104,6 +111,10 @@ export default function AddLabModal({ isOpen, onClose, onLabCreated, initialLab 
   const [videoFile, setVideoFile] = useState(null);
   const [videoFilePreview, setVideoFilePreview] = useState(initialLab?.video_file || null);
   const [videoMode, setVideoMode] = useState(() => (initialLab?.video_url ? "url" : (initialLab?.video_file ? "upload" : "upload")));
+
+  const [sourceFile, setSourceFile] = useState(null);
+  const [sourceFilePreview, setSourceFilePreview] = useState(initialLab?.source_file || null);
+  const [sourceMode, setSourceMode] = useState(() => (initialLab?.source_link ? "link" : (initialLab?.source_file ? "upload" : "upload")));
 
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
@@ -226,7 +237,7 @@ export default function AddLabModal({ isOpen, onClose, onLabCreated, initialLab 
       }));
 
       let payload;
-      if (videoFile) {
+      if (videoFile || sourceFile) {
         payload = new FormData();
         payload.append("name", form.name.trim());
         payload.append("description", form.description.trim());
@@ -236,10 +247,18 @@ export default function AddLabModal({ isOpen, onClose, onLabCreated, initialLab 
         payload.append("points", String(Number(form.points) || 100));
         payload.append("target_url", form.target_url.trim());
         payload.append("video_url", form.video_url.trim());
+        payload.append("source_link", form.source_link.trim());
+        payload.append("setup_guide", form.setup_guide.trim());
+        payload.append("setup_commands", form.setup_commands.trim());
         if (form.subject_id) {
           payload.append("subject_id", String(form.subject_id));
         }
-        payload.append("video_file", videoFile);
+        if (videoFile) {
+          payload.append("video_file", videoFile);
+        }
+        if (sourceFile) {
+          payload.append("source_file", sourceFile);
+        }
         payload.append("questions", JSON.stringify(cleanQuestions));
       } else {
         payload = {
@@ -251,6 +270,9 @@ export default function AddLabModal({ isOpen, onClose, onLabCreated, initialLab 
           points: Number(form.points) || 100,
           target_url: form.target_url.trim(),
           video_url: form.video_url.trim(),
+          source_link: form.source_link.trim(),
+          setup_guide: form.setup_guide.trim(),
+          setup_commands: form.setup_commands.trim(),
           subject_id: form.subject_id ? Number(form.subject_id) : null,
           questions: cleanQuestions,
         };
@@ -744,6 +766,230 @@ export default function AddLabModal({ isOpen, onClose, onLabCreated, initialLab 
                   </div>
                 </div>
               )}
+            </div>
+
+            {/* ── Source Code Attachment & Local Setup Sub-section ── */}
+            <div
+              style={{
+                marginTop: 18,
+                padding: "16px 18px",
+                background: "rgba(0, 229, 255, 0.03)",
+                border: `1px solid rgba(0, 229, 255, 0.25)`,
+                borderRadius: 8,
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <FolderArchive size={16} color={C.cyan} />
+                  <span style={{ fontFamily: sans, fontSize: 13, fontWeight: 700, color: C.hi }}>
+                    Lab Source Code & Local Setup
+                  </span>
+                  <Badge tone="cyan">Optional</Badge>
+                </div>
+
+                <div style={{ display: "flex", gap: 4, background: C.panel2, padding: 3, borderRadius: 6, border: `1px solid ${C.border}` }}>
+                  <button
+                    type="button"
+                    onClick={() => setSourceMode("upload")}
+                    style={{
+                      background: sourceMode === "upload" ? C.cyan : "transparent",
+                      color: sourceMode === "upload" ? "#0A0D12" : C.mid,
+                      border: "none",
+                      borderRadius: 4,
+                      padding: "4px 9px",
+                      fontFamily: sans,
+                      fontSize: 11,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 4,
+                    }}
+                  >
+                    <UploadCloud size={12} /> Source File (.ZIP)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSourceMode("link")}
+                    style={{
+                      background: sourceMode === "link" ? C.cyan : "transparent",
+                      color: sourceMode === "link" ? "#0A0D12" : C.mid,
+                      border: "none",
+                      borderRadius: 4,
+                      padding: "4px 9px",
+                      fontFamily: sans,
+                      fontSize: 11,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 4,
+                    }}
+                  >
+                    <Link2 size={12} /> Repo Link (GitHub)
+                  </button>
+                </div>
+              </div>
+
+              {sourceMode === "upload" ? (
+                <div style={{ marginBottom: 16 }}>
+                  <div
+                    style={{
+                      border: `1.5px dashed ${sourceFile ? C.cyan : C.border}`,
+                      borderRadius: 8,
+                      padding: "16px 20px",
+                      textAlign: "center",
+                      background: C.panel2,
+                      cursor: "pointer",
+                      position: "relative",
+                      transition: "border-color 150ms",
+                    }}
+                  >
+                    <input
+                      type="file"
+                      accept=".zip,.tar,.tar.gz,.tgz,.rar,.7z,.py,.js,.html,.sh,.dockerfile"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          setSourceFile(file);
+                          setSourceFilePreview(file.name);
+                        }
+                      }}
+                      style={{
+                        position: "absolute",
+                        inset: 0,
+                        opacity: 0,
+                        cursor: "pointer",
+                        width: "100%",
+                        height: "100%",
+                      }}
+                    />
+                    <FolderArchive size={28} color={sourceFile ? C.cyan : C.mid} style={{ marginBottom: 6 }} />
+                    <div style={{ fontFamily: sans, fontSize: 13, color: C.hi, fontWeight: 600 }}>
+                      {sourceFile ? sourceFile.name : (sourceFilePreview ? "Replace current uploaded source archive" : "Click or drag lab source archive (.ZIP, .TAR.GZ) here")}
+                    </div>
+                    <div style={{ fontFamily: mono, fontSize: 11, color: C.low, marginTop: 4 }}>
+                      {sourceFile
+                        ? `${(sourceFile.size / (1024 * 1024)).toFixed(2)} MB · Selected`
+                        : "Supports ZIP, TAR, GZ, code files up to 250MB for students to run locally"}
+                    </div>
+                  </div>
+
+                  {sourceFilePreview && (
+                    <div style={{ marginTop: 12, display: "flex", alignItems: "center", justifyContent: "space-between", background: C.panel3, padding: "8px 12px", borderRadius: 6 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <FileCode size={15} color={C.cyan} />
+                        <span style={{ fontFamily: mono, fontSize: 11.5, color: C.hi, maxWidth: 300, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {sourceFile ? sourceFile.name : (typeof sourceFilePreview === "string" ? sourceFilePreview.split("/").pop() : "Source Archive")}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSourceFile(null);
+                          setSourceFilePreview(null);
+                        }}
+                        style={{
+                          background: "transparent",
+                          border: "none",
+                          color: C.danger,
+                          cursor: "pointer",
+                          fontFamily: sans,
+                          fontSize: 11.5,
+                          fontWeight: 600,
+                        }}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ display: "block", fontFamily: sans, fontSize: 12, color: C.mid, marginBottom: 6 }}>
+                    Source Code Repository / Container URL
+                  </label>
+                  <input
+                    type="url"
+                    placeholder="e.g. https://github.com/blitzlab/vulnerable-app or https://hub.docker.com/r/..."
+                    value={form.source_link}
+                    onChange={(e) => updateField("source_link", e.target.value)}
+                    style={{
+                      width: "100%",
+                      boxSizing: "border-box",
+                      background: C.panel2,
+                      border: `1px solid ${C.border}`,
+                      borderRadius: 7,
+                      padding: "9px 12px",
+                      fontFamily: mono,
+                      fontSize: 12.5,
+                      color: C.hi,
+                      outline: "none",
+                    }}
+                  />
+                  <div style={{ fontFamily: sans, fontSize: 11, color: C.low, marginTop: 4 }}>
+                    GitHub, GitLab, Docker Hub, or repository URL for students to clone or pull.
+                  </div>
+                </div>
+              )}
+
+              {/* Local Setup Commands */}
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: sans, fontSize: 12, color: C.mid, marginBottom: 6 }}>
+                  <Terminal size={13} color={C.cyan} />
+                  <span>Local Run / Docker Commands</span>
+                  <span style={{ fontFamily: mono, fontSize: 10, color: C.low }}>(Quick copyable CLI commands)</span>
+                </label>
+                <textarea
+                  rows={3}
+                  placeholder={`# Example commands:\ngit clone https://github.com/...\ncd vulnerable-app\ndocker compose up -d`}
+                  value={form.setup_commands}
+                  onChange={(e) => updateField("setup_commands", e.target.value)}
+                  style={{
+                    width: "100%",
+                    boxSizing: "border-box",
+                    background: "#080c10",
+                    border: `1px solid ${C.border}`,
+                    borderRadius: 7,
+                    padding: "9px 12px",
+                    fontFamily: mono,
+                    fontSize: 12,
+                    color: "#00E5FF",
+                    outline: "none",
+                    resize: "vertical",
+                    lineHeight: 1.5,
+                  }}
+                />
+              </div>
+
+              {/* Step-by-Step Local Setup Guide */}
+              <div>
+                <label style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: sans, fontSize: 12, color: C.mid, marginBottom: 6 }}>
+                  <Code size={13} color={C.cyan} />
+                  <span>Step-by-Step Local Setup Guide</span>
+                  <span style={{ fontFamily: mono, fontSize: 10, color: C.low }}>(Prerequisites, instructions, ports, credentials)</span>
+                </label>
+                <textarea
+                  rows={4}
+                  placeholder={`Step 1: Install Docker Desktop and Python 3.11\nStep 2: Unzip the lab source code or clone the repository\nStep 3: Run the setup command to start the vulnerable container\nStep 4: Navigate to http://localhost:8080 and begin testing`}
+                  value={form.setup_guide}
+                  onChange={(e) => updateField("setup_guide", e.target.value)}
+                  style={{
+                    width: "100%",
+                    boxSizing: "border-box",
+                    background: C.panel2,
+                    border: `1px solid ${C.border}`,
+                    borderRadius: 7,
+                    padding: "9px 12px",
+                    fontFamily: sans,
+                    fontSize: 12.5,
+                    color: C.hi,
+                    outline: "none",
+                    resize: "vertical",
+                    lineHeight: 1.6,
+                  }}
+                />
+              </div>
             </div>
           </div>
 

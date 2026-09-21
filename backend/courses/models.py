@@ -169,6 +169,11 @@ class Lab(models.Model):
     target_url = models.CharField(max_length=300, blank=True, default='')
     video_url = models.URLField(max_length=500, blank=True, default='', help_text='External teaching video URL (e.g. YouTube, Vimeo, MP4 stream)')
     video_file = models.FileField(upload_to='lab_videos/', blank=True, null=True, help_text='Uploaded lab teaching video file')
+    source_link = models.URLField(max_length=500, blank=True, default='', help_text='External source code repository or container link (e.g. GitHub, GitLab, Docker Hub)')
+    source_file = models.FileField(upload_to='lab_sources/', blank=True, null=True, help_text='Lab source code archive or file (.zip, .tar.gz, etc.)')
+    source_file_size = models.PositiveIntegerField(default=0, help_text='Size in bytes of uploaded source file')
+    setup_guide = models.TextField(blank=True, default='', help_text='Step-by-step instructions for running and setting up the lab locally')
+    setup_commands = models.TextField(blank=True, default='', help_text='CLI / Terminal commands to start or build the lab locally (e.g. docker-compose up -d)')
     course = models.ForeignKey(
         Course,
         on_delete=models.SET_NULL,

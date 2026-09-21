@@ -2,7 +2,8 @@ import React, { useState, useEffect } from "react";
 import {
   ChevronRight, Wifi, Clock, AlertTriangle, FileText, Globe,
   Terminal as TerminalIcon, Flag, Play, CheckCircle2, Lock,
-  Unlock, Lightbulb, Trophy, Send, AlertCircle, RefreshCw, ExternalLink, Video
+  Unlock, Lightbulb, Trophy, Send, AlertCircle, RefreshCw, ExternalLink, Video,
+  FolderArchive, Download, Copy, Check, FileCode
 } from "lucide-react";
 import Panel from "../common/Panel";
 import Btn from "../common/Btn";
@@ -26,6 +27,7 @@ export default function LabDetail({ lab, back }) {
   const [feedbacks, setFeedbacks] = useState({});
   const [unlockingHint, setUnlockingHint] = useState({});
   const [finalizing, setFinalizing] = useState(false);
+  const [copiedCommands, setCopiedCommands] = useState(false);
 
   const labId = lab?.id;
 
@@ -335,6 +337,119 @@ export default function LabDetail({ lab, back }) {
                   >
                     Watch Tutorial Video <ExternalLink size={11} />
                   </a>
+                )}
+              </Panel>
+            </div>
+          )}
+
+          {/* Local Lab Setup & Source Code */}
+          {(l.source_file || l.source_link || l.setup_commands || l.setup_guide) && (
+            <div style={{ marginTop: 20 }}>
+              <div style={{ fontFamily: mono, fontSize: 10.5, color: C.cyan, letterSpacing: "0.04em", marginBottom: 8, display: "flex", alignItems: "center", gap: 5 }}>
+                <FolderArchive size={13} /> LOCAL SETUP & SOURCE CODE
+              </div>
+              <Panel style={{ padding: 12, background: C.panel2, border: `1px solid rgba(0, 229, 255, 0.25)` }}>
+                {/* Download / Repo Buttons */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
+                  {l.source_file && (
+                    <a
+                      href={l.source_file}
+                      download
+                      style={{
+                        background: "rgba(0, 229, 255, 0.12)",
+                        border: "1px solid rgba(0, 229, 255, 0.35)",
+                        color: C.cyan,
+                        padding: "7px 10px",
+                        borderRadius: 6,
+                        fontFamily: sans,
+                        fontSize: 11.5,
+                        fontWeight: 600,
+                        textDecoration: "none",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 6,
+                      }}
+                    >
+                      <Download size={13} />
+                      Download Lab Source Files
+                    </a>
+                  )}
+
+                  {l.source_link && (
+                    <a
+                      href={l.source_link}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{
+                        background: C.panel3,
+                        border: `1px solid ${C.border}`,
+                        color: C.hi,
+                        padding: "7px 10px",
+                        borderRadius: 6,
+                        fontFamily: sans,
+                        fontSize: 11.5,
+                        fontWeight: 600,
+                        textDecoration: "none",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 6,
+                      }}
+                    >
+                      <ExternalLink size={13} color={C.cyan} />
+                      Open Source Repository
+                    </a>
+                  )}
+                </div>
+
+                {/* Quick Run Commands */}
+                {l.setup_commands && (
+                  <div style={{ background: "#06090e", border: `1px solid ${C.border}`, borderRadius: 6, padding: "8px 10px", marginBottom: 10 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                      <span style={{ fontFamily: mono, fontSize: 10, color: C.cyan, display: "flex", alignItems: "center", gap: 4 }}>
+                        <TerminalIcon size={11} /> Run Commands:
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(l.setup_commands);
+                          setCopiedCommands(true);
+                          setTimeout(() => setCopiedCommands(false), 2000);
+                        }}
+                        style={{
+                          background: "transparent",
+                          border: "none",
+                          color: copiedCommands ? C.green : C.mid,
+                          padding: 2,
+                          cursor: "pointer",
+                          fontFamily: sans,
+                          fontSize: 10.5,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 3,
+                        }}
+                      >
+                        {copiedCommands ? <Check size={10} /> : <Copy size={10} />}
+                        {copiedCommands ? "Copied" : "Copy"}
+                      </button>
+                    </div>
+                    <pre style={{ margin: 0, fontFamily: mono, fontSize: 11, color: "#79c0ff", whiteSpace: "pre-wrap", lineHeight: 1.4 }}>
+                      {l.setup_commands}
+                    </pre>
+                  </div>
+                )}
+
+                {/* Step-by-Step Setup Guide */}
+                {l.setup_guide && (
+                  <div>
+                    <div style={{ fontFamily: mono, fontSize: 9.5, color: C.low, letterSpacing: "0.04em", marginBottom: 4 }}>
+                      LOCAL SETUP INSTRUCTIONS
+                    </div>
+                    <div style={{ fontFamily: sans, fontSize: 12, color: C.mid, whiteSpace: "pre-wrap", lineHeight: 1.55 }}>
+                      {l.setup_guide}
+                    </div>
+                  </div>
                 )}
               </Panel>
             </div>

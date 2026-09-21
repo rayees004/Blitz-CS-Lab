@@ -217,11 +217,13 @@ class LabSerializer(serializers.ModelSerializer):
         model = Lab
         fields = [
             'id', 'name', 'description', 'org', 'category', 'difficulty',
-            'points', 'target_url', 'video_url', 'video_file', 'course', 'course_name', 'course_id',
+            'points', 'target_url', 'video_url', 'video_file',
+            'source_link', 'source_file', 'source_file_size', 'setup_guide', 'setup_commands',
+            'course', 'course_name', 'course_id',
             'subject', 'subject_name', 'subject_id', 'is_active',
             'question_count', 'questions', 'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at', 'question_count', 'course_name', 'subject_name']
+        read_only_fields = ['id', 'created_at', 'updated_at', 'question_count', 'course_name', 'subject_name', 'source_file_size']
 
 
     def validate_name(self, value):
@@ -232,6 +234,9 @@ class LabSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         questions_data = validated_data.pop('questions', [])
+        source_file = validated_data.get('source_file')
+        if source_file and hasattr(source_file, 'size'):
+            validated_data['source_file_size'] = source_file.size
         with transaction.atomic():
             lab = Lab.objects.create(**validated_data)
             for q_idx, q_data in enumerate(questions_data):
@@ -247,6 +252,9 @@ class LabSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         questions_data = validated_data.pop('questions', None)
+        source_file = validated_data.get('source_file')
+        if source_file and hasattr(source_file, 'size'):
+            validated_data['source_file_size'] = source_file.size
         with transaction.atomic():
             for attr, val in validated_data.items():
                 setattr(instance, attr, val)
