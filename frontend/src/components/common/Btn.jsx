@@ -1,7 +1,8 @@
 import React from "react";
 import { C, sans } from "../../constants/theme";
 
-export default function Btn({ children, variant = "primary", onClick, style, icon: Icon, small, disabled, type = "button", ...rest }) {
+export default function Btn({ children, variant = "primary", onClick, style, icon: Icon, small, sm, disabled, type = "button", ...rest }) {
+  const isSmall = small || sm;
   const base = {
     display: "inline-flex",
     alignItems: "center",
@@ -9,12 +10,14 @@ export default function Btn({ children, variant = "primary", onClick, style, ico
     gap: 7,
     fontFamily: sans,
     fontWeight: 600,
-    fontSize: small ? 12.5 : 13.5,
-    padding: small ? "6px 12px" : "9px 16px",
+    fontSize: isSmall ? 12.5 : 13.5,
+    padding: isSmall ? "6px 12px" : "9px 16px",
     borderRadius: 7,
     cursor: disabled ? "not-allowed" : "pointer",
     opacity: disabled ? 0.6 : 1,
     border: "1px solid transparent",
+    whiteSpace: "nowrap",
+    flexShrink: 0,
     transition: "background 120ms ease, border-color 120ms ease, transform 80ms ease",
   };
   const variants = {
@@ -37,7 +40,7 @@ export default function Btn({ children, variant = "primary", onClick, style, ico
       style={{ ...base, ...variants[variant], ...style }}
       {...rest}
     >
-      {Icon && <Icon size={small ? 13 : 15} strokeWidth={2.2} />}
+      {Icon && <Icon size={isSmall ? 13 : 15} strokeWidth={2.2} />}
       {children}
     </button>
   );

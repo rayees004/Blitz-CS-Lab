@@ -748,7 +748,7 @@ export default function StudentLabAttendModal({ lab, onClose, onUpdated }) {
 
                         {/* Flag Submission Input */}
                         <div style={{ marginTop: 10 }}>
-                          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                          <div style={{ display: "flex", gap: 8, alignItems: "stretch" }}>
                             <input
                               type="text"
                               disabled={isSolved}
@@ -764,14 +764,17 @@ export default function StudentLabAttendModal({ lab, onClose, onUpdated }) {
                               placeholder={isSolved ? "Solved! Flag submitted." : "BLITZ{ enter captured flag }"}
                               style={{
                                 flex: 1,
+                                minWidth: 0,
                                 background: isSolved ? "rgba(0, 230, 118, 0.08)" : C.void,
                                 border: `1px solid ${isSolved ? "rgba(0, 230, 118, 0.4)" : C.borderLight}`,
                                 borderRadius: 6,
-                                padding: "9px 12px",
+                                padding: "8px 12px",
                                 fontFamily: mono,
                                 fontSize: 12.5,
                                 color: isSolved ? C.green : C.hi,
                                 outline: "none",
+                                height: 38,
+                                boxSizing: "border-box",
                               }}
                             />
                             {!isSolved ? (
@@ -780,6 +783,13 @@ export default function StudentLabAttendModal({ lab, onClose, onUpdated }) {
                                 icon={Send}
                                 disabled={fb?.submitting || !flagInputs[q.id]?.trim()}
                                 onClick={() => handleSubmitFlag(q.id)}
+                                style={{
+                                  height: 38,
+                                  padding: "0 14px",
+                                  whiteSpace: "nowrap",
+                                  flexShrink: 0,
+                                  fontSize: 12,
+                                }}
                               >
                                 {fb?.submitting ? "Verifying..." : "Submit Answer"}
                               </Btn>

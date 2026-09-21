@@ -608,43 +608,53 @@ export default function LabDetail({ lab, back }) {
                   )}
 
                   {/* Flag Input */}
-                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                    <input
-                      type="text"
-                      disabled={isSolved}
-                      value={flagInputs[q.id] || ""}
-                      onChange={(e) => setFlagInputs((prev) => ({ ...prev, [q.id]: e.target.value }))}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && !isSolved) handleSubmitFlag(q.id);
-                      }}
-                      placeholder={isSolved ? "Solved! Flag submitted." : "BLITZ{ submit question flag }"}
-                      style={{
-                        flex: 1,
-                        background: isSolved ? "rgba(0, 230, 118, 0.08)" : C.void,
-                        border: `1px solid ${isSolved ? "rgba(0, 230, 118, 0.4)" : C.borderLight}`,
-                        borderRadius: 6,
-                        padding: "8px 12px",
-                        fontFamily: mono,
-                        fontSize: 12.5,
-                        color: isSolved ? C.green : C.hi,
-                        outline: "none",
-                      }}
-                    />
-                    {!isSolved ? (
-                      <Btn
-                        sm
-                        icon={Send}
-                        disabled={fb?.loading || !flagInputs[q.id]?.trim()}
-                        onClick={() => handleSubmitFlag(q.id)}
-                      >
-                        {fb?.loading ? "Verifying..." : "Submit Answer"}
-                      </Btn>
-                    ) : (
-                      <span style={{ fontFamily: mono, fontSize: 11, color: C.green, display: "flex", alignItems: "center", gap: 4 }}>
-                        <CheckCircle2 size={14} /> Solved
-                      </span>
-                    )}
-                  </div>
+                    <div style={{ display: "flex", gap: 8, alignItems: "stretch" }}>
+                      <input
+                        type="text"
+                        disabled={isSolved}
+                        value={flagInputs[q.id] || ""}
+                        onChange={(e) => setFlagInputs((prev) => ({ ...prev, [q.id]: e.target.value }))}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && !isSolved) handleSubmitFlag(q.id);
+                        }}
+                        placeholder={isSolved ? "Solved! Flag submitted." : "BLITZ{ submit question flag }"}
+                        style={{
+                          flex: 1,
+                          minWidth: 0,
+                          background: isSolved ? "rgba(0, 230, 118, 0.08)" : C.void,
+                          border: `1px solid ${isSolved ? "rgba(0, 230, 118, 0.4)" : C.borderLight}`,
+                          borderRadius: 6,
+                          padding: "8px 12px",
+                          fontFamily: mono,
+                          fontSize: 12.5,
+                          color: isSolved ? C.green : C.hi,
+                          outline: "none",
+                          height: 38,
+                          boxSizing: "border-box",
+                        }}
+                      />
+                      {!isSolved ? (
+                        <Btn
+                          sm
+                          icon={Send}
+                          disabled={fb?.loading || !flagInputs[q.id]?.trim()}
+                          onClick={() => handleSubmitFlag(q.id)}
+                          style={{
+                            height: 38,
+                            padding: "0 14px",
+                            whiteSpace: "nowrap",
+                            flexShrink: 0,
+                            fontSize: 12,
+                          }}
+                        >
+                          {fb?.loading ? "Verifying..." : "Submit Answer"}
+                        </Btn>
+                      ) : (
+                        <span style={{ fontFamily: mono, fontSize: 11, color: C.green, display: "flex", alignItems: "center", gap: 4 }}>
+                          <CheckCircle2 size={14} /> Solved
+                        </span>
+                      )}
+                    </div>
 
                   {fb?.msg && (
                     <div
