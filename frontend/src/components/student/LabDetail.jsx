@@ -232,9 +232,11 @@ export default function LabDetail({ lab, back }) {
             Marks: {currentScore} / {maxScore} pts
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: mono, fontSize: 12, color: C.cyan }}>
-            <Wifi size={13} /> TARGET ONLINE
-          </div>
+          {l.target_url && (
+            <div style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: mono, fontSize: 12, color: C.cyan }}>
+              <Wifi size={13} /> TARGET ONLINE
+            </div>
+          )}
         </div>
       </div>
 
@@ -253,40 +255,44 @@ export default function LabDetail({ lab, back }) {
             EVALUATION RULES
           </div>
           <ol style={{ fontFamily: sans, fontSize: 12.5, color: C.mid, lineHeight: 1.7, margin: 0, paddingLeft: 18 }}>
-            <li>Navigate to the target environment.</li>
-            <li>Identify security vulnerabilities.</li>
+            <li>Review mission instructions and setup guide.</li>
+            <li>Analyze vulnerabilities in the lab environment.</li>
             <li>Unlocking progressive hints applies mark deductions.</li>
             <li>Submit proof flags to record awarded marks.</li>
             <li>Finalize the lab once completed.</li>
           </ol>
 
-          <div style={{ fontFamily: mono, fontSize: 10.5, color: C.low, letterSpacing: "0.04em", margin: "20px 0 8px" }}>
-            TARGET INFORMATION
-          </div>
-          <Panel style={{ padding: 12, background: C.panel2 }}>
-            <div style={{ fontFamily: mono, fontSize: 11, color: C.mid }}>
-              Target Host:
-            </div>
-            <a
-              href={l.target_url || "#"}
-              target="_blank"
-              rel="noreferrer"
-              style={{
-                fontFamily: mono,
-                fontSize: 11.5,
-                color: C.cyan,
-                wordBreak: "break-all",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 4,
-                marginTop: 4,
-                textDecoration: "none",
-              }}
-            >
-              {l.target_url || `https://${(l.org || "blitz").toLowerCase().replace(/\\s+/g, "-")}.blitzlab.internal`}
-              <ExternalLink size={11} />
-            </a>
-          </Panel>
+          {l.target_url && (
+            <>
+              <div style={{ fontFamily: mono, fontSize: 10.5, color: C.low, letterSpacing: "0.04em", margin: "20px 0 8px" }}>
+                TARGET INFORMATION
+              </div>
+              <Panel style={{ padding: 12, background: C.panel2 }}>
+                <div style={{ fontFamily: mono, fontSize: 11, color: C.mid }}>
+                  Target Host:
+                </div>
+                <a
+                  href={l.target_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{
+                    fontFamily: mono,
+                    fontSize: 11.5,
+                    color: C.cyan,
+                    wordBreak: "break-all",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 4,
+                    marginTop: 4,
+                    textDecoration: "none",
+                  }}
+                >
+                  {l.target_url}
+                  <ExternalLink size={11} />
+                </a>
+              </Panel>
+            </>
+          )}
 
           {/* Teaching Video for Students */}
           {(l.video_file || l.video_url) && (

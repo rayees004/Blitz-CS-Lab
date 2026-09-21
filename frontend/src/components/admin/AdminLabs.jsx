@@ -170,51 +170,55 @@ function LabViewDrawer({ lab, courses, onClose, onEdit, onDelete }) {
         {/* Drawer Scrollable Content */}
         <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
           {/* Target Environment */}
-          <div style={{ marginBottom: 20 }}>
-            <div style={{ fontFamily: mono, fontSize: 11, color: C.low, letterSpacing: "0.06em", marginBottom: 8 }}>
-              TARGET ENVIRONMENT & URL
-            </div>
-            <div
-              style={{
-                background: C.panel2,
-                border: `1px solid ${C.border}`,
-                borderRadius: 8,
-                padding: "12px 14px",
-                display: "flex",
-                flexDirection: "column",
-                gap: 8,
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span style={{ fontFamily: sans, fontSize: 12.5, color: C.mid }}>Organization / Target:</span>
-                <span style={{ fontFamily: sans, fontSize: 13, fontWeight: 600, color: C.hi }}>
-                  {lab.org || "BlitzLab Staging"}
-                </span>
+          {(lab.target_url || (lab.org && lab.org !== "BlitzLab" && lab.org !== "Internal")) && (
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontFamily: mono, fontSize: 11, color: C.low, letterSpacing: "0.06em", marginBottom: 8 }}>
+                TARGET ENVIRONMENT & URL
               </div>
-              {lab.target_url && (
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <span style={{ fontFamily: sans, fontSize: 12.5, color: C.mid }}>Live Target URL:</span>
-                  <a
-                    href={lab.target_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    style={{
-                      fontFamily: mono,
-                      fontSize: 12,
-                      color: C.cyan,
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 5,
-                      textDecoration: "none",
-                    }}
-                  >
-                    {lab.target_url}
-                    <ExternalLink size={12} />
-                  </a>
-                </div>
-              )}
+              <div
+                style={{
+                  background: C.panel2,
+                  border: `1px solid ${C.border}`,
+                  borderRadius: 8,
+                  padding: "12px 14px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 8,
+                }}
+              >
+                {lab.org && (
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <span style={{ fontFamily: sans, fontSize: 12.5, color: C.mid }}>Organization / Target:</span>
+                    <span style={{ fontFamily: sans, fontSize: 13, fontWeight: 600, color: C.hi }}>
+                      {lab.org}
+                    </span>
+                  </div>
+                )}
+                {lab.target_url && (
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <span style={{ fontFamily: sans, fontSize: 12.5, color: C.mid }}>Live Target URL:</span>
+                    <a
+                      href={lab.target_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{
+                        fontFamily: mono,
+                        fontSize: 12,
+                        color: C.cyan,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 5,
+                        textDecoration: "none",
+                      }}
+                    >
+                      {lab.target_url}
+                      <ExternalLink size={12} />
+                    </a>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Lab Teaching Video */}
           {(lab.video_file || lab.video_url) && (
@@ -1095,10 +1099,14 @@ export default function AdminLabs({ onOpenAddModal = null }) {
                     </p>
 
                     <div style={{ display: "flex", alignItems: "center", gap: 18, fontFamily: mono, fontSize: 11.5, color: C.low, flexWrap: "wrap" }}>
-                      <span>
-                        Target: <strong style={{ color: C.hi }}>{l.org || "Internal"}</strong>
-                      </span>
-                      <span>·</span>
+                      {l.org && l.org !== "BlitzLab" && l.org !== "Internal" && (
+                        <>
+                          <span>
+                            Target: <strong style={{ color: C.hi }}>{l.org}</strong>
+                          </span>
+                          <span>·</span>
+                        </>
+                      )}
                       <span>
                         Reward: <strong style={{ color: C.amber }}>{l.points || l.pts || 100} pts</strong>
                       </span>

@@ -386,55 +386,29 @@ export default function AddLabModal({ isOpen, onClose, onLabCreated, initialLab 
               01 // LAB SPECIFICATIONS
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 14, marginBottom: 14 }}>
-              <div>
-                <label style={{ display: "block", fontFamily: sans, fontSize: 12, color: C.mid, marginBottom: 6 }}>
-                  Lab Name <span style={{ color: C.amber }}>*</span>
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Advanced SQL Injection in ShopX"
-                  value={form.name}
-                  onChange={(e) => updateField("name", e.target.value)}
-                  style={{
-                    width: "100%",
-                    boxSizing: "border-box",
-                    background: C.panel2,
-                    border: `1px solid ${errors.name ? C.danger : C.border}`,
-                    borderRadius: 7,
-                    padding: "9px 12px",
-                    fontFamily: sans,
-                    fontSize: 13,
-                    color: C.hi,
-                    outline: "none",
-                  }}
-                />
-                {errors.name && <div style={{ color: C.danger, fontSize: 11.5, marginTop: 4 }}>{errors.name}</div>}
-              </div>
-
-              <div>
-                <label style={{ display: "block", fontFamily: sans, fontSize: 12, color: C.mid, marginBottom: 6 }}>
-                  Target System / Org
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. ShopX Staging"
-                  value={form.org}
-                  onChange={(e) => updateField("org", e.target.value)}
-                  style={{
-                    width: "100%",
-                    boxSizing: "border-box",
-                    background: C.panel2,
-                    border: `1px solid ${C.border}`,
-                    borderRadius: 7,
-                    padding: "9px 12px",
-                    fontFamily: sans,
-                    fontSize: 13,
-                    color: C.hi,
-                    outline: "none",
-                  }}
-                />
-              </div>
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ display: "block", fontFamily: sans, fontSize: 12, color: C.mid, marginBottom: 6 }}>
+                Lab Name <span style={{ color: C.amber }}>*</span>
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. Advanced SQL Injection in ShopX"
+                value={form.name}
+                onChange={(e) => updateField("name", e.target.value)}
+                style={{
+                  width: "100%",
+                  boxSizing: "border-box",
+                  background: C.panel2,
+                  border: `1px solid ${errors.name ? C.danger : C.border}`,
+                  borderRadius: 7,
+                  padding: "9px 12px",
+                  fontFamily: sans,
+                  fontSize: 13,
+                  color: C.hi,
+                  outline: "none",
+                }}
+              />
+              {errors.name && <div style={{ color: C.danger, fontSize: 11.5, marginTop: 4 }}>{errors.name}</div>}
             </div>
 
             <div style={{ marginBottom: 14 }}>
@@ -499,7 +473,7 @@ export default function AddLabModal({ isOpen, onClose, onLabCreated, initialLab 
               {errors.description && <div style={{ color: C.danger, fontSize: 11.5, marginTop: 4 }}>{errors.description}</div>}
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr 1.5fr", gap: 12 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr", gap: 12 }}>
               <div>
                 <label style={{ display: "block", fontFamily: sans, fontSize: 12, color: C.mid, marginBottom: 6 }}>
                   Category
@@ -572,30 +546,6 @@ export default function AddLabModal({ isOpen, onClose, onLabCreated, initialLab 
                     fontFamily: mono,
                     fontSize: 13,
                     color: C.amber,
-                    outline: "none",
-                  }}
-                />
-              </div>
-
-              <div>
-                <label style={{ display: "block", fontFamily: sans, fontSize: 12, color: C.mid, marginBottom: 6 }}>
-                  Target URL (Optional)
-                </label>
-                <input
-                  type="text"
-                  placeholder="https://..."
-                  value={form.target_url}
-                  onChange={(e) => updateField("target_url", e.target.value)}
-                  style={{
-                    width: "100%",
-                    boxSizing: "border-box",
-                    background: C.panel2,
-                    border: `1px solid ${C.border}`,
-                    borderRadius: 7,
-                    padding: "9px 12px",
-                    fontFamily: mono,
-                    fontSize: 12,
-                    color: C.hi,
                     outline: "none",
                   }}
                 />

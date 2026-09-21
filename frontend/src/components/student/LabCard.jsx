@@ -39,7 +39,8 @@ export default function LabCard({ lab, onOpen }) {
       <div>
         <div style={{ fontFamily: sans, fontSize: 15.5, fontWeight: 700, color: C.hi }}>{lab.name}</div>
         <div style={{ fontFamily: mono, fontSize: 11.5, color: C.low, marginTop: 3 }}>
-          {lab.org} · {lab.cat}
+          {lab.cat}
+          {lab.org && lab.org !== "BlitzLab" && lab.org !== "Internal" ? ` · ${lab.org}` : ""}
           {lab.subject_name ? ` · Subject: ${lab.subject_name}` : (lab.course_name ? ` · ${lab.course_name}` : "")}
         </div>
       </div>

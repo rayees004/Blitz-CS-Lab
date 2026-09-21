@@ -254,7 +254,7 @@ export default function StudentLabAttendModal({ lab, onClose, onUpdated }) {
                 </span>
               </div>
               <div style={{ fontFamily: mono, fontSize: 11, color: C.low, marginTop: 2 }}>
-                {lab.category} · Target Organization: {lab.org || "BlitzLab"} · <span style={{ color: C.cyan }}>Score is lab-based only (repeat visits do not increase score)</span>
+                {lab.category}{lab.org && lab.org !== "BlitzLab" ? ` · ${lab.org}` : ""} · <span style={{ color: C.cyan }}>Score is lab-based only (repeat visits do not increase score)</span>
               </div>
             </div>
           </div>
@@ -347,74 +347,76 @@ export default function StudentLabAttendModal({ lab, onClose, onUpdated }) {
             </div>
           ) : (
             <>
-              {/* Target Environment Banner */}
-              <div
-                style={{
-                  background: C.panel2,
-                  border: `1px solid ${C.border}`,
-                  borderRadius: 8,
-                  padding: 14,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: 12,
-                  flexWrap: "wrap",
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: C.cyan, boxShadow: `0 0 8px ${C.cyan}` }} />
-                  <span style={{ fontFamily: mono, fontSize: 11, color: C.cyan, fontWeight: 700 }}>
-                    TARGET ONLINE
-                  </span>
-                  <span style={{ fontFamily: mono, fontSize: 12, color: C.hi, background: C.void, padding: "4px 10px", borderRadius: 4, border: `1px solid ${C.border}` }}>
-                    {lab.target_url || `https://${(lab.org || "blitz").toLowerCase().replace(/\\s+/g, "-")}.blitzlab.internal`}
-                  </span>
-                </div>
+              {/* Target Environment Banner - Only display if target_url exists */}
+              {lab.target_url && (
+                <div
+                  style={{
+                    background: C.panel2,
+                    border: `1px solid ${C.border}`,
+                    borderRadius: 8,
+                    padding: 14,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 12,
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <div style={{ width: 8, height: 8, borderRadius: "50%", background: C.cyan, boxShadow: `0 0 8px ${C.cyan}` }} />
+                    <span style={{ fontFamily: mono, fontSize: 11, color: C.cyan, fontWeight: 700 }}>
+                      TARGET ONLINE
+                    </span>
+                    <span style={{ fontFamily: mono, fontSize: 12, color: C.hi, background: C.void, padding: "4px 10px", borderRadius: 4, border: `1px solid ${C.border}` }}>
+                      {lab.target_url}
+                    </span>
+                  </div>
 
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <button
-                    onClick={() => handleCopyUrl(lab.target_url || `https://${(lab.org || "blitz").toLowerCase().replace(/\\s+/g, "-")}.blitzlab.internal`)}
-                    style={{
-                      background: C.void,
-                      border: `1px solid ${C.border}`,
-                      color: copiedUrl ? C.cyan : C.mid,
-                      borderRadius: 6,
-                      padding: "6px 10px",
-                      cursor: "pointer",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 6,
-                      fontFamily: sans,
-                      fontSize: 12,
-                    }}
-                  >
-                    {copiedUrl ? <Check size={13} /> : <Copy size={13} />}
-                    {copiedUrl ? "Copied" : "Copy URL"}
-                  </button>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <button
+                      onClick={() => handleCopyUrl(lab.target_url)}
+                      style={{
+                        background: C.void,
+                        border: `1px solid ${C.border}`,
+                        color: copiedUrl ? C.cyan : C.mid,
+                        borderRadius: 6,
+                        padding: "6px 10px",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 6,
+                        fontFamily: sans,
+                        fontSize: 12,
+                      }}
+                    >
+                      {copiedUrl ? <Check size={13} /> : <Copy size={13} />}
+                      {copiedUrl ? "Copied" : "Copy URL"}
+                    </button>
 
-                  <a
-                    href={lab.target_url || "#"}
-                    target="_blank"
-                    rel="noreferrer"
-                    style={{
-                      background: "rgba(0, 229, 255, 0.12)",
-                      border: "1px solid rgba(0, 229, 255, 0.35)",
-                      color: C.cyan,
-                      borderRadius: 6,
-                      padding: "6px 12px",
-                      textDecoration: "none",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 6,
-                      fontFamily: sans,
-                      fontSize: 12,
-                      fontWeight: 600,
-                    }}
-                  >
-                    <ExternalLink size={13} /> Open Target
-                  </a>
+                    <a
+                      href={lab.target_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{
+                        background: "rgba(0, 229, 255, 0.12)",
+                        border: "1px solid rgba(0, 229, 255, 0.35)",
+                        color: C.cyan,
+                        borderRadius: 6,
+                        padding: "6px 12px",
+                        textDecoration: "none",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 6,
+                        fontFamily: sans,
+                        fontSize: 12,
+                        fontWeight: 600,
+                      }}
+                    >
+                      <ExternalLink size={13} /> Open Target
+                    </a>
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Scenario Description */}
               <div
