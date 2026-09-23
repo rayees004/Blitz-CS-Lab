@@ -11,26 +11,52 @@ import ProgressBar from "../common/ProgressBar";
 import { C, sans, mono } from "../../constants/theme";
 import { LABS as MOCK_LABS } from "../../data/mockData";
 import { fetchLabs, createLab } from "../../api/labs";
+import { fetchAdminDashboardStats } from "../../api/students";
 import AddLabModal from "./AddLabModal";
 
 export default function AdminDashboard({ onNavigate }) {
   const [modalOpen, setModalOpen] = useState(false);
   const [labs, setLabs] = useState([]);
+  const [dbStats, setDbStats] = useState({
+    total_students: 0,
+    active_students: 0,
+    active_students_pct: 0,
+    fee_due_raw: 0,
+    fee_due_formatted: "₹0",
+    avg_progress: 0,
+    total_labs: 0,
+    total_completions: 0,
+    completions_chart: {
+      "7D": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      "30D": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      "90D": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    },
+    active_labs: [],
+  });
+  const [chartTimeframe, setChartTimeframe] = useState("30D"); // 7D | 30D | 90D
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState(null);
 
-  const loadLabs = useCallback(async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await fetchLabs();
-      const serverLabs = data.results || [];
+      const [labsData, statsData] = await Promise.all([
+        fetchLabs().catch(() => ({ results: [] })),
+        fetchAdminDashboardStats().catch(() => null),
+      ]);
+
+      const serverLabs = labsData.results || [];
       if (serverLabs.length > 0) {
         setLabs(serverLabs);
       } else {
         setLabs(MOCK_LABS);
       }
+
+      if (statsData) {
+        setDbStats(statsData);
+      }
     } catch (err) {
-      console.warn("Could not fetch server labs, using mock labs:", err);
+      console.warn("Could not fetch server data, falling back:", err);
       setLabs(MOCK_LABS);
     } finally {
       setLoading(false);
@@ -38,14 +64,14 @@ export default function AdminDashboard({ onNavigate }) {
   }, []);
 
   useEffect(() => {
-    loadLabs();
-  }, [loadLabs]);
+    loadData();
+  }, [loadData]);
 
   const handleLabCreated = async (payload) => {
     try {
       const res = await createLab(payload);
       setNotice({ type: "success", text: `Lab "${payload.name}" successfully created with ${payload.questions.length} questions!` });
-      await loadLabs();
+      await loadData();
       setTimeout(() => setNotice(null), 5000);
     } catch (err) {
       // In case of backend issue, add locally so UI updates smoothly
@@ -69,7 +95,10 @@ export default function AdminDashboard({ onNavigate }) {
     }
   };
 
-  const displayLabs = labs.slice(0, 5);
+  const displayLabs = (dbStats.active_labs && dbStats.active_labs.length > 0)
+    ? dbStats.active_labs
+    : labs.slice(0, 5);
+
 
   return (
     <div style={{ padding: 28, overflowY: "auto", height: "100%", boxSizing: "border-box" }}>
@@ -122,12 +151,35 @@ export default function AdminDashboard({ onNavigate }) {
         </div>
       )}
 
-      {/* Stat Cards */}
-      <div style={{ display: "flex", gap: 14, marginTop: 22 }}>
-        <StatCard label="Total Students" value="312" icon={Users} />
-        <StatCard label="Active Students" value="276" icon={Activity} sub="88% active" tone="cyan" />
-        <StatCard label="Fee Due" value="₹1.4L" icon={Wallet} />
-        <StatCard label="Avg. Progress" value="47%" icon={TrendingUp} />
+      {/* Stat Cards with Real Database Data */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14, marginTop: 22 }}>
+        <StatCard
+          label="Total Students"
+          value={dbStats.total_students}
+          icon={Users}
+          sub="Registered students"
+        />
+        <StatCard
+          label="Active Students"
+          value={dbStats.active_students}
+          icon={Activity}
+          sub={`${dbStats.active_students_pct}% active`}
+          tone="cyan"
+        />
+        <StatCard
+          label="Fee Due"
+          value={dbStats.fee_due_formatted}
+          icon={Wallet}
+          sub="Outstanding tuition"
+          tone={dbStats.fee_due_raw > 0 ? "amber" : "neutral"}
+        />
+        <StatCard
+          label="Avg. Progress"
+          value={`${dbStats.avg_progress}%`}
+          icon={TrendingUp}
+          sub="Platform wide completion"
+          tone="green"
+        />
       </div>
 
       {/* Main Grid */}
@@ -135,22 +187,29 @@ export default function AdminDashboard({ onNavigate }) {
         {/* Lab Completions Panel */}
         <Panel style={{ padding: 20 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-            <div style={{ fontFamily: sans, fontSize: 14, fontWeight: 700, color: C.hi }}>
-              Lab Completions — 30 Days
+            <div>
+              <div style={{ fontFamily: sans, fontSize: 14, fontWeight: 700, color: C.hi }}>
+                Lab Completions — {chartTimeframe}
+              </div>
+              <div style={{ fontFamily: mono, fontSize: 11, color: C.low, marginTop: 2 }}>
+                {dbStats.total_completions} Total verified lab completions recorded
+              </div>
             </div>
             <div style={{ display: "flex", gap: 6 }}>
               {["7D", "30D", "90D"].map((d) => (
                 <div
                   key={d}
+                  onClick={() => setChartTimeframe(d)}
                   style={{
                     fontFamily: mono,
                     fontSize: 11,
                     padding: "4px 9px",
                     borderRadius: 5,
-                    color: d === "30D" ? "#1A1200" : C.mid,
-                    background: d === "30D" ? C.amber : C.panel2,
+                    color: chartTimeframe === d ? "#1A1200" : C.mid,
+                    background: chartTimeframe === d ? C.amber : C.panel2,
                     border: `1px solid ${C.border}`,
                     cursor: "pointer",
+                    fontWeight: chartTimeframe === d ? 700 : 500,
                   }}
                 >
                   {d}
@@ -159,15 +218,17 @@ export default function AdminDashboard({ onNavigate }) {
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "flex-end", gap: 6, height: 120 }}>
-            {[40, 55, 35, 70, 60, 80, 65, 90, 75, 85, 70, 95].map((v, i) => (
+            {(dbStats.completions_chart[chartTimeframe] || [15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15]).map((v, i) => (
               <div
                 key={i}
+                title={`Interval ${i + 1}`}
                 style={{
                   flex: 1,
                   height: `${v}%`,
-                  background: i === 11 ? C.amber : C.panel3,
+                  background: i === 11 ? C.amber : (v > 15 ? C.cyan : C.panel3),
                   borderRadius: "3px 3px 0 0",
                   border: `1px solid ${C.border}`,
+                  transition: "height 0.3s ease",
                 }}
               />
             ))}

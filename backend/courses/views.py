@@ -1687,6 +1687,135 @@ class StudentProgressReportView(APIView):
         })
 
 
+class AdminDashboardStatsView(APIView):
+    """
+    GET /api/admin/dashboard-stats/
+    Calculates accurate live database statistics for the Admin Dashboard:
+    - total_students: Count of User(user_type='student')
+    - active_students: Count of active students (is_active=True)
+    - active_students_pct: (active_students / total_students) * 100
+    - fee_due: Sum of course prices where student enrollment fee_status in ('DUE', 'PARTIAL')
+    - fee_due_formatted: Formatted in INR (e.g. ₹0 or ₹1.4L)
+    - avg_progress: Average platform completion % across all students
+    - completions_chart: Grouped completions counts for 7D, 30D, and 90D intervals
+    - recent_active_labs: Top active labs with live question & hint counts from DB
+    """
+    def get_permissions(self):
+        return [IsAdminOrStaff()]
+
+    def get(self, request):
+        now = timezone.now()
+
+        # 1. Student counts
+        all_students = User.objects.filter(user_type='student')
+        total_students = all_students.count()
+        active_students = all_students.filter(is_active=True).count()
+        active_pct = round((active_students / total_students) * 100) if total_students > 0 else 0
+
+        # 2. Fee Due calculation from database enrollments
+        # Find enrollments with fee_status in DUE or PARTIAL
+        due_enrollments = Enrollment.objects.filter(
+            is_active=True,
+            fee_status__in=['DUE', 'PARTIAL']
+        ).select_related('course')
+
+        total_fee_due = 0.0
+        for enr in due_enrollments:
+            price = float(enr.course.price) if enr.course and enr.course.price else 0.0
+            if enr.fee_status == 'PARTIAL':
+                total_fee_due += price * 0.5  # 50% remainder for partial
+            else:
+                total_fee_due += price
+
+        # Format Fee Due nicely
+        if total_fee_due >= 100000:
+            fee_due_str = f"₹{round(total_fee_due / 100000, 1)}L"
+        elif total_fee_due >= 1000:
+            fee_due_str = f"₹{round(total_fee_due / 1000, 1)}k"
+        else:
+            fee_due_str = f"₹{int(total_fee_due)}"
+
+        # 3. Overall Average Progress calculation
+        all_labs = Lab.objects.filter(is_active=True)
+        total_platform_points = sum(l.points for l in all_labs)
+
+        avg_progress = 0
+        if total_students > 0 and total_platform_points > 0:
+            # Sum up all scores achieved by all students
+            all_scores = LabScore.objects.all()
+            total_earned_sum = sum(s.score for s in all_scores)
+            avg_progress = round((total_earned_sum / (total_students * total_platform_points)) * 100)
+            avg_progress = min(100, max(0, avg_progress))
+
+        # 4. Lab completions histogram chart (7D, 30D, 90D buckets)
+        completed_scores = LabScore.objects.filter(is_completed=True)
+
+        def get_bucket_chart(days, buckets=12):
+            cutoff = now - timezone.timedelta(days=days)
+            bucket_delta = timezone.timedelta(days=days / buckets)
+            chart = []
+            max_in_bucket = 1
+
+            for b in range(buckets):
+                bucket_start = cutoff + (bucket_delta * b)
+                bucket_end = bucket_start + bucket_delta
+                # Count completions in this window
+                c_count = completed_scores.filter(
+                    completed_at__gte=bucket_start,
+                    completed_at__lt=bucket_end
+                ).count()
+                chart.append(c_count)
+                if c_count > max_in_bucket:
+                    max_in_bucket = c_count
+
+            # Normalize heights to percentages 15% - 100% for sleek chart display
+            pct_bars = []
+            for count in chart:
+                pct = round((count / max_in_bucket) * 100) if max_in_bucket > 0 else 0
+                pct_bars.append(max(18, pct) if count > 0 else 12)
+            return pct_bars
+
+        chart_7d = get_bucket_chart(7)
+        chart_30d = get_bucket_chart(30)
+        chart_90d = get_bucket_chart(90)
+
+        # 5. Top active labs list from database
+        active_labs_qs = Lab.objects.filter(is_active=True).select_related('subject', 'course').prefetch_related('questions__hints')[:5]
+        active_labs = []
+        for lab in active_labs_qs:
+            q_count = lab.questions.count()
+            h_count = sum(q.hints.count() for q in lab.questions.all())
+            active_labs.append({
+                'id': lab.id,
+                'name': lab.name,
+                'org': lab.org or 'BlitzLab',
+                'category': lab.category,
+                'difficulty': lab.difficulty,
+                'points': lab.points,
+                'question_count': q_count,
+                'hint_count': h_count,
+                'subject_name': lab.subject.name if lab.subject else None,
+            })
+
+        return Response({
+            'total_students': total_students,
+            'active_students': active_students,
+            'active_students_pct': active_pct,
+            'fee_due_raw': total_fee_due,
+            'fee_due_formatted': fee_due_str,
+            'avg_progress': avg_progress,
+            'total_labs': all_labs.count(),
+            'total_completions': completed_scores.count(),
+            'completions_chart': {
+                '7D': chart_7d,
+                '30D': chart_30d,
+                '90D': chart_90d,
+            },
+            'active_labs': active_labs,
+        })
+
+
+
 
 # ─── STUDY MATERIALS ──────────────────────────────────────────
 class StudyMaterialListCreateView(APIView):

@@ -24,12 +24,16 @@ from .views import (
     LabSubmissionListView,
     StudentActivityFeedView,
     StudentProgressReportView,
+    AdminDashboardStatsView,
     StudyMaterialListCreateView,
     StudyMaterialDetailView,
     StudentMaterialsView,
 )
 
 urlpatterns = [
+    # Admin live dashboard stats
+    path('admin/dashboard-stats/', AdminDashboardStatsView.as_view(), name='api_admin_dashboard_stats'),
+
     # Student Labs & Attend / Submit Marks
     path('student/labs/', StudentLabListView.as_view(), name='api_student_labs'),
     path('student/lab-scores/', StudentLabScoreListView.as_view(), name='api_student_lab_scores'),

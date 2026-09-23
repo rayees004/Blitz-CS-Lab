@@ -50,3 +50,9 @@ export async function fetchStudentProgress(params = {}) {
   return apiFetch(`/student-progress/${qs}`);
 }
 
+/** Fetch live admin dashboard statistics computed directly from database */
+export async function fetchAdminDashboardStats() {
+  return apiFetch('/admin/dashboard-stats/');
+}
+
+
