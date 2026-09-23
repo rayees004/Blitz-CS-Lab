@@ -27,6 +27,8 @@ import AdminClasses from "./src/components/admin/AdminClasses";
 import AdminSubjects from "./src/components/admin/AdminSubjects";
 import AdminLabs from "./src/components/admin/AdminLabs";
 import AdminMaterials from "./src/components/admin/AdminMaterials";
+import AdminActivity from "./src/components/admin/AdminActivity";
+import StudentProgressView from "./src/components/student/StudentProgressView";
 
 
 // Export modular subcomponents for external consumption
@@ -129,7 +131,7 @@ export default function BlitzCyberLab() {
       "a-materials": <AdminMaterials />,
       "a-assignments": <Placeholder title="Assignments" blurb="Assign labs and materials to classes or individual students." icon={ClipboardList} />,
       "a-fees": <Placeholder title="Fees" blurb="Track payment status across every enrolled student." icon={Wallet} />,
-      "a-activity": <Placeholder title="Activity" blurb="Live feed of lab attempts, completions, and logins." icon={Activity} />,
+      "a-activity": <AdminActivity onSelectStudent={() => setAdminPage("a-students")} />,
       "a-analytics": <Placeholder title="Analytics" blurb="Registrations, completions, and difficulty trends over time." icon={BarChart3} />,
       "a-audit": <Placeholder title="Audit Logs" blurb="Immutable record of administrative actions." icon={ScrollText} />,
       "a-settings": <Placeholder title="Settings" blurb="Platform configuration, instructors, and organization details." icon={Settings} />,
@@ -157,7 +159,7 @@ export default function BlitzCyberLab() {
     "lab-detail": <LabDetail lab={activeLab} back={() => setStudentPage("labs")} />,
     materials: <Materials />,
     challenges: <Placeholder title="Challenges" blurb="Timed and community challenge events." icon={Target} />,
-    progress: <Placeholder title="Progress" blurb="Your completion history across all security domains." icon={TrendingUp} />,
+    progress: <StudentProgressView go={goLab} />,
     leaderboard: <Placeholder title="Leaderboard" blurb="Rankings within your class and across Blitz Cyber Lab." icon={Trophy} />,
     achievements: <Placeholder title="Achievements" blurb="Badges earned from labs, streaks, and challenges." icon={Award} />,
     certificates: <Placeholder title="Certificates" blurb="Download certificates for completed tracks." icon={FileBadge} />,

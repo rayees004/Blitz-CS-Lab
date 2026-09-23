@@ -3,11 +3,14 @@ import {
   X, BookOpen, Plus, AlertCircle, Loader2, CheckCircle,
   PauseCircle, PlayCircle, Trash2, ChevronDown, Mail,
   Phone, Building2, Calendar, User, Shield, Layers,
+  Trophy, FlaskConical, TrendingUp, CheckCircle2, Zap
 } from "lucide-react";
 import Btn from "../common/Btn";
 import Badge from "../common/Badge";
+import ProgressBar from "../common/ProgressBar";
 import { C, sans, mono } from "../../constants/theme";
 import { fetchStudentEnrollments, fetchCourses, enrollStudent, updateEnrollment, removeEnrollment } from "../../api/courses";
+import { fetchStudentProgress } from "../../api/students";
 
 /* ─── Helpers ─────────────────────────────────────────── */
 const FEE_TONE = { PAID: "cyan", DUE: "danger", PARTIAL: "warn" };
@@ -463,26 +466,33 @@ function EnrollForm({ studentId, enrolledCourseIds, onEnrolled, onCancel }) {
 
 /* ─── Main Panel ─────────────────────────────────────── */
 export default function StudentDetailPanel({ student, onClose, onStudentUpdate }) {
+  const [activeTab, setActiveTab] = useState("overview"); // "overview" | "labs"
   const [enrollments, setEnrollments] = useState([]);
+  const [progressData, setProgressData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [showEnrollForm, setShowEnrollForm] = useState(false);
 
-  const loadEnrollments = useCallback(async () => {
+  const loadData = useCallback(async () => {
     if (!student?.id) return;
     setLoading(true);
     setError("");
     try {
-      const data = await fetchStudentEnrollments(student.id);
-      setEnrollments(data.results || []);
+      const [enrData, progData] = await Promise.all([
+        fetchStudentEnrollments(student.id),
+        fetchStudentProgress({ student_id: student.id }),
+      ]);
+      setEnrollments(enrData.results || []);
+      const stProg = (progData.results || []).find((s) => s.student_id === student.id) || (progData.results || [])[0];
+      setProgressData(stProg || null);
     } catch (err) {
-      setError(err.message || "Failed to load enrollments.");
+      setError(err.message || "Failed to load student details.");
     } finally {
       setLoading(false);
     }
   }, [student?.id]);
 
-  useEffect(() => { loadEnrollments(); }, [loadEnrollments]);
+  useEffect(() => { loadData(); }, [loadData]);
 
   // Close on Escape
   useEffect(() => {
@@ -609,7 +619,154 @@ export default function StudentDetailPanel({ student, onClose, onStudentUpdate }
               <InfoRow icon={Calendar} label="Enrolled On" value={joinedDate} />
               <InfoRow icon={Shield} label="Account Type" value="Student" />
             </div>
+
+            {/* Quick Labs & Score Progress Bar */}
+            {progressData && (
+              <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 14, marginTop: 12 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, fontSize: 12 }}>
+                  <span style={{ fontFamily: sans, color: C.mid, display: "flex", alignItems: "center", gap: 5 }}>
+                    <TrendingUp size={13} color={C.amber} /> Overall Lab Completion
+                  </span>
+                  <span style={{ fontFamily: mono, fontWeight: 700, color: C.hi }}>
+                    {progressData.total_earned_score} pts ({progressData.progress_pct}%)
+                  </span>
+                </div>
+                <ProgressBar pct={progressData.progress_pct} color={C.cyan} />
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginTop: 12 }}>
+                  <div style={{ background: C.panel2, padding: "8px 10px", borderRadius: 6 }}>
+                    <div style={{ fontFamily: mono, fontSize: 10, color: C.low }}>ATTENDED</div>
+                    <div style={{ fontFamily: mono, fontSize: 15, fontWeight: 700, color: "#c084fc", marginTop: 2 }}>
+                      {progressData.labs_attended_count}
+                    </div>
+                  </div>
+                  <div style={{ background: C.panel2, padding: "8px 10px", borderRadius: 6 }}>
+                    <div style={{ fontFamily: mono, fontSize: 10, color: C.low }}>COMPLETED</div>
+                    <div style={{ fontFamily: mono, fontSize: 15, fontWeight: 700, color: "#4ade80", marginTop: 2 }}>
+                      {progressData.labs_completed_count}
+                    </div>
+                  </div>
+                  <div style={{ background: C.panel2, padding: "8px 10px", borderRadius: 6 }}>
+                    <div style={{ fontFamily: mono, fontSize: 10, color: C.low }}>TOTAL MARKS</div>
+                    <div style={{ fontFamily: mono, fontSize: 15, fontWeight: 700, color: C.amber, marginTop: 2 }}>
+                      {progressData.total_earned_score}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
+
+          {/* Tab Selector: Courses & Subjects VS Attended Labs & Scores */}
+          <div style={{ display: "flex", gap: 6, marginBottom: 18, borderBottom: `1px solid ${C.border}`, paddingBottom: 10 }}>
+            <button
+              onClick={() => setActiveTab("overview")}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "6px 12px",
+                borderRadius: 6,
+                background: activeTab === "overview" ? C.panel3 : "transparent",
+                color: activeTab === "overview" ? C.hi : C.low,
+                fontFamily: sans,
+                fontSize: 12.5,
+                fontWeight: 600,
+                border: "none",
+                cursor: "pointer",
+              }}
+            >
+              <Layers size={13} />
+              Courses & Subjects
+            </button>
+            <button
+              onClick={() => setActiveTab("labs")}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "6px 12px",
+                borderRadius: 6,
+                background: activeTab === "labs" ? C.panel3 : "transparent",
+                color: activeTab === "labs" ? C.amber : C.low,
+                fontFamily: sans,
+                fontSize: 12.5,
+                fontWeight: 600,
+                border: "none",
+                cursor: "pointer",
+              }}
+            >
+              <FlaskConical size={13} />
+              Attended Labs & Scores ({progressData?.lab_scores?.length || 0})
+            </button>
+          </div>
+
+          {activeTab === "labs" ? (
+            /* ──────── ATTENDED LABS & SCORES BREAKDOWN ──────── */
+            <div style={{ marginBottom: 24 }}>
+              <div style={{ fontFamily: mono, fontSize: 11, color: C.low, marginBottom: 12 }}>
+                Verified practical lab attempts, question flags, and scores.
+              </div>
+              {(!progressData?.lab_scores || progressData.lab_scores.length === 0) ? (
+                <div style={{
+                  background: C.panel,
+                  border: `1px dashed ${C.border}`,
+                  borderRadius: 8,
+                  padding: "24px 16px",
+                  textAlign: "center",
+                  fontFamily: sans,
+                  fontSize: 12.5,
+                  color: C.low,
+                }}>
+                  No labs attended yet by this student.
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {progressData.lab_scores.map((lab) => (
+                    <div
+                      key={lab.lab_id}
+                      style={{
+                        background: C.panel,
+                        border: `1px solid ${C.border}`,
+                        borderRadius: 8,
+                        padding: "14px 16px",
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 6 }}>
+                        <div>
+                          <div style={{ fontFamily: sans, fontSize: 13.5, fontWeight: 600, color: C.hi }}>
+                            {lab.lab_name}
+                          </div>
+                          <div style={{ fontFamily: mono, fontSize: 11, color: C.low, marginTop: 2 }}>
+                            {lab.subject_name || lab.category} • {lab.difficulty}
+                          </div>
+                        </div>
+                        {lab.is_completed ? (
+                          <Badge tone="cyan">COMPLETED</Badge>
+                        ) : (
+                          <Badge tone="warn">IN PROGRESS</Badge>
+                        )}
+                      </div>
+
+                      <div style={{ display: "flex", justifyContent: "space-between", margin: "8px 0 4px", fontSize: 12 }}>
+                        <span style={{ fontFamily: sans, color: C.mid }}>Marks Earned:</span>
+                        <span style={{ fontFamily: mono, fontWeight: 700, color: C.amber }}>
+                          {lab.score} / {lab.max_score} pts ({lab.score_pct}%)
+                        </span>
+                      </div>
+                      <ProgressBar pct={lab.score_pct} color={lab.is_completed ? "#4ade80" : C.cyan} />
+
+                      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 10, fontSize: 11, fontFamily: mono, color: C.low }}>
+                        <span>Attended: {lab.attend_count}x session(s)</span>
+                        <span>Questions Solved: {lab.solved_questions}/{lab.total_questions}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            /* ──────── COURSES & SUBJECTS TAB ──────── */
+            <>
 
           {/* Assigned Subjects (Lab Access Gate) */}
           <div style={{ marginBottom: 24 }}>
@@ -759,7 +916,10 @@ export default function StudentDetailPanel({ student, onClose, onStudentUpdate }
               />
             ))}
           </div>
+          </>
+          )}
         </div>
+
 
         {/* Footer */}
         <div style={{

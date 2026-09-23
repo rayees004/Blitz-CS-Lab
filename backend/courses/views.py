@@ -1367,14 +1367,325 @@ class LabSubmissionListView(APIView):
     """
     GET /api/lab-submissions/
     Returns list of all student lab submissions (for instructor / admin view or audit).
+    Supports optional ?student_id=<id> filter.
     """
     def get_permissions(self):
         return [IsAdminOrStaff()]
 
     def get(self, request):
-        submissions = LabSubmission.objects.select_related('student', 'lab').all()
+        submissions = LabSubmission.objects.select_related('student', 'lab', 'lab__subject', 'lab__course').all()
+        student_id = request.query_params.get('student_id')
+        if student_id:
+            submissions = submissions.filter(student_id=student_id)
         serializer = LabSubmissionSerializer(submissions, many=True)
         return Response({'count': submissions.count(), 'results': serializer.data})
+
+
+class StudentActivityFeedView(APIView):
+    """
+    GET /api/student-activity/
+    Returns unified live activity feed across students:
+    - Lab attendances / attempts
+    - Flag submissions & completions
+    - Hint unlocks
+    - Enrollment events
+    Supports filter by ?student_id=<id>, ?type=<type>, and ?q=<search>.
+    """
+    def get_permissions(self):
+        return [IsAdminOrStaff()]
+
+    def get(self, request):
+        student_id = request.query_params.get('student_id')
+        q = request.query_params.get('q', '').strip().lower()
+
+        # 1. Fetch Lab Submissions / Attempts
+        subs_qs = LabSubmission.objects.select_related('student', 'lab', 'lab__subject', 'lab__course').all().order_by('-last_activity_at')
+        if student_id:
+            subs_qs = subs_qs.filter(student_id=student_id)
+
+        # 2. Fetch Lab Scores (attendance records)
+        scores_qs = LabScore.objects.select_related('student', 'lab', 'lab__subject').all().order_by('-last_attended_at')
+        if student_id:
+            scores_qs = scores_qs.filter(student_id=student_id)
+
+        # 3. Fetch Subject Enrollments
+        subj_enr_qs = SubjectEnrollment.objects.select_related('student', 'subject', 'subject__course').all().order_by('-enrolled_at')
+        if student_id:
+            subj_enr_qs = subj_enr_qs.filter(student_id=student_id)
+
+        activities = []
+
+        # Build activities from Submissions
+        for sub in subs_qs[:150]:
+            student_name = sub.student.get_full_name() or sub.student.username
+            answers = sub.answers if isinstance(sub.answers, dict) else {}
+
+            # Question / flag events inside submission
+            for q_id, ans in answers.items():
+                if isinstance(ans, dict) and ans.get('is_correct'):
+                    activities.append({
+                        'id': f"flag-{sub.id}-{q_id}",
+                        'type': 'flag_solve',
+                        'student_id': sub.student_id,
+                        'student_name': student_name,
+                        'student_username': sub.student.username,
+                        'lab_id': sub.lab_id,
+                        'lab_name': sub.lab.name,
+                        'subject_name': sub.lab.subject.name if sub.lab.subject else None,
+                        'title': f"Solved Question in {sub.lab.name}",
+                        'description': f"Successfully cracked and submitted flag for question #{q_id}",
+                        'points': ans.get('points_awarded', 0),
+                        'timestamp': ans.get('solved_at') or sub.last_activity_at,
+                        'status': 'SUCCESS',
+                    })
+
+                # Hints unlocked
+                for hint_id in (ans.get('hints_unlocked') or []):
+                    activities.append({
+                        'id': f"hint-{sub.id}-{hint_id}",
+                        'type': 'hint_unlock',
+                        'student_id': sub.student_id,
+                        'student_name': student_name,
+                        'student_username': sub.student.username,
+                        'lab_id': sub.lab_id,
+                        'lab_name': sub.lab.name,
+                        'subject_name': sub.lab.subject.name if sub.lab.subject else None,
+                        'title': f"Unlocked Hint in {sub.lab.name}",
+                        'description': f"Unlocked hint #{hint_id} (-{ans.get('deductions', 10)} pts deduction)",
+                        'points': -(ans.get('deductions', 10)),
+                        'timestamp': sub.last_activity_at,
+                        'status': 'WARNING',
+                    })
+
+            # Overall Completion event
+            if sub.status == 'COMPLETED':
+                activities.append({
+                    'id': f"sub-complete-{sub.id}",
+                    'type': 'lab_completed',
+                    'student_id': sub.student_id,
+                    'student_name': student_name,
+                    'student_username': sub.student.username,
+                    'lab_id': sub.lab_id,
+                    'lab_name': sub.lab.name,
+                    'subject_name': sub.lab.subject.name if sub.lab.subject else None,
+                    'title': f"Completed Lab: {sub.lab.name}",
+                    'description': f"Scored {sub.score} / {sub.max_score} points ({round((sub.score/sub.max_score)*100) if sub.max_score else 100}%)",
+                    'points': sub.score,
+                    'timestamp': sub.submitted_at or sub.last_activity_at,
+                    'status': 'COMPLETED',
+                })
+            else:
+                activities.append({
+                    'id': f"sub-progress-{sub.id}",
+                    'type': 'lab_in_progress',
+                    'student_id': sub.student_id,
+                    'student_name': student_name,
+                    'student_username': sub.student.username,
+                    'lab_id': sub.lab_id,
+                    'lab_name': sub.lab.name,
+                    'subject_name': sub.lab.subject.name if sub.lab.subject else None,
+                    'title': f"In-Progress Lab: {sub.lab.name}",
+                    'description': f"Current score {sub.score} / {sub.max_score} pts",
+                    'points': sub.score,
+                    'timestamp': sub.last_activity_at,
+                    'status': 'IN_PROGRESS',
+                })
+
+        # Build activities from Lab Scores (attendances)
+        for ls in scores_qs[:100]:
+            student_name = ls.student.get_full_name() or ls.student.username
+            activities.append({
+                'id': f"attend-{ls.id}",
+                'type': 'lab_attended',
+                'student_id': ls.student_id,
+                'student_name': student_name,
+                'student_username': ls.student.username,
+                'lab_id': ls.lab_id,
+                'lab_name': ls.lab.name,
+                'subject_name': ls.lab.subject.name if ls.lab.subject else None,
+                'title': f"Attended Lab: {ls.lab.name}",
+                'description': f"Attended {ls.attend_count} time(s) • Current marks: {ls.score}/{ls.max_score} pts",
+                'points': ls.score,
+                'timestamp': ls.last_attended_at,
+                'status': 'ATTENDED',
+            })
+
+        # Build activities from Subject Enrollments
+        for se in subj_enr_qs[:50]:
+            student_name = se.student.get_full_name() or se.student.username
+            activities.append({
+                'id': f"enroll-subj-{se.id}",
+                'type': 'subject_assigned',
+                'student_id': se.student_id,
+                'student_name': student_name,
+                'student_username': se.student.username,
+                'lab_id': None,
+                'lab_name': None,
+                'subject_name': se.subject.name,
+                'title': f"Assigned to Subject: {se.subject.name}",
+                'description': f"Granted practical lab access for {se.subject.name} ({se.subject.code})",
+                'points': 0,
+                'timestamp': se.enrolled_at,
+                'status': 'INFO',
+            })
+
+        # Deduplicate by id and sort descending by timestamp
+        seen = set()
+        unique_acts = []
+        for a in activities:
+            if a['id'] not in seen:
+                seen.add(a['id'])
+                unique_acts.append(a)
+
+        unique_acts.sort(key=lambda x: str(x.get('timestamp') or ''), reverse=True)
+
+        if q:
+            unique_acts = [
+                a for a in unique_acts
+                if q in a['student_name'].lower()
+                or q in a['student_username'].lower()
+                or (a['lab_name'] and q in a['lab_name'].lower())
+                or (a['subject_name'] and q in a['subject_name'].lower())
+                or q in a['title'].lower()
+            ]
+
+        return Response({
+            'count': len(unique_acts),
+            'results': unique_acts[:100],
+        })
+
+
+class StudentProgressReportView(APIView):
+    """
+    GET /api/student-progress/
+    Returns comprehensive progress listing for all students or a specific student:
+    - Overall score / total achievable marks
+    - Completion percentage
+    - Labs attended, completed, in-progress
+    - Breakdown of scores per attended lab
+    - Subject enrollment status
+    Supports optional ?student_id=<id> filter.
+    """
+    def get_permissions(self):
+        return [IsAdminOrStaff()]
+
+    def get(self, request):
+        student_id = request.query_params.get('student_id')
+        students_qs = User.objects.filter(user_type='student', is_active=True).order_by('first_name', 'last_name')
+        if student_id:
+            students_qs = students_qs.filter(id=student_id)
+
+        all_labs = Lab.objects.filter(is_active=True)
+        total_platform_labs = all_labs.count()
+        total_platform_possible_points = sum(l.points for l in all_labs)
+
+        # Batch load scores and submissions
+        all_scores = LabScore.objects.select_related('lab', 'lab__subject').all()
+        scores_by_student = {}
+        for sc in all_scores:
+            scores_by_student.setdefault(sc.student_id, []).append(sc)
+
+        all_subs = LabSubmission.objects.select_related('lab', 'lab__subject').all()
+        subs_by_student = {}
+        for sb in all_subs:
+            subs_by_student.setdefault(sb.student_id, []).append(sb)
+
+        all_subj_enr = SubjectEnrollment.objects.select_related('subject').filter(is_active=True)
+        subj_by_student = {}
+        for se in all_subj_enr:
+            subj_by_student.setdefault(se.student_id, []).append(se)
+
+        results = []
+        platform_stats = {
+            'total_students': students_qs.count(),
+            'total_labs': total_platform_labs,
+            'total_platform_points': total_platform_possible_points,
+            'total_completions': 0,
+            'total_attendances': 0,
+            'average_progress_pct': 0,
+        }
+
+        total_progress_pct_sum = 0
+
+        for student in students_qs:
+            sc_list = scores_by_student.get(student.id, [])
+            sb_list = subs_by_student.get(student.id, [])
+            se_list = subj_by_student.get(student.id, [])
+
+            labs_attended_count = len(sc_list)
+            total_attend_times = sum(sc.attend_count for sc in sc_list)
+            platform_stats['total_attendances'] += total_attend_times
+
+            completed_labs = [sc for sc in sc_list if sc.is_completed]
+            labs_completed_count = len(completed_labs)
+            platform_stats['total_completions'] += labs_completed_count
+
+            in_progress_labs = [sc for sc in sc_list if not sc.is_completed and sc.attend_count > 0]
+            labs_in_progress_count = len(in_progress_labs)
+
+            total_earned_score = sum(sc.score for sc in sc_list)
+            total_assigned_max_score = sum(sc.max_score for sc in sc_list) if sc_list else total_platform_possible_points
+
+            progress_pct = round((total_earned_score / total_platform_possible_points) * 100) if total_platform_possible_points > 0 else 0
+            completion_rate = round((labs_completed_count / total_platform_labs) * 100) if total_platform_labs > 0 else 0
+
+            total_progress_pct_sum += progress_pct
+
+            # Lab detail items for this student
+            lab_details = []
+            for sc in sc_list:
+                lab_details.append({
+                    'lab_id': sc.lab_id,
+                    'lab_name': sc.lab.name,
+                    'category': sc.lab.category,
+                    'difficulty': sc.lab.difficulty,
+                    'subject_name': sc.lab.subject.name if sc.lab.subject else None,
+                    'score': sc.score,
+                    'max_score': sc.max_score,
+                    'score_pct': round((sc.score / sc.max_score) * 100) if sc.max_score > 0 else 0,
+                    'attend_count': sc.attend_count,
+                    'is_completed': sc.is_completed,
+                    'solved_questions': sc.solved_questions_count,
+                    'total_questions': sc.total_questions_count,
+                    'first_attended_at': sc.first_attended_at,
+                    'last_attended_at': sc.last_attended_at,
+                    'completed_at': sc.completed_at,
+                })
+
+            # Sort student's lab scores by latest attended
+            lab_details.sort(key=lambda x: str(x.get('last_attended_at') or ''), reverse=True)
+
+            student_name = student.get_full_name() or student.username
+            results.append({
+                'student_id': student.id,
+                'name': student_name,
+                'username': student.username,
+                'email': student.email,
+                'organization': student.organization,
+                'date_joined': student.date_joined,
+                'assigned_subjects_count': len(se_list),
+                'assigned_subjects': [{'id': se.subject_id, 'name': se.subject.name, 'code': se.subject.code} for se in se_list],
+                'labs_attended_count': labs_attended_count,
+                'total_attend_times': total_attend_times,
+                'labs_completed_count': labs_completed_count,
+                'labs_in_progress_count': labs_in_progress_count,
+                'total_earned_score': total_earned_score,
+                'total_possible_score': total_platform_possible_points,
+                'progress_pct': progress_pct,
+                'completion_rate': completion_rate,
+                'last_active_at': sc_list[0].last_attended_at if sc_list else student.date_joined,
+                'lab_scores': lab_details,
+            })
+
+        if results:
+            platform_stats['average_progress_pct'] = round(total_progress_pct_sum / len(results))
+
+        return Response({
+            'stats': platform_stats,
+            'count': len(results),
+            'results': results,
+        })
+
 
 
 # ─── STUDY MATERIALS ──────────────────────────────────────────
