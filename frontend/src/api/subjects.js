@@ -1,26 +1,6 @@
-import { getStoredToken } from './auth';
+import { apiFetch, authHeaders, handleApiResponse, API_BASE } from './client';
 
-const API_BASE = '/api';
-
-function authHeaders() {
-  const token = getStoredToken();
-  return {
-    'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Token ${token}` } : {}),
-  };
-}
-
-async function handleResponse(res) {
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const msg =
-      data.detail ||
-      (data.non_field_errors && data.non_field_errors[0]) ||
-      'An error occurred. Please try again.';
-    throw new Error(msg);
-  }
-  return data;
-}
+export { authHeaders, handleApiResponse };
 
 /** Fetch all active subjects with optional courseId and search query */
 export async function fetchSubjects(params = {}) {
@@ -29,108 +9,82 @@ export async function fetchSubjects(params = {}) {
   if (params.q) query.append('q', params.q);
 
   const qs = query.toString() ? `?${query.toString()}` : '';
-  const res = await fetch(`${API_BASE}/subjects/${qs}`, { headers: authHeaders() });
-  return handleResponse(res);
+  return apiFetch(`/subjects/${qs}`);
 }
 
 /** Fetch single subject details */
 export async function fetchSubject(subjectId) {
-  const res = await fetch(`${API_BASE}/subjects/${subjectId}/`, { headers: authHeaders() });
-  return handleResponse(res);
+  return apiFetch(`/subjects/${subjectId}/`);
 }
 
 /** Create a new subject */
 export async function createSubject(payload) {
-  const res = await fetch(`${API_BASE}/subjects/`, {
+  return apiFetch('/subjects/', {
     method: 'POST',
-    headers: authHeaders(),
     body: JSON.stringify(payload),
   });
-  return handleResponse(res);
 }
 
 /** Update a subject */
 export async function updateSubject(subjectId, patch) {
-  const res = await fetch(`${API_BASE}/subjects/${subjectId}/`, {
+  return apiFetch(`/subjects/${subjectId}/`, {
     method: 'PATCH',
-    headers: authHeaders(),
     body: JSON.stringify(patch),
   });
-  return handleResponse(res);
 }
 
 /** Deactivate (soft-delete) a subject */
 export async function deleteSubject(subjectId) {
-  const res = await fetch(`${API_BASE}/subjects/${subjectId}/`, {
+  return apiFetch(`/subjects/${subjectId}/`, {
     method: 'DELETE',
-    headers: authHeaders(),
   });
-  return handleResponse(res);
 }
 
 /** Fetch all subjects belonging to a course */
 export async function fetchCourseSubjects(courseId) {
-  const res = await fetch(`${API_BASE}/courses/${courseId}/subjects/`, {
-    headers: authHeaders(),
-  });
-  return handleResponse(res);
+  return apiFetch(`/courses/${courseId}/subjects/`);
 }
 
 /** Fetch modules belonging to a subject (course) */
 export async function fetchSubjectModules(subjectId) {
-  const res = await fetch(`${API_BASE}/subjects/${subjectId}/modules/`, {
-    headers: authHeaders(),
-  });
-  return handleResponse(res);
+  return apiFetch(`/subjects/${subjectId}/modules/`);
 }
 
 /** Add a module to a subject (course) */
 export async function createSubjectModule(subjectId, payload) {
-  const res = await fetch(`${API_BASE}/subjects/${subjectId}/modules/`, {
+  return apiFetch(`/subjects/${subjectId}/modules/`, {
     method: 'POST',
-    headers: authHeaders(),
     body: JSON.stringify(payload),
   });
-  return handleResponse(res);
 }
 
 /** Update a module */
 export async function updateModule(moduleId, patch) {
-  const res = await fetch(`${API_BASE}/modules/${moduleId}/`, {
+  return apiFetch(`/modules/${moduleId}/`, {
     method: 'PATCH',
-    headers: authHeaders(),
     body: JSON.stringify(patch),
   });
-  return handleResponse(res);
 }
 
 /** Delete a module */
 export async function deleteModule(moduleId) {
-  const res = await fetch(`${API_BASE}/modules/${moduleId}/`, {
+  return apiFetch(`/modules/${moduleId}/`, {
     method: 'DELETE',
-    headers: authHeaders(),
   });
-  return handleResponse(res);
 }
 
 /** Bulk assign/sync multiple subjects for a student */
 export async function assignStudentSubjects(studentId, subjectIds, sync = true) {
-  const res = await fetch(`${API_BASE}/students/${studentId}/assign-subjects/`, {
+  return apiFetch(`/students/${studentId}/assign-subjects/`, {
     method: 'POST',
-    headers: authHeaders(),
     body: JSON.stringify({
       subject_ids: subjectIds,
       sync,
     }),
   });
-  return handleResponse(res);
 }
 
 /** Fetch subjects assigned to a student */
 export async function fetchStudentSubjects(studentId) {
-  const res = await fetch(`${API_BASE}/students/${studentId}/subjects/`, {
-    headers: authHeaders(),
-  });
-  return handleResponse(res);
+  return apiFetch(`/students/${studentId}/subjects/`);
 }
-

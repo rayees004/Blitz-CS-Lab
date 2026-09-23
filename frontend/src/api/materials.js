@@ -1,30 +1,6 @@
-import { getStoredToken } from './auth';
+import { apiFetch, authHeaders, handleApiResponse, API_BASE } from './client';
 
-const API_BASE = '/api';
-
-function authHeaders(isMultipart = false) {
-  const token = getStoredToken();
-  const headers = {};
-  if (!isMultipart) {
-    headers['Content-Type'] = 'application/json';
-  }
-  if (token) {
-    headers['Authorization'] = `Token ${token}`;
-  }
-  return headers;
-}
-
-async function handleResponse(res) {
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const msg =
-      data.detail ||
-      (data.non_field_errors && data.non_field_errors[0]) ||
-      'An error occurred. Please try again.';
-    throw new Error(msg);
-  }
-  return data;
-}
+export { authHeaders, handleApiResponse };
 
 /** Fetch study materials with optional query filters (Admin or general) */
 export async function fetchMaterials(params = {}) {
@@ -35,8 +11,7 @@ export async function fetchMaterials(params = {}) {
   if (params.q) query.append('q', params.q);
 
   const qs = query.toString() ? `?${query.toString()}` : '';
-  const res = await fetch(`${API_BASE}/materials/${qs}`, { headers: authHeaders() });
-  return handleResponse(res);
+  return apiFetch(`/materials/${qs}`);
 }
 
 /** Fetch study materials for currently logged in student */
@@ -48,36 +23,28 @@ export async function fetchStudentMaterials(params = {}) {
   if (params.q) query.append('q', params.q);
 
   const qs = query.toString() ? `?${query.toString()}` : '';
-  const res = await fetch(`${API_BASE}/student/materials/${qs}`, { headers: authHeaders() });
-  return handleResponse(res);
+  return apiFetch(`/student/materials/${qs}`);
 }
 
 /** Upload a new study material (FormData payload) */
 export async function createMaterial(formData) {
-  const res = await fetch(`${API_BASE}/materials/`, {
+  return apiFetch('/materials/', {
     method: 'POST',
-    headers: authHeaders(true),
     body: formData,
   });
-  return handleResponse(res);
 }
 
 /** Update an existing study material */
 export async function updateMaterial(id, formDataOrJson) {
-  const isMultipart = typeof FormData !== 'undefined' && formDataOrJson instanceof FormData;
-  const res = await fetch(`${API_BASE}/materials/${id}/`, {
+  return apiFetch(`/materials/${id}/`, {
     method: 'PATCH',
-    headers: authHeaders(isMultipart),
-    body: isMultipart ? formDataOrJson : JSON.stringify(formDataOrJson),
+    body: formDataOrJson,
   });
-  return handleResponse(res);
 }
 
 /** Delete a study material */
 export async function deleteMaterial(id) {
-  const res = await fetch(`${API_BASE}/materials/${id}/`, {
+  return apiFetch(`/materials/${id}/`, {
     method: 'DELETE',
-    headers: authHeaders(),
   });
-  return handleResponse(res);
 }

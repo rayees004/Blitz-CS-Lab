@@ -1,147 +1,100 @@
-import { getStoredToken } from './auth';
+import { apiFetch, authHeaders, handleApiResponse, API_BASE } from './client';
 
-const API_BASE = '/api';
-
-function authHeaders() {
-  const token = getStoredToken();
-  return {
-    'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Token ${token}` } : {}),
-  };
-}
-
-async function handleResponse(res) {
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const msg =
-      data.detail ||
-      (data.non_field_errors && data.non_field_errors[0]) ||
-      'An error occurred. Please try again.';
-    throw new Error(msg);
-  }
-  return data;
-}
+export { authHeaders, handleApiResponse };
 
 /** Fetch all available active courses/classes */
 export async function fetchCourses() {
-  const res = await fetch(`${API_BASE}/courses/`, { headers: authHeaders() });
-  return handleResponse(res);
+  return apiFetch('/courses/');
 }
 
 /** Fetch a single course with modules */
 export async function fetchCourse(courseId) {
-  const res = await fetch(`${API_BASE}/courses/${courseId}/`, { headers: authHeaders() });
-  return handleResponse(res);
+  return apiFetch(`/courses/${courseId}/`);
 }
 
 /** Create a new class */
 export async function createCourse(payload) {
-  const res = await fetch(`${API_BASE}/courses/`, {
+  return apiFetch('/courses/', {
     method: 'POST',
-    headers: authHeaders(),
     body: JSON.stringify(payload),
   });
-  return handleResponse(res);
 }
 
 /** Update a class */
 export async function updateCourse(courseId, patch) {
-  const res = await fetch(`${API_BASE}/courses/${courseId}/`, {
+  return apiFetch(`/courses/${courseId}/`, {
     method: 'PATCH',
-    headers: authHeaders(),
     body: JSON.stringify(patch),
   });
-  return handleResponse(res);
 }
 
 /** Deactivate (soft-delete) a class */
 export async function deleteCourse(courseId) {
-  const res = await fetch(`${API_BASE}/courses/${courseId}/`, {
+  return apiFetch(`/courses/${courseId}/`, {
     method: 'DELETE',
-    headers: authHeaders(),
   });
-  return handleResponse(res);
 }
 
 /** Fetch modules for a class */
 export async function fetchModules(courseId) {
-  const res = await fetch(`${API_BASE}/courses/${courseId}/modules/`, { headers: authHeaders() });
-  return handleResponse(res);
+  return apiFetch(`/courses/${courseId}/modules/`);
 }
 
 /** Add a module to a class */
 export async function createModule(courseId, payload) {
-  const res = await fetch(`${API_BASE}/courses/${courseId}/modules/`, {
+  return apiFetch(`/courses/${courseId}/modules/`, {
     method: 'POST',
-    headers: authHeaders(),
     body: JSON.stringify(payload),
   });
-  return handleResponse(res);
 }
 
 /** Update a module */
 export async function updateModule(moduleId, patch) {
-  const res = await fetch(`${API_BASE}/modules/${moduleId}/`, {
+  return apiFetch(`/modules/${moduleId}/`, {
     method: 'PATCH',
-    headers: authHeaders(),
     body: JSON.stringify(patch),
   });
-  return handleResponse(res);
 }
 
 /** Delete a module */
 export async function deleteModule(moduleId) {
-  const res = await fetch(`${API_BASE}/modules/${moduleId}/`, {
+  return apiFetch(`/modules/${moduleId}/`, {
     method: 'DELETE',
-    headers: authHeaders(),
   });
-  return handleResponse(res);
 }
 
 /** Fetch all enrollments for a student */
 export async function fetchStudentEnrollments(studentId) {
-  const res = await fetch(`${API_BASE}/students/${studentId}/enrollments/`, {
-    headers: authHeaders(),
-  });
-  return handleResponse(res);
+  return apiFetch(`/students/${studentId}/enrollments/`);
 }
 
 /** Enroll a student in a course */
 export async function enrollStudent(studentId, courseId, feeStatus = 'DUE', notes = '') {
-  const res = await fetch(`${API_BASE}/students/${studentId}/enrollments/`, {
+  return apiFetch(`/students/${studentId}/enrollments/`, {
     method: 'POST',
-    headers: authHeaders(),
     body: JSON.stringify({ course_id: courseId, fee_status: feeStatus, notes }),
   });
-  return handleResponse(res);
 }
 
 /** Update enrollment: fee_status, is_on_hold, hold_reason, notes */
 export async function updateEnrollment(enrollmentId, patch) {
-  const res = await fetch(`${API_BASE}/enrollments/${enrollmentId}/`, {
+  return apiFetch(`/enrollments/${enrollmentId}/`, {
     method: 'PATCH',
-    headers: authHeaders(),
     body: JSON.stringify(patch),
   });
-  return handleResponse(res);
 }
 
 /** Remove a student from a course */
 export async function removeEnrollment(enrollmentId) {
-  const res = await fetch(`${API_BASE}/enrollments/${enrollmentId}/`, {
+  return apiFetch(`/enrollments/${enrollmentId}/`, {
     method: 'DELETE',
-    headers: authHeaders(),
   });
-  return handleResponse(res);
 }
 
 /** Bulk assign multiple courses to a student (with sync option) */
 export async function assignStudentCourses(studentId, courseIds, feeStatus = 'DUE', sync = true) {
-  const res = await fetch(`${API_BASE}/students/${studentId}/assign-courses/`, {
+  return apiFetch(`/students/${studentId}/assign-courses/`, {
     method: 'POST',
-    headers: authHeaders(),
     body: JSON.stringify({ course_ids: courseIds, fee_status: feeStatus, sync }),
   });
-  return handleResponse(res);
 }
-

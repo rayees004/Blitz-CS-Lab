@@ -1,5 +1,14 @@
 const API_BASE = '/api';
 
+export function clearAuthSession() {
+  localStorage.removeItem('blitz_token');
+  localStorage.removeItem('blitz_user');
+}
+
+export function notifyAuthExpired() {
+  window.dispatchEvent(new CustomEvent('blitz:auth_expired'));
+}
+
 export async function loginUser(identifier, password) {
   const payload = {
     email: identifier.includes('@') ? identifier.trim() : '',
@@ -49,8 +58,7 @@ export async function logoutUser() {
       // Ignore network errors on logout
     }
   }
-  localStorage.removeItem('blitz_token');
-  localStorage.removeItem('blitz_user');
+  clearAuthSession();
 }
 
 export function getStoredUser() {
@@ -64,4 +72,43 @@ export function getStoredUser() {
 
 export function getStoredToken() {
   return localStorage.getItem('blitz_token');
+}
+
+/**
+ * Validates the current stored token against the server to check if it has expired.
+ * If expired or invalid (401), clears session and notifies listener to redirect to login.
+ */
+export async function checkTokenValidity() {
+  const token = getStoredToken();
+  if (!token) {
+    return false;
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/me/`, {
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Token ${token}`,
+      },
+    });
+
+    if (res.status === 401) {
+      clearAuthSession();
+      notifyAuthExpired();
+      return false;
+    }
+
+    if (!res.ok) {
+      return false;
+    }
+
+    const data = await res.json().catch(() => ({}));
+    if (data.user) {
+      localStorage.setItem('blitz_user', JSON.stringify(data.user));
+    }
+    return true;
+  } catch {
+    // Network glitch or server temporarily unreachable; keep local state
+    return true;
+  }
 }

@@ -12,7 +12,7 @@ import Topbar from "./src/components/layout/Topbar";
 import Login from "./src/components/auth/Login";
 import Placeholder from "./src/components/common/Placeholder";
 
-import { logoutUser, getStoredUser } from "./src/api/auth";
+import { logoutUser, getStoredUser, checkTokenValidity } from "./src/api/auth";
 
 // Student Views
 import StudentDashboard from "./src/components/student/StudentDashboard";
@@ -67,7 +67,34 @@ export default function BlitzCyberLab() {
   const [adminPage, setAdminPage] = useState("a-dashboard");
   const [activeLab, setActiveLab] = useState(null);
 
+  const [sessionNotice, setSessionNotice] = useState(null);
+
+  React.useEffect(() => {
+    // 1. Listen for global token expiry / 401 unauthorized events
+    const handleAuthExpired = () => {
+      setCurrentUser(null);
+      setSessionNotice("Your session has expired. Please log in again to continue.");
+      setStage("login");
+    };
+
+    window.addEventListener("blitz:auth_expired", handleAuthExpired);
+
+    // 2. On app load/refresh, verify stored token validity with backend
+    if (getStoredUser()) {
+      checkTokenValidity().then((isValid) => {
+        if (!isValid) {
+          handleAuthExpired();
+        }
+      });
+    }
+
+    return () => {
+      window.removeEventListener("blitz:auth_expired", handleAuthExpired);
+    };
+  }, []);
+
   const handleLogin = (role, user) => {
+    setSessionNotice(null);
     if (user) setCurrentUser(user);
     setStage(role);
   };
@@ -75,6 +102,7 @@ export default function BlitzCyberLab() {
   const handleLogout = async () => {
     await logoutUser();
     setCurrentUser(null);
+    setSessionNotice(null);
     setStage("login");
   };
 
@@ -86,7 +114,7 @@ export default function BlitzCyberLab() {
   if (stage === "login") {
     return (
       <div style={{ fontFamily: sans }}>
-        <Login onLogin={handleLogin} />
+        <Login onLogin={handleLogin} initialNotice={sessionNotice} />
       </div>
     );
   }

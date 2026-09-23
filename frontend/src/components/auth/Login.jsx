@@ -5,11 +5,18 @@ import Btn from "../common/Btn";
 import { C, sans, mono } from "../../constants/theme";
 import { loginUser } from "../../api/auth";
 
-export default function Login({ onLogin }) {
+export default function Login({ onLogin, initialNotice }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [notice, setNotice] = useState(initialNotice || null);
+
+  React.useEffect(() => {
+    if (initialNotice) {
+      setNotice(initialNotice);
+    }
+  }, [initialNotice]);
 
   const handleSubmit = async (e) => {
     if (e) e.preventDefault();
@@ -20,6 +27,7 @@ export default function Login({ onLogin }) {
 
     setLoading(true);
     setError(null);
+    setNotice(null);
 
     try {
       const response = await loginUser(email, password);
@@ -115,6 +123,29 @@ export default function Login({ onLogin }) {
         <p style={{ fontFamily: sans, fontSize: 13, color: C.mid, margin: "0 0 20px" }}>
           Enter your Blitz Cyber Lab credentials to access your dashboard.
         </p>
+
+        {/* Session expiry notice banner */}
+        {notice && (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "flex-start",
+              gap: 8,
+              background: "rgba(245, 158, 11, 0.12)",
+              border: "1px solid rgba(245, 158, 11, 0.4)",
+              color: "#fcd34d",
+              padding: "10px 12px",
+              borderRadius: 6,
+              fontSize: 12.5,
+              fontFamily: sans,
+              lineHeight: 1.45,
+              marginBottom: 16,
+            }}
+          >
+            <AlertCircle size={16} style={{ flexShrink: 0, marginTop: 2, color: "#f59e0b" }} />
+            <span>{notice}</span>
+          </div>
+        )}
 
         {/* Error message banner */}
         {error && (
