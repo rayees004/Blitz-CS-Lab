@@ -9,6 +9,7 @@ from django.utils import timezone
 from django.db import transaction
 from accounts.models import User
 from accounts.views import IsAdminOrStaff
+from accounts.audit import record_audit_log
 from .models import (
     Course, Enrollment, Module, Subject, SubjectEnrollment,
     Lab, LabQuestion, QuestionHint, LabSubmission, LabScore,
@@ -50,6 +51,19 @@ class CourseListCreateView(APIView):
         serializer = CreateCourseSerializer(data=request.data)
         if serializer.is_valid():
             course = serializer.save()
+
+            record_audit_log(
+                action_type='COURSE_CREATE',
+                description=f"Created course/class '{course.name}' ({course.duration_weeks} weeks, ₹{course.price}).",
+                request=request,
+                actor=request.user,
+                target_entity='Course',
+                target_id=course.id,
+                target_name=course.name,
+                severity='NOTICE',
+                details={'name': course.name, 'price': float(course.price), 'duration_weeks': course.duration_weeks}
+            )
+
             return Response({
                 'message': f'Class "{course.name}" created successfully.',
                 'course': CourseSerializer(course).data,
@@ -82,10 +96,23 @@ class CourseDetailView(APIView):
         course = self.get_course(pk)
         serializer = CreateCourseSerializer(course, data=request.data, partial=True)
         if serializer.is_valid():
-            serializer.save()
+            updated = serializer.save()
+
+            record_audit_log(
+                action_type='COURSE_UPDATE',
+                description=f"Updated course/class settings for '{updated.name}'.",
+                request=request,
+                actor=request.user,
+                target_entity='Course',
+                target_id=updated.id,
+                target_name=updated.name,
+                severity='INFO',
+                details={'updated_fields': list(request.data.keys())}
+            )
+
             return Response({
                 'message': 'Class updated.',
-                'course': CourseSerializer(course).data,
+                'course': CourseSerializer(updated).data,
             })
         return Response({'detail': 'Update failed.', 'errors': serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -94,7 +121,20 @@ class CourseDetailView(APIView):
         name = course.name
         course.is_active = False
         course.save()
+
+        record_audit_log(
+            action_type='COURSE_DELETE',
+            description=f"Deactivated course/class '{name}'.",
+            request=request,
+            actor=request.user,
+            target_entity='Course',
+            target_id=course.id,
+            target_name=name,
+            severity='WARNING'
+        )
+
         return Response({'message': f'Class "{name}" deactivated.'})
+
 
 
 class CourseModulesView(APIView):
@@ -204,6 +244,19 @@ class SubjectListCreateView(APIView):
         serializer = CreateSubjectSerializer(data=request.data)
         if serializer.is_valid():
             subject = serializer.save()
+
+            record_audit_log(
+                action_type='SUBJECT_CREATE',
+                description=f"Created course subject '{subject.name}' ({subject.code or 'No code'}).",
+                request=request,
+                actor=request.user,
+                target_entity='Subject',
+                target_id=subject.id,
+                target_name=subject.name,
+                severity='NOTICE',
+                details={'name': subject.name, 'code': subject.code, 'course_id': subject.course_id}
+            )
+
             return Response({
                 'message': f'Subject "{subject.name}" created successfully.',
                 'subject': SubjectSerializer(subject).data,
@@ -236,10 +289,23 @@ class SubjectDetailView(APIView):
         subject = self.get_subject(pk)
         serializer = CreateSubjectSerializer(subject, data=request.data, partial=True)
         if serializer.is_valid():
-            subject = serializer.save()
+            updated = serializer.save()
+
+            record_audit_log(
+                action_type='SUBJECT_UPDATE',
+                description=f"Updated details for subject '{updated.name}'.",
+                request=request,
+                actor=request.user,
+                target_entity='Subject',
+                target_id=updated.id,
+                target_name=updated.name,
+                severity='INFO',
+                details={'updated_fields': list(request.data.keys())}
+            )
+
             return Response({
                 'message': 'Subject updated successfully.',
-                'subject': SubjectSerializer(subject).data,
+                'subject': SubjectSerializer(updated).data,
             })
         return Response({'detail': 'Update failed.', 'errors': serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -248,7 +314,20 @@ class SubjectDetailView(APIView):
         name = subject.name
         subject.is_active = False
         subject.save()
+
+        record_audit_log(
+            action_type='SUBJECT_DELETE',
+            description=f"Deactivated subject '{name}'.",
+            request=request,
+            actor=request.user,
+            target_entity='Subject',
+            target_id=subject.id,
+            target_name=name,
+            severity='WARNING'
+        )
+
         return Response({'message': f'Subject "{name}" deactivated.'})
+
 
 
 class SubjectModulesView(APIView):
@@ -403,6 +482,19 @@ class StudentBulkEnrollView(APIView):
 
         enrollments = student.enrollments.select_related('course').filter(is_active=True)
         from accounts.serializers import UserSerializer
+
+        record_audit_log(
+            action_type='ENROLLMENT_ASSIGN',
+            description=f"Assigned {enrollments.count()} course(s) to '{student.get_full_name() or student.username}'.",
+            request=request,
+            actor=request.user,
+            target_entity='Enrollment',
+            target_id=student.id,
+            target_name=student.get_full_name() or student.username,
+            severity='NOTICE',
+            details={'course_ids': course_ids, 'total_enrolled': enrollments.count()}
+        )
+
         return Response({
             'message': f'Successfully updated course assignments for "{student.get_full_name() or student.username}".',
             'student': UserSerializer(student).data,
@@ -450,7 +542,21 @@ class StudentBulkAssignSubjectsView(APIView):
 
         enrollments = student.subject_enrollments.select_related('subject', 'subject__course').filter(is_active=True)
         from accounts.serializers import UserSerializer
+
+        record_audit_log(
+            action_type='SUBJECT_ASSIGN',
+            description=f"Assigned {enrollments.count()} subject(s) to '{student.get_full_name() or student.username}'.",
+            request=request,
+            actor=request.user,
+            target_entity='SubjectEnrollment',
+            target_id=student.id,
+            target_name=student.get_full_name() or student.username,
+            severity='NOTICE',
+            details={'subject_ids': subject_ids, 'total_assigned': enrollments.count()}
+        )
+
         return Response({
+
             'message': f'Successfully updated subject assignments for "{student.get_full_name() or student.username}".',
             'student': UserSerializer(student).data,
             'count': enrollments.count(),
@@ -563,6 +669,19 @@ class LabListCreateView(APIView):
         serializer = LabSerializer(data=data)
         if serializer.is_valid():
             lab = serializer.save()
+
+            record_audit_log(
+                action_type='LAB_CREATE',
+                description=f"Created practical cybersecurity lab '{lab.name}' ({lab.category}, {lab.difficulty}, {lab.points} pts).",
+                request=request,
+                actor=request.user,
+                target_entity='Lab',
+                target_id=lab.id,
+                target_name=lab.name,
+                severity='NOTICE',
+                details={'category': lab.category, 'difficulty': lab.difficulty, 'points': lab.points}
+            )
+
             return Response({
                 'message': f'Lab "{lab.name}" created successfully.',
                 'lab': LabSerializer(lab).data,
@@ -608,6 +727,19 @@ class LabDetailView(APIView):
         serializer = LabSerializer(lab, data=data, partial=True)
         if serializer.is_valid():
             updated_lab = serializer.save()
+
+            record_audit_log(
+                action_type='LAB_UPDATE',
+                description=f"Updated lab configurations for '{updated_lab.name}'.",
+                request=request,
+                actor=request.user,
+                target_entity='Lab',
+                target_id=updated_lab.id,
+                target_name=updated_lab.name,
+                severity='INFO',
+                details={'updated_fields': list(data.keys())}
+            )
+
             return Response({
                 'message': f'Lab "{updated_lab.name}" updated successfully.',
                 'lab': LabSerializer(updated_lab).data,
@@ -619,7 +751,20 @@ class LabDetailView(APIView):
         name = lab.name
         lab.is_active = False
         lab.save()
+
+        record_audit_log(
+            action_type='LAB_DELETE',
+            description=f"Archived / deactivated cybersecurity lab '{name}'.",
+            request=request,
+            actor=request.user,
+            target_entity='Lab',
+            target_id=lab.id,
+            target_name=name,
+            severity='WARNING'
+        )
+
         return Response({'message': f'Lab "{name}" archived successfully.'})
+
 
 
 class SubjectLabsView(APIView):
@@ -1863,6 +2008,19 @@ class StudyMaterialListCreateView(APIView):
         )
         if serializer.is_valid():
             material = serializer.save()
+
+            record_audit_log(
+                action_type='MATERIAL_UPLOAD',
+                description=f"Uploaded study material '{material.title}' ({material.file_type}) for subject '{material.subject.name}'.",
+                request=request,
+                actor=request.user,
+                target_entity='StudyMaterial',
+                target_id=material.id,
+                target_name=material.title,
+                severity='NOTICE',
+                details={'subject': material.subject.name, 'file_type': material.file_type}
+            )
+
             return Response({
                 'message': f'Study material "{material.title}" uploaded successfully.',
                 'material': StudyMaterialSerializer(material, context={'request': request}).data,
@@ -1932,6 +2090,18 @@ class StudyMaterialDetailView(APIView):
             material.file_size_bytes = file_obj.size
 
         material.save()
+
+        record_audit_log(
+            action_type='MATERIAL_UPDATE',
+            description=f"Updated study material details for '{material.title}'.",
+            request=request,
+            actor=request.user,
+            target_entity='StudyMaterial',
+            target_id=material.id,
+            target_name=material.title,
+            severity='INFO'
+        )
+
         return Response({
             'message': 'Study material updated successfully.',
             'material': StudyMaterialSerializer(material, context={'request': request}).data
@@ -1941,7 +2111,20 @@ class StudyMaterialDetailView(APIView):
         material = self.get_material(pk)
         title = material.title
         material.delete()
+
+        record_audit_log(
+            action_type='MATERIAL_DELETE',
+            description=f"Deleted study material '{title}'.",
+            request=request,
+            actor=request.user,
+            target_entity='StudyMaterial',
+            target_id=pk,
+            target_name=title,
+            severity='WARNING'
+        )
+
         return Response({'message': f'Study material "{title}" deleted successfully.'})
+
 
 
 class StudentMaterialsView(APIView):

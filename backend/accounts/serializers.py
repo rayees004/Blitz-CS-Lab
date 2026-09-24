@@ -238,3 +238,45 @@ class LoginSerializer(serializers.Serializer):
             'user': user,
             'token': token.key,
         }
+
+
+class AuditLogSerializer(serializers.ModelSerializer):
+    timestamp_formatted = serializers.SerializerMethodField()
+    actor_display = serializers.SerializerMethodField()
+    action_type_display = serializers.CharField(source='get_action_type_display', read_only=True)
+
+    class Meta:
+        from .models import AuditLog
+        model = AuditLog
+        fields = [
+            'id',
+            'actor',
+            'actor_username',
+            'actor_email',
+            'actor_role',
+            'actor_display',
+            'action_type',
+            'action_type_display',
+            'severity',
+            'target_entity',
+            'target_id',
+            'target_name',
+            'description',
+            'details',
+            'ip_address',
+            'user_agent',
+            'timestamp',
+            'timestamp_formatted',
+        ]
+
+    def get_timestamp_formatted(self, obj):
+        return obj.timestamp.strftime('%b %d, %Y • %H:%M:%S')
+
+    def get_actor_display(self, obj):
+        if obj.actor:
+            name = obj.actor.get_full_name()
+            if name:
+                return f"{name} (@{obj.actor.username})"
+            return f"@{obj.actor.username}"
+        return obj.actor_username or 'System'
+
