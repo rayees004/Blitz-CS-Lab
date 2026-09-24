@@ -57,10 +57,7 @@ export const NAV_ADMIN = [
   { label: "Courses", icon: BookMarked, key: "a-subjects" },
   { label: "Labs", icon: FlaskConical, key: "a-labs" },
   { label: "Study Materials", icon: BookOpen, key: "a-materials" },
-  { label: "Assignments", icon: ClipboardList, key: "a-assignments" },
-  { label: "Fees", icon: Wallet, key: "a-fees" },
   { label: "Activity", icon: Activity, key: "a-activity" },
-  { label: "Analytics", icon: BarChart3, key: "a-analytics" },
   { label: "Audit Logs", icon: ScrollText, key: "a-audit" },
   { label: "Settings", icon: Settings, key: "a-settings" },
 ];

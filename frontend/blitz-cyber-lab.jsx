@@ -129,12 +129,8 @@ export default function BlitzCyberLab() {
       "a-subjects": <AdminSubjects />,
       "a-labs": <AdminLabs onOpenAddModal={() => setAdminPage("a-dashboard")} />,
       "a-materials": <AdminMaterials />,
-      "a-assignments": <Placeholder title="Assignments" blurb="Assign labs and materials to classes or individual students." icon={ClipboardList} />,
-      "a-fees": <Placeholder title="Fees" blurb="Track payment status across every enrolled student." icon={Wallet} />,
       "a-activity": <AdminActivity onSelectStudent={() => setAdminPage("a-students")} />,
-      "a-analytics": <Placeholder title="Analytics" blurb="Registrations, completions, and difficulty trends over time." icon={BarChart3} />,
       "a-audit": <Placeholder title="Audit Logs" blurb="Immutable record of administrative actions." icon={ScrollText} />,
-      "a-settings": <Placeholder title="Settings" blurb="Platform configuration, instructors, and organization details." icon={Settings} />,
     };
     return (
       <div style={{ fontFamily: sans, display: "flex", height: "100vh", background: C.void, color: C.hi, overflow: "hidden" }}>
@@ -162,7 +158,6 @@ export default function BlitzCyberLab() {
     progress: <StudentProgressView go={goLab} />,
     leaderboard: <Placeholder title="Leaderboard" blurb="Rankings within your class and across Blitz Cyber Lab." icon={Trophy} />,
     achievements: <Placeholder title="Achievements" blurb="Badges earned from labs, streaks, and challenges." icon={Award} />,
-    certificates: <Placeholder title="Certificates" blurb="Download certificates for completed tracks." icon={FileBadge} />,
     profile: <Placeholder title="Profile" blurb="Manage your account and notification preferences." icon={User} />,
   };
 
