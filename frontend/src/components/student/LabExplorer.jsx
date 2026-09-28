@@ -163,19 +163,25 @@ export default function LabExplorer({ go }) {
         </div>
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginTop: 22 }}>
-          {filtered.map((lab) => (
-            <LabCard
-              key={lab.id}
-              lab={{
-                ...lab,
-                diff: lab.difficulty || lab.diff || "Beginner",
-                cat: lab.category || lab.cat || "Web Security",
-                pts: lab.points || lab.pts || 100,
-                desc: lab.description || lab.desc || "",
-              }}
-              onOpen={() => go("lab-detail", lab)}
-            />
-          ))}
+          {filtered.map((lab) => {
+            const pct = lab.progress_pct ?? lab.pct ?? 0;
+            const isCompleted = lab.is_completed || lab.submission_status === "COMPLETED" || pct === 100;
+            return (
+              <LabCard
+                key={lab.id}
+                lab={{
+                  ...lab,
+                  diff: lab.difficulty || lab.diff || "Beginner",
+                  cat: lab.category || lab.cat || "Web Security",
+                  pts: lab.points || lab.pts || 100,
+                  desc: lab.description || lab.desc || "",
+                  pct: pct,
+                  is_completed: isCompleted,
+                }}
+                onOpen={() => go("lab-detail", lab)}
+              />
+            );
+          })}
         </div>
       )}
     </div>

@@ -8,8 +8,8 @@ import { C, sans, mono } from "../../constants/theme";
 
 export default function LabCard({ lab, onOpen }) {
   const isLocked = Boolean(lab.is_locked);
-  const started = lab.pct > 0 && lab.pct < 100;
-  const done = lab.pct === 100;
+  const done = Boolean(lab.is_completed || lab.submission_status === "COMPLETED" || lab.pct === 100);
+  const started = !done && (Boolean(lab.pct > 0) || lab.submission_status === "IN_PROGRESS" || (lab.attend_count && lab.attend_count > 0));
 
   return (
     <Panel style={{

@@ -28,6 +28,7 @@ import AdminSubjects from "./src/components/admin/AdminSubjects";
 import AdminLabs from "./src/components/admin/AdminLabs";
 import AdminMaterials from "./src/components/admin/AdminMaterials";
 import AdminActivity from "./src/components/admin/AdminActivity";
+import AdminAuditLogs from "./src/components/admin/AdminAuditLogs";
 import StudentProgressView from "./src/components/student/StudentProgressView";
 
 
@@ -130,7 +131,7 @@ export default function BlitzCyberLab() {
       "a-labs": <AdminLabs onOpenAddModal={() => setAdminPage("a-dashboard")} />,
       "a-materials": <AdminMaterials />,
       "a-activity": <AdminActivity onSelectStudent={() => setAdminPage("a-students")} />,
-      "a-audit": <Placeholder title="Audit Logs" blurb="Immutable record of administrative actions." icon={ScrollText} />,
+      "a-audit": <AdminAuditLogs />,
     };
     return (
       <div style={{ fontFamily: sans, display: "flex", height: "100vh", background: C.void, color: C.hi, overflow: "hidden" }}>
@@ -154,7 +155,6 @@ export default function BlitzCyberLab() {
     labs: <LabExplorer go={goLab} />,
     "lab-detail": <LabDetail lab={activeLab} back={() => setStudentPage("labs")} />,
     materials: <Materials />,
-    challenges: <Placeholder title="Challenges" blurb="Timed and community challenge events." icon={Target} />,
     progress: <StudentProgressView go={goLab} />,
     leaderboard: <Placeholder title="Leaderboard" blurb="Rankings within your class and across Blitz Cyber Lab." icon={Trophy} />,
     achievements: <Placeholder title="Achievements" blurb="Badges earned from labs, streaks, and challenges." icon={Award} />,

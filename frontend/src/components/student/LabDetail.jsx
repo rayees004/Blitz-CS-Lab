@@ -475,6 +475,29 @@ export default function LabDetail({ lab, back }) {
             )}
           </div>
 
+          {isCompleted && (
+            <div
+              style={{
+                padding: "12px 16px",
+                borderRadius: 8,
+                background: "rgba(0, 230, 118, 0.1)",
+                border: "1px solid rgba(0, 230, 118, 0.3)",
+                color: C.green,
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                fontFamily: sans,
+                fontSize: 13,
+              }}
+            >
+              <Trophy size={18} style={{ flexShrink: 0 }} />
+              <div>
+                <strong>Lab Completed!</strong> You scored <strong>{currentScore}</strong> out of{" "}
+                <strong>{maxScore}</strong> marks. You can freely re-examine challenges, target commands, and hints.
+              </div>
+            </div>
+          )}
+
           {loading ? (
             <div style={{ padding: 40, textAlign: "center", color: C.mid }}>
               <RefreshCw size={24} className="spin" style={{ marginBottom: 8, color: C.cyan }} />

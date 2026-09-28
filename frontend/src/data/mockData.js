@@ -43,7 +43,6 @@ export const NAV_STUDENT = [
   { label: "Learning", icon: GraduationCap, key: "learning" },
   { label: "Labs", icon: FlaskConical, key: "labs" },
   { label: "Study Materials", icon: BookOpen, key: "materials" },
-  { label: "Challenges", icon: Target, key: "challenges" },
   { label: "Progress", icon: TrendingUp, key: "progress" },
   { label: "Leaderboard", icon: Trophy, key: "leaderboard" },
   { label: "Achievements", icon: Award, key: "achievements" },

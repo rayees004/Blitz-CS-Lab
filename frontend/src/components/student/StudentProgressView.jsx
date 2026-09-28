@@ -169,7 +169,7 @@ export default function StudentProgressView({ go }) {
                     <span style={{ fontFamily: sans, fontSize: 14, fontWeight: 600, color: C.hi }}>
                       {lab.name}
                     </span>
-                    <DiffBadge diff={lab.difficulty} />
+                    <DiffBadge level={lab.difficulty} />
                     {lab.is_completed || lab.submission_status === "COMPLETED" ? (
                       <Badge tone="cyan">COMPLETED</Badge>
                     ) : (
@@ -194,7 +194,7 @@ export default function StudentProgressView({ go }) {
                   </div>
                   {go && (
                     <button
-                      onClick={() => go("dashboard")}
+                      onClick={() => go("lab-detail", lab)}
                       style={{
                         marginTop: 6,
                         background: "none",
@@ -208,7 +208,7 @@ export default function StudentProgressView({ go }) {
                         gap: 4,
                       }}
                     >
-                      Resume Lab <ArrowRight size={12} />
+                      {lab.is_completed || lab.submission_status === "COMPLETED" ? "Review Lab" : "Resume Lab"} <ArrowRight size={12} />
                     </button>
                   )}
                 </div>
