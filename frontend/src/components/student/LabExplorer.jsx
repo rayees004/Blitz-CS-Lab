@@ -12,16 +12,16 @@ export default function LabExplorer({ go }) {
   const [cat, setCat] = useState("All");
   const [search, setSearch] = useState("");
 
+  const [batchInfo, setBatchInfo] = useState(null);
+
   useEffect(() => {
     let isMounted = true;
     fetchStudentLabs()
       .then((data) => {
         if (!isMounted) return;
-        const results = data.labs || [];
-        if (results.length > 0) {
-          setLabs(results);
-        } else {
-          setLabs(MOCK_LABS);
+        setLabs(data.labs || []);
+        if (data.batch || data.stats?.batch_index) {
+          setBatchInfo(data.batch || { batch_index: data.stats?.batch_index });
         }
       })
       .catch((err) => {
@@ -64,25 +64,45 @@ export default function LabExplorer({ go }) {
             <h1 style={{ fontFamily: sans, fontSize: 22, fontWeight: 700, color: C.hi, margin: 0 }}>
               Lab Explorer
             </h1>
-            <span
-              style={{
-                fontFamily: mono,
-                fontSize: 11,
-                color: C.cyan,
-                background: "rgba(63, 216, 200, 0.1)",
-                padding: "2px 7px",
-                borderRadius: 4,
-                border: `1px solid rgba(63, 216, 200, 0.25)`,
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 4,
-              }}
-            >
-              <Database size={10} /> Live Labs
-            </span>
+            {batchInfo ? (
+              <span
+                style={{
+                  fontFamily: mono,
+                  fontSize: 11,
+                  color: C.cyan,
+                  background: "rgba(63, 216, 200, 0.1)",
+                  padding: "2px 7px",
+                  borderRadius: 4,
+                  border: `1px solid rgba(63, 216, 200, 0.25)`,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 4,
+                  fontWeight: 600,
+                }}
+              >
+                <Database size={10} /> Batch #{batchInfo.batch_index} (5 Labs Active)
+              </span>
+            ) : (
+              <span
+                style={{
+                  fontFamily: mono,
+                  fontSize: 11,
+                  color: C.cyan,
+                  background: "rgba(63, 216, 200, 0.1)",
+                  padding: "2px 7px",
+                  borderRadius: 4,
+                  border: `1px solid rgba(63, 216, 200, 0.25)`,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 4,
+                }}
+              >
+                <Database size={10} /> Live Labs
+              </span>
+            )}
           </div>
           <p style={{ fontFamily: sans, fontSize: 13.5, color: C.mid, marginTop: 6 }}>
-            {labs.length} isolated environments across {cats.length - 1} security domains.
+            {labs.length} isolated environments across {Math.max(1, cats.length - 1)} security domains. Only this 5-lab batch is visible until all 5 labs are attended.
           </p>
         </div>
 

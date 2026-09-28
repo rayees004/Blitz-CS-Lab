@@ -7,13 +7,14 @@ import json
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.db import transaction
+import random
 from accounts.models import User
 from accounts.views import IsAdminOrStaff
 from accounts.audit import record_audit_log
 from .models import (
     Course, Enrollment, Module, Subject, SubjectEnrollment,
     Lab, LabQuestion, QuestionHint, LabSubmission, LabScore,
-    StudyMaterial
+    StudyMaterial, StudentAssignedBatch
 )
 from .serializers import (
     CourseSerializer,
@@ -954,11 +955,89 @@ def get_lab_effective_course(lab):
     return None
 
 
+def get_or_create_student_lab_batch(student):
+    """
+    Retrieves or generates a persistent 5-lab batch for the student.
+    - If the student is admin/staff, return None (unrestricted view).
+    - If student has an active batch:
+        Check if all labs in the batch are attended/completed (or in progress).
+        If all labs are attended/completed, complete this batch and generate the next batch of 5 labs!
+        Otherwise, keep the exact same 5 labs (stable across refreshes).
+    - If no active batch exists:
+        Pick 5 random labs from eligible labs (or from all active labs not yet completed).
+    """
+    if not student or student.is_staff or student.is_superuser or getattr(student, 'user_type', None) == 'admin':
+        return None
+
+    # Check for current active batch
+    active_batch = StudentAssignedBatch.objects.filter(student=student, is_active=True).first()
+
+    if active_batch:
+        batch_labs = list(active_batch.labs.all())
+        if batch_labs:
+            # Check attendance/completion status for all labs in this batch
+            attended_lab_ids = set(LabScore.objects.filter(
+                student=student,
+                lab__in=batch_labs,
+                attend_count__gt=0
+            ).values_list('lab_id', flat=True))
+
+            all_attended = all(l.id in attended_lab_ids for l in batch_labs)
+            if all_attended:
+                # Mark current batch as completed
+                active_batch.is_active = False
+                active_batch.completed_at = timezone.now()
+                active_batch.save()
+                active_batch = None
+            else:
+                return active_batch
+
+    # Generate new batch of 5 labs
+    if not active_batch:
+        # Determine which labs the student has already completed across all past batches
+        previously_attended_ids = set(LabScore.objects.filter(
+            student=student,
+            attend_count__gt=0
+        ).values_list('lab_id', flat=True))
+
+        # Eligible candidate pool: active labs not yet attended
+        eligible_qs = Lab.objects.filter(is_active=True).exclude(id__in=previously_attended_ids)
+        available_count = eligible_qs.count()
+
+        candidate_ids = list(eligible_qs.values_list('id', flat=True))
+        if available_count < 5:
+            # If fewer than 5 un-attended labs remain, include any remaining active labs to make up to 5
+            all_active_ids = list(Lab.objects.filter(is_active=True).values_list('id', flat=True))
+            remaining_needed = min(5, len(all_active_ids))
+            # Keep un-attended first, then fill
+            chosen_ids = list(candidate_ids)
+            for lid in all_active_ids:
+                if len(chosen_ids) >= remaining_needed:
+                    break
+                if lid not in chosen_ids:
+                    chosen_ids.append(lid)
+        else:
+            # Pick 5 randomly without changing on refresh
+            chosen_ids = random.sample(candidate_ids, 5)
+
+        next_idx = StudentAssignedBatch.objects.filter(student=student).count() + 1
+        new_batch = StudentAssignedBatch.objects.create(
+            student=student,
+            batch_index=next_idx,
+            is_active=True
+        )
+        new_batch.labs.set(chosen_ids)
+        return new_batch
+
+    return active_batch
+
+
 def can_student_attend_lab(student, lab):
     """
     Check if a student can attend a lab.
     Rules:
       - Admin / Staff can always attend.
+      - If the lab has already been attended (attend_count > 0 or completed), re-attending / reopening is strictly BLOCKED.
       - A student must be actively assigned/enrolled in the lab's Subject.
       - If the lab has no assigned subject, or student is not assigned to that subject, attending is NOT possible.
     Returns: (can_attend: bool, lock_reason: str or None, effective_subject: Subject or None)
@@ -969,6 +1048,17 @@ def can_student_attend_lab(student, lab):
     # Admins and staff have unrestricted lab access
     if student.is_staff or student.is_superuser or getattr(student, 'user_type', None) == 'admin':
         return True, None, lab.subject
+
+    # Check if student has already attended / submitted this lab
+    prior_score = LabScore.objects.filter(student=student, lab=lab).first()
+    if prior_score and (prior_score.attend_count > 0 or prior_score.is_completed):
+        return False, "Lab already attended. Reopening this lab is blocked.", lab.subject
+
+    prior_sub = LabSubmission.objects.filter(student=student, lab=lab).first()
+    if prior_sub and (prior_sub.status == 'COMPLETED' or prior_sub.status == 'IN_PROGRESS'):
+        # If in progress and never attended (score 0, attend_count 0), allow, else block
+        if prior_score and prior_score.attend_count > 0:
+            return False, "Lab already attended. Reopening this lab is blocked.", lab.subject
 
     if not lab.subject:
         return False, "This lab has not been assigned to any subject yet. Attendance is not available.", None
@@ -998,7 +1088,17 @@ class StudentLabListView(APIView):
 
     def get(self, request):
         student = get_current_student(request)
-        labs = Lab.objects.select_related('course', 'subject', 'subject__course').prefetch_related('questions__hints').filter(is_active=True).order_by('-created_at')
+        is_admin_or_staff = bool(student and (student.is_staff or student.is_superuser or getattr(student, 'user_type', None) == 'admin'))
+
+        # Fetch or generate the student's persistent 5-lab batch
+        assigned_batch = None
+        if student and not is_admin_or_staff:
+            assigned_batch = get_or_create_student_lab_batch(student)
+
+        if assigned_batch:
+            labs = assigned_batch.labs.select_related('course', 'subject', 'subject__course').prefetch_related('questions__hints').filter(is_active=True).order_by('id')
+        else:
+            labs = Lab.objects.select_related('course', 'subject', 'subject__course').prefetch_related('questions__hints').filter(is_active=True).order_by('-created_at')
 
         lab_scores_by_lab = {}
         if student:
@@ -1136,12 +1236,19 @@ class StudentLabListView(APIView):
             'max_total_points': total_possible_points,
             'overall_progress_pct': overall_pct,
             'total_attendances': total_attendances,
+            'batch_index': assigned_batch.batch_index if assigned_batch else 1,
+            'is_batch_active': bool(assigned_batch),
         }
 
         return Response({
             'labs': enriched_labs,
             'lab_scores': lab_score_list,
             'stats': stats,
+            'batch': {
+                'batch_index': assigned_batch.batch_index if assigned_batch else 1,
+                'total_in_batch': labs.count(),
+                'completed_in_batch': labs_completed_count,
+            } if assigned_batch else None,
         })
 
 

@@ -7,9 +7,10 @@ import ProgressBar from "../common/ProgressBar";
 import { C, sans, mono } from "../../constants/theme";
 
 export default function LabCard({ lab, onOpen }) {
-  const isLocked = Boolean(lab.is_locked);
-  const done = Boolean(lab.is_completed || lab.submission_status === "COMPLETED" || lab.pct === 100);
-  const started = !done && (Boolean(lab.pct > 0) || lab.submission_status === "IN_PROGRESS" || (lab.attend_count && lab.attend_count > 0));
+  const isAttended = Boolean(lab.is_completed || lab.submission_status === "COMPLETED" || (lab.attend_count && lab.attend_count > 0));
+  const isLocked = Boolean(lab.is_locked || isAttended);
+  const done = Boolean(lab.is_completed || lab.submission_status === "COMPLETED");
+  const started = !done && !isAttended && (Boolean(lab.pct > 0) || lab.submission_status === "IN_PROGRESS");
 
   return (
     <Panel style={{
@@ -22,14 +23,18 @@ export default function LabCard({ lab, onOpen }) {
     }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <span style={{ fontFamily: mono, fontSize: 11, color: C.low }}>LAB {lab.id}</span>
-        {isLocked ? (
+        {isAttended ? (
+          <Badge tone="danger">
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
+              <Lock size={10} /> LOCKED (ATTENDED)
+            </span>
+          </Badge>
+        ) : isLocked ? (
           <Badge tone="danger">
             <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
               <Lock size={10} /> LOCKED
             </span>
           </Badge>
-        ) : done ? (
-          <Badge tone="cyan">COMPLETED</Badge>
         ) : started ? (
           <Badge tone="amber">IN PROGRESS</Badge>
         ) : (
@@ -53,7 +58,11 @@ export default function LabCard({ lab, onOpen }) {
           padding: "5px 8px", borderRadius: 4, display: "flex", alignItems: "center", gap: 5
         }}>
           <Lock size={11} color={C.danger} />
-          <span>{lab.lock_reason || `Requires assignment to subject ${lab.subject_name || 'subject'}`}</span>
+          <span>
+            {isAttended
+              ? "Already attended. Marks recorded and reopening is locked."
+              : (lab.lock_reason || `Requires assignment to subject ${lab.subject_name || 'subject'}`)}
+          </span>
         </div>
       )}
       <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
@@ -81,12 +90,19 @@ export default function LabCard({ lab, onOpen }) {
       </div>
       {started && !isLocked && <ProgressBar value={lab.pct} h={5} />}
       <Btn
-        onClick={onOpen}
+        onClick={isLocked ? undefined : onOpen}
+        disabled={isLocked}
         icon={isLocked ? Lock : Play}
-        style={{ marginTop: 4 }}
-        variant={isLocked ? "subtle" : done ? "subtle" : "primary"}
+        style={{ marginTop: 4, cursor: isLocked ? "not-allowed" : "pointer" }}
+        variant={isLocked ? "subtle" : "primary"}
       >
-        {isLocked ? "Locked (Subject Required)" : done ? "Review Lab" : started ? "Continue Lab" : "Start Lab"}
+        {isAttended
+          ? "Locked (Already Attended)"
+          : isLocked
+          ? "Locked (Subject Required)"
+          : started
+          ? "Continue Lab"
+          : "Start Lab"}
       </Btn>
     </Panel>
   );

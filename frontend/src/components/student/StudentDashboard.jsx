@@ -45,9 +45,8 @@ export default function StudentDashboard({ go }) {
     loadData();
   }, [loadData]);
 
-  // Find most relevant lab to continue (must be attendable, not locked!)
-  const inProgressLab = labs.find((l) => l.submission_status === "IN_PROGRESS" && !l.is_locked);
-  const heroLab = inProgressLab || labs.find((l) => !l.is_locked) || labs[0];
+  // Find most relevant lab to attend (must be attendable and NOT already attended/locked!)
+  const heroLab = labs.find((l) => !l.is_locked && !l.is_completed && l.submission_status !== "COMPLETED" && !(l.attend_count > 0));
 
   // Filtering labs for the Attend section
   const filteredLabs = labs.filter((lab) => {
@@ -285,14 +284,22 @@ export default function StudentDashboard({ go }) {
 
                   {/* Right: Actions */}
                   <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <Btn
-                      sm
-                      tone={isCompleted ? "ghost" : "primary"}
-                      icon={isCompleted ? Eye : Play}
-                      onClick={() => setAttendingLab(matchingLab || { id: sc.lab, name: sc.lab_name, points: sc.max_score })}
+                    <span
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 5,
+                        fontFamily: mono,
+                        fontSize: 11,
+                        color: C.danger,
+                        background: "rgba(229, 83, 75, 0.12)",
+                        padding: "4px 10px",
+                        borderRadius: 5,
+                        border: "1px solid rgba(229, 83, 75, 0.3)",
+                      }}
                     >
-                      {isCompleted ? "Review Lab" : "Continue Lab"}
-                    </Btn>
+                      <Lock size={12} /> Locked (Recorded)
+                    </span>
                   </div>
                 </Panel>
               );
@@ -384,7 +391,7 @@ export default function StudentDashboard({ go }) {
                   icon={Play}
                   onClick={() => setAttendingLab(heroLab)}
                 >
-                  {heroLab.submission_status === "COMPLETED" ? "Review Lab" : heroLab.submission_status === "IN_PROGRESS" ? "Continue Lab & Submit Marks" : "Attend Lab"}
+                  {heroLab.submission_status === "IN_PROGRESS" ? "Continue Lab & Submit Marks" : "Attend Lab"}
                 </Btn>
               </div>
             </div>
@@ -396,11 +403,29 @@ export default function StudentDashboard({ go }) {
       <div style={{ marginTop: 36 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, flexWrap: "wrap", gap: 12 }}>
           <div>
-            <div style={{ fontFamily: sans, fontSize: 16, fontWeight: 700, color: C.hi }}>
-              Available Hands-On Labs
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontFamily: sans, fontSize: 16, fontWeight: 700, color: C.hi }}>
+                Assigned Hands-On Labs
+              </span>
+              {stats?.batch_index && (
+                <span
+                  style={{
+                    fontFamily: mono,
+                    fontSize: 10,
+                    color: C.cyan,
+                    background: "rgba(0, 229, 255, 0.08)",
+                    padding: "2px 7px",
+                    borderRadius: 4,
+                    border: "1px solid rgba(0, 229, 255, 0.25)",
+                    fontWeight: 600,
+                  }}
+                >
+                  Batch #{stats.batch_index} (5 Labs Active)
+                </span>
+              )}
             </div>
             <div style={{ fontFamily: sans, fontSize: 12.5, color: C.mid, marginTop: 2 }}>
-              Launch isolated target sandboxes, exploit real vulnerabilities, and submit proof flags for marks.
+              Only this 5-lab batch is visible. Once all 5 labs in this batch are attended, the next batch of 5 labs is loaded. Attended labs are permanently locked.
             </div>
           </div>
 
@@ -482,9 +507,10 @@ export default function StudentDashboard({ go }) {
         ) : (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))", gap: 16 }}>
             {filteredLabs.map((lab) => {
-              const isCompleted = lab.submission_status === "COMPLETED";
-              const isInProgress = lab.submission_status === "IN_PROGRESS";
-              const isLocked = Boolean(lab.is_locked);
+              const isAttended = Boolean(lab.is_completed || lab.submission_status === "COMPLETED" || (lab.attend_count && lab.attend_count > 0));
+              const isCompleted = lab.submission_status === "COMPLETED" || lab.is_completed;
+              const isInProgress = lab.submission_status === "IN_PROGRESS" && !isAttended;
+              const isLocked = Boolean(lab.is_locked || isAttended);
 
               return (
                 <Panel
@@ -685,7 +711,7 @@ export default function StudentDashboard({ go }) {
                   {/* Card Bottom CTA Button */}
                   <div style={{ marginTop: 16, paddingTop: 12, borderTop: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                     <span style={{ fontFamily: mono, fontSize: 11, color: isLocked ? C.danger : C.mid }}>
-                      {isLocked ? "Enrollment Required" : isCompleted ? "Completed" : isInProgress ? "In Progress" : "Not Started"}
+                      {isAttended ? "Already Attended (Locked)" : isLocked ? "Enrollment Required" : isCompleted ? "Completed" : isInProgress ? "In Progress" : "Not Started"}
                     </span>
 
                     {isLocked ? (
@@ -707,16 +733,16 @@ export default function StudentDashboard({ go }) {
                           cursor: "pointer",
                         }}
                       >
-                        <Lock size={12} /> Locked
+                        <Lock size={12} /> {isAttended ? "Locked (Attended)" : "Locked"}
                       </button>
                     ) : (
                       <Btn
                         sm
-                        icon={isCompleted ? Check : Play}
+                        icon={Play}
                         onClick={() => setAttendingLab(lab)}
-                        tone={isCompleted ? "ghost" : isInProgress ? "primary" : "default"}
+                        tone={isInProgress ? "primary" : "default"}
                       >
-                        {isCompleted ? "Review Lab" : isInProgress ? "Continue & Submit" : "Attend Lab"}
+                        {isInProgress ? "Continue & Submit" : "Attend Lab"}
                       </Btn>
                     )}
                   </div>

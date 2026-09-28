@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import {
   TrendingUp, Trophy, Award, FlaskConical, CheckCircle2,
-  Clock, ArrowRight, ShieldCheck, Zap, RefreshCw, Layers
+  Clock, ArrowRight, ShieldCheck, Zap, RefreshCw, Layers, Lock
 } from "lucide-react";
 import Panel from "../common/Panel";
 import StatCard from "../common/StatCard";
@@ -192,25 +192,19 @@ export default function StudentProgressView({ go }) {
                   <div style={{ fontFamily: mono, fontSize: 11, color: C.low, marginTop: 2 }}>
                     {lab.solved_questions_count || 0} / {lab.question_count || 0} flags solved
                   </div>
-                  {go && (
-                    <button
-                      onClick={() => go("lab-detail", lab)}
-                      style={{
-                        marginTop: 6,
-                        background: "none",
-                        border: "none",
-                        color: C.cyan,
-                        fontFamily: sans,
-                        fontSize: 12,
-                        cursor: "pointer",
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 4,
-                      }}
-                    >
-                      {lab.is_completed || lab.submission_status === "COMPLETED" ? "Review Lab" : "Resume Lab"} <ArrowRight size={12} />
-                    </button>
-                  )}
+                  <div
+                    style={{
+                      marginTop: 6,
+                      fontFamily: mono,
+                      fontSize: 11,
+                      color: C.low,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 4,
+                    }}
+                  >
+                    <Lock size={11} color={C.danger} /> Marks Recorded
+                  </div>
                 </div>
               </div>
             ))}

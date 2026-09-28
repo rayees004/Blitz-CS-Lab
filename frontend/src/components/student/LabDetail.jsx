@@ -480,9 +480,9 @@ export default function LabDetail({ lab, back }) {
               style={{
                 padding: "12px 16px",
                 borderRadius: 8,
-                background: "rgba(0, 230, 118, 0.1)",
-                border: "1px solid rgba(0, 230, 118, 0.3)",
-                color: C.green,
+                background: "rgba(229, 83, 75, 0.08)",
+                border: "1px solid rgba(229, 83, 75, 0.3)",
+                color: "#fca5a5",
                 display: "flex",
                 alignItems: "center",
                 gap: 12,
@@ -490,10 +490,10 @@ export default function LabDetail({ lab, back }) {
                 fontSize: 13,
               }}
             >
-              <Trophy size={18} style={{ flexShrink: 0 }} />
+              <Lock size={18} style={{ flexShrink: 0, color: C.danger }} />
               <div>
-                <strong>Lab Completed!</strong> You scored <strong>{currentScore}</strong> out of{" "}
-                <strong>{maxScore}</strong> marks. You can freely re-examine challenges, target commands, and hints.
+                <strong>Lab Completed & Locked:</strong> You scored <strong>{currentScore}</strong> out of{" "}
+                <strong>{maxScore}</strong> marks. Re-attending or modifying proofs is locked.
               </div>
             </div>
           )}

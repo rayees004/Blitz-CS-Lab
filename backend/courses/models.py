@@ -380,3 +380,29 @@ class StudyMaterial(models.Model):
         return f"[{self.subject.name}] {self.title} ({self.file_type})"
 
 
+class StudentAssignedBatch(models.Model):
+    """
+    Stores the persistent 5-lab batch assigned to a student.
+    Labs in this batch stay constant across page refreshes and visits.
+    Only when all labs in the current batch have been attended/completed does the system
+    generate the next 5-lab batch for the student.
+    """
+    student = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='assigned_lab_batches'
+    )
+    batch_index = models.PositiveIntegerField(default=1)
+    labs = models.ManyToManyField(Lab, related_name='assigned_batches')
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['student', 'batch_index']
+
+    def __str__(self):
+        return f"Batch #{self.batch_index} for {self.student.username} (active={self.is_active})"
+
+
+
