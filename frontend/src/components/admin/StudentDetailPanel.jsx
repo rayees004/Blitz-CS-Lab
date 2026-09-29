@@ -2,13 +2,13 @@ import React, { useState, useEffect, useCallback } from "react";
 import {
   X, AlertCircle, Loader2, Mail,
   Phone, Building2, Calendar, Shield, Layers,
-  FlaskConical, TrendingUp
+  FlaskConical, TrendingUp, ShieldAlert, ShieldCheck, Ban, CheckCircle2
 } from "lucide-react";
 import Btn from "../common/Btn";
 import Badge from "../common/Badge";
 import ProgressBar from "../common/ProgressBar";
 import { C, sans, mono } from "../../constants/theme";
-import { fetchStudentProgress } from "../../api/students";
+import { fetchStudentProgress, updateStudent } from "../../api/students";
 
 /* ─── Helpers ─────────────────────────────────────────── */
 
@@ -40,6 +40,34 @@ export default function StudentDetailPanel({ student, onClose, onStudentUpdate }
   const [progressData, setProgressData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  const [currentStudent, setCurrentStudent] = useState(student);
+  const [blockingLoading, setBlockingLoading] = useState(false);
+  const [showBlockModal, setShowBlockModal] = useState(false);
+  const [blockReasonInput, setBlockReasonInput] = useState(student?.lab_access_block_reason || "");
+
+  useEffect(() => {
+    setCurrentStudent(student);
+    setBlockReasonInput(student?.lab_access_block_reason || "");
+  }, [student]);
+
+  const handleToggleLabAccess = async (targetBlock, reason = "") => {
+    setBlockingLoading(true);
+    try {
+      const res = await updateStudent(currentStudent.id, {
+        is_lab_access_blocked: targetBlock,
+        lab_access_block_reason: targetBlock ? reason : "",
+      });
+      const updated = res.student || res;
+      setCurrentStudent(updated);
+      if (onStudentUpdate) onStudentUpdate(updated);
+      setShowBlockModal(false);
+    } catch (err) {
+      setError(err.message || "Failed to update lab access.");
+    } finally {
+      setBlockingLoading(false);
+    }
+  };
 
   const loadData = useCallback(async () => {
     if (!student?.id) return;
@@ -142,9 +170,12 @@ export default function StudentDetailPanel({ student, onClose, onStudentUpdate }
                   @{student?.username}
                 </div>
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                  <Badge tone={student?.is_active ? "cyan" : "danger"}>
-                    {student?.is_active ? "ACTIVE" : "INACTIVE"}
+                  <Badge tone={currentStudent?.is_active ? "cyan" : "danger"}>
+                    {currentStudent?.is_active ? "ACTIVE" : "INACTIVE"}
                   </Badge>
+                  {currentStudent?.is_lab_access_blocked && (
+                    <Badge tone="danger">LABS BLOCKED</Badge>
+                  )}
                 </div>
               </div>
             </div>
@@ -190,6 +221,118 @@ export default function StudentDetailPanel({ student, onClose, onStudentUpdate }
                     </div>
                   </div>
                 </div>
+              </div>
+            )}
+          </div>
+
+          {/* ─── Practical Lab Access Security Control Box ─── */}
+          <div style={{
+            background: currentStudent?.is_lab_access_blocked ? "rgba(229,83,75,0.07)" : "rgba(63,216,200,0.05)",
+            border: `1px solid ${currentStudent?.is_lab_access_blocked ? "rgba(229,83,75,0.3)" : "rgba(63,216,200,0.25)"}`,
+            borderRadius: 10,
+            padding: "14px 16px",
+            marginBottom: 20,
+            display: "flex",
+            flexDirection: "column",
+            gap: 10,
+          }}>
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+              <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                <div style={{
+                  padding: 7,
+                  borderRadius: 8,
+                  background: currentStudent?.is_lab_access_blocked ? "rgba(229,83,75,0.15)" : "rgba(63,216,200,0.12)",
+                  color: currentStudent?.is_lab_access_blocked ? C.danger : C.cyan,
+                  marginTop: 1,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}>
+                  {currentStudent?.is_lab_access_blocked ? <ShieldAlert size={17} /> : <ShieldCheck size={17} />}
+                </div>
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontFamily: sans, fontSize: 13.5, fontWeight: 700, color: C.hi }}>
+                      Practical Lab Access
+                    </span>
+                    <Badge tone={currentStudent?.is_lab_access_blocked ? "danger" : "cyan"}>
+                      {currentStudent?.is_lab_access_blocked ? "LABS BLOCKED" : "LAB ACCESS ENABLED"}
+                    </Badge>
+                  </div>
+                  <div style={{ fontFamily: mono, fontSize: 11, color: C.low, marginTop: 3 }}>
+                    {currentStudent?.is_lab_access_blocked
+                      ? "Student is currently prohibited from attending, viewing workspaces, or submitting all practical labs."
+                      : "Student can freely attend and submit practical labs in their assigned subjects."}
+                  </div>
+                </div>
+              </div>
+
+              {currentStudent?.is_lab_access_blocked ? (
+                <button
+                  type="button"
+                  onClick={() => handleToggleLabAccess(false)}
+                  disabled={blockingLoading}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    padding: "6px 12px",
+                    borderRadius: 6,
+                    background: "rgba(63,216,200,0.12)",
+                    border: `1px solid ${C.cyan}`,
+                    color: C.cyan,
+                    fontFamily: sans,
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: blockingLoading ? "wait" : "pointer",
+                    flexShrink: 0,
+                  }}
+                >
+                  {blockingLoading ? <Loader2 size={12} style={{ animation: "spin 1s linear infinite" }} /> : <ShieldCheck size={13} />}
+                  Unblock Access
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowBlockModal(true)}
+                  disabled={blockingLoading}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    padding: "6px 12px",
+                    borderRadius: 6,
+                    background: "rgba(229,83,75,0.12)",
+                    border: `1px solid ${C.danger}`,
+                    color: C.danger,
+                    fontFamily: sans,
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: blockingLoading ? "wait" : "pointer",
+                    flexShrink: 0,
+                  }}
+                >
+                  {blockingLoading ? <Loader2 size={12} style={{ animation: "spin 1s linear infinite" }} /> : <Ban size={13} />}
+                  Block Lab Access
+                </button>
+              )}
+            </div>
+
+            {currentStudent?.is_lab_access_blocked && currentStudent?.lab_access_block_reason && (
+              <div style={{
+                background: "rgba(229,83,75,0.08)",
+                border: "1px dashed rgba(229,83,75,0.3)",
+                borderRadius: 6,
+                padding: "8px 12px",
+                fontFamily: sans,
+                fontSize: 11.5,
+                color: "#fca5a5",
+                display: "flex",
+                gap: 6,
+                alignItems: "center",
+              }}>
+                <span style={{ fontWeight: 600 }}>Reason:</span>
+                <span>{currentStudent.lab_access_block_reason}</span>
               </div>
             )}
           </div>
@@ -382,6 +525,124 @@ export default function StudentDetailPanel({ student, onClose, onStudentUpdate }
           </Btn>
         </div>
       </div>
+
+      {/* ── Block Reason Confirmation Modal ── */}
+      {showBlockModal && (
+        <div style={{
+          position: "fixed",
+          inset: 0,
+          background: "rgba(0,0,0,0.65)",
+          backdropFilter: "blur(4px)",
+          zIndex: 1000,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: 16,
+        }}>
+          <div style={{
+            background: C.panel,
+            border: `1px solid ${C.border}`,
+            borderRadius: 12,
+            padding: "24px 22px",
+            width: "100%",
+            maxWidth: 420,
+            boxShadow: "0 20px 50px rgba(0,0,0,0.6)",
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+              <div style={{
+                width: 36, height: 36, borderRadius: 8,
+                background: "rgba(229,83,75,0.15)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                color: C.danger, flexShrink: 0
+              }}>
+                <ShieldAlert size={20} />
+              </div>
+              <div>
+                <div style={{ fontFamily: sans, fontSize: 15, fontWeight: 700, color: C.hi }}>
+                  Block Lab Access
+                </div>
+                <div style={{ fontFamily: mono, fontSize: 11, color: C.low, marginTop: 2 }}>
+                  Student: @{currentStudent?.username}
+                </div>
+              </div>
+            </div>
+
+            <p style={{ fontFamily: sans, fontSize: 12.5, color: C.mid, lineHeight: 1.5, marginBottom: 16 }}>
+              This will immediately lock the student out of all hands-on practical labs, preventing attendance, terminal access, flag submission, and scoring.
+            </p>
+
+            <div style={{ marginBottom: 18 }}>
+              <label style={{ display: "block", fontFamily: sans, fontSize: 11.5, color: C.mid, marginBottom: 6 }}>
+                Reason for blocking (optional):
+              </label>
+              <input
+                autoFocus
+                value={blockReasonInput}
+                onChange={(e) => setBlockReasonInput(e.target.value)}
+                placeholder="e.g. Pending fee clearance, disciplinary hold, etc."
+                style={{
+                  width: "100%",
+                  boxSizing: "border-box",
+                  background: C.panel2,
+                  border: `1px solid ${C.border}`,
+                  borderRadius: 6,
+                  padding: "9px 12px",
+                  fontFamily: sans,
+                  fontSize: 12.5,
+                  color: C.hi,
+                  outline: "none",
+                }}
+              />
+            </div>
+
+            <div style={{ display: "flex", gap: 10 }}>
+              <button
+                type="button"
+                onClick={() => setShowBlockModal(false)}
+                disabled={blockingLoading}
+                style={{
+                  flex: 1,
+                  padding: "9px 0",
+                  borderRadius: 6,
+                  background: C.panel2,
+                  border: `1px solid ${C.border}`,
+                  color: C.mid,
+                  fontFamily: sans,
+                  fontSize: 12.5,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => handleToggleLabAccess(true, blockReasonInput)}
+                disabled={blockingLoading}
+                style={{
+                  flex: 1.5,
+                  padding: "9px 0",
+                  borderRadius: 6,
+                  background: C.danger,
+                  border: "none",
+                  color: "#fff",
+                  fontFamily: sans,
+                  fontSize: 12.5,
+                  fontWeight: 600,
+                  cursor: blockingLoading ? "wait" : "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 6,
+                }}
+              >
+                {blockingLoading ? <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> : <Ban size={14} />}
+                Confirm Block
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <style>{`
         @keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }

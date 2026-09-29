@@ -87,6 +87,48 @@ export default function StudentDashboard({ go }) {
         </div>
       </div>
 
+      {/* Lab Access Block Notice */}
+      {stats?.is_lab_access_blocked && (
+        <div
+          style={{
+            marginTop: 18,
+            padding: "14px 18px",
+            borderRadius: 8,
+            background: "rgba(229, 83, 75, 0.12)",
+            border: "1px solid rgba(229, 83, 75, 0.4)",
+            display: "flex",
+            alignItems: "center",
+            gap: 14,
+            boxShadow: "0 4px 20px rgba(229,83,75,0.15)",
+          }}
+        >
+          <div
+            style={{
+              width: 38,
+              height: 38,
+              borderRadius: 8,
+              background: "rgba(229, 83, 75, 0.2)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            <ShieldAlert size={22} color="#f87171" />
+          </div>
+          <div>
+            <div style={{ fontFamily: sans, fontSize: 14, fontWeight: 700, color: "#fca5a5", marginBottom: 3 }}>
+              Lab Access Blocked By Administrator
+            </div>
+            <div style={{ fontFamily: sans, fontSize: 12.5, color: C.mid, lineHeight: 1.45 }}>
+              {stats.lab_access_block_reason
+                ? `Reason: "${stats.lab_access_block_reason}". Practical lab launching, workspaces, and attendance are suspended.`
+                : "Your practical lab access is currently suspended. Please contact your instructor or platform administrator."}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Real-time Stat Cards */}
       <div style={{ display: "flex", gap: 14, marginTop: 22, flexWrap: "wrap" }}>
         <StatCard

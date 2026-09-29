@@ -187,22 +187,50 @@ class StudentDetailView(APIView):
 
     def patch(self, request, pk):
         student = self.get_student(pk)
+        was_blocked = student.is_lab_access_blocked
         serializer = UpdateStudentSerializer(student, data=request.data, partial=True)
         if serializer.is_valid():
             updated = serializer.save()
             name = updated.get_full_name() or updated.username
 
-            record_audit_log(
-                action_type='USER_UPDATE',
-                description=f"Updated profile details for '{name}' (@{updated.username}).",
-                request=request,
-                actor=request.user,
-                target_entity='User',
-                target_id=updated.id,
-                target_name=name,
-                severity='INFO',
-                details={'fields_changed': list(request.data.keys())}
-            )
+            if 'is_lab_access_blocked' in request.data and was_blocked != updated.is_lab_access_blocked:
+                if updated.is_lab_access_blocked:
+                    reason_msg = f" Reason: '{updated.lab_access_block_reason}'." if updated.lab_access_block_reason else ""
+                    record_audit_log(
+                        action_type='LAB_ACCESS_BLOCK',
+                        description=f"Blocked practical lab access for student '{name}' (@{updated.username}).{reason_msg}",
+                        request=request,
+                        actor=request.user,
+                        target_entity='User',
+                        target_id=updated.id,
+                        target_name=name,
+                        severity='WARNING',
+                        details={'reason': updated.lab_access_block_reason, 'blocked': True}
+                    )
+                else:
+                    record_audit_log(
+                        action_type='LAB_ACCESS_UNBLOCK',
+                        description=f"Restored practical lab access for student '{name}' (@{updated.username}).",
+                        request=request,
+                        actor=request.user,
+                        target_entity='User',
+                        target_id=updated.id,
+                        target_name=name,
+                        severity='NOTICE',
+                        details={'blocked': False}
+                    )
+            else:
+                record_audit_log(
+                    action_type='USER_UPDATE',
+                    description=f"Updated profile details for '{name}' (@{updated.username}).",
+                    request=request,
+                    actor=request.user,
+                    target_entity='User',
+                    target_id=updated.id,
+                    target_name=name,
+                    severity='INFO',
+                    details={'fields_changed': list(request.data.keys())}
+                )
 
             return Response({
                 'message': 'Student updated successfully.',

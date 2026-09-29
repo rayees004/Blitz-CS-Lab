@@ -17,6 +17,16 @@ class User(AbstractUser):
     )
     phone_number = models.CharField(max_length=20, blank=True, null=True)
     organization = models.CharField(max_length=150, blank=True, default='Blitz Cyber Lab')
+    is_lab_access_blocked = models.BooleanField(
+        default=False,
+        help_text='If True, student cannot attend, start, or submit practical labs'
+    )
+    lab_access_block_reason = models.CharField(
+        max_length=255,
+        blank=True,
+        default='',
+        help_text='Administrative reason explaining why lab access is blocked'
+    )
 
     def save(self, *args, **kwargs):
         # Automatically make superusers/staff default to admin role if still student
@@ -40,6 +50,8 @@ class AuditLog(models.Model):
         ('USER_CREATE', 'User Created'),
         ('USER_UPDATE', 'User Updated'),
         ('USER_DELETE', 'User Deactivated'),
+        ('LAB_ACCESS_BLOCK', 'Lab Access Blocked'),
+        ('LAB_ACCESS_UNBLOCK', 'Lab Access Unblocked'),
         ('AUTH_LOGIN', 'User Logged In'),
         ('AUTH_LOGOUT', 'User Logged Out'),
         ('COURSE_CREATE', 'Course Created'),

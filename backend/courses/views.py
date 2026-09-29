@@ -1049,6 +1049,12 @@ def can_student_attend_lab(student, lab):
     if student.is_staff or student.is_superuser or getattr(student, 'user_type', None) == 'admin':
         return True, None, lab.subject
 
+    # Administrative Lab Access Block check
+    if getattr(student, 'is_lab_access_blocked', False):
+        reason = getattr(student, 'lab_access_block_reason', '')
+        detail_msg = f"Practical lab access has been blocked by administrator. Reason: {reason}" if reason else "Practical lab access has been blocked by administrator. Please contact support."
+        return False, detail_msg, lab.subject
+
     # Check if student has already attended / submitted this lab
     prior_score = LabScore.objects.filter(student=student, lab=lab).first()
     if prior_score and (prior_score.attend_count > 0 or prior_score.is_completed):
@@ -1238,6 +1244,8 @@ class StudentLabListView(APIView):
             'total_attendances': total_attendances,
             'batch_index': assigned_batch.batch_index if assigned_batch else 1,
             'is_batch_active': bool(assigned_batch),
+            'is_lab_access_blocked': getattr(student, 'is_lab_access_blocked', False) if student else False,
+            'lab_access_block_reason': getattr(student, 'lab_access_block_reason', '') if student else '',
         }
 
         return Response({

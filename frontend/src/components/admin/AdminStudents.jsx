@@ -3,12 +3,13 @@ import {
   Plus, MoreHorizontal, Search, X,
   Eye, EyeOff, Loader2, AlertCircle, CheckCircle,
   UserPlus, Trash2, RefreshCw, BookOpen, Layers,
+  Ban, ShieldCheck, ShieldAlert
 } from "lucide-react";
 import Panel from "../common/Panel";
 import Btn from "../common/Btn";
 import Badge from "../common/Badge";
 import { C, sans, mono } from "../../constants/theme";
-import { fetchStudents, createStudent, deleteStudent } from "../../api/students";
+import { fetchStudents, createStudent, deleteStudent, updateStudent } from "../../api/students";
 import { fetchSubjects } from "../../api/subjects";
 import StudentDetailPanel from "./StudentDetailPanel";
 import AssignSubjectsModal from "./AssignSubjectsModal";
@@ -338,6 +339,36 @@ export default function AdminStudents() {
     setToast({ message: `${student.full_name || student.username} added!`, type: "success" });
   };
 
+  const [blockStudentModal, setBlockStudentModal] = useState(null);
+  const [blockReasonInput, setBlockReasonInput] = useState("");
+  const [blockingLoading, setBlockingLoading] = useState(false);
+
+  const handleToggleLabAccessQuick = async (studentToUpdate, targetBlock, reason = "") => {
+    setBlockingLoading(true);
+    try {
+      const res = await updateStudent(studentToUpdate.id, {
+        is_lab_access_blocked: targetBlock,
+        lab_access_block_reason: targetBlock ? reason : "",
+      });
+      const updated = res.student || res;
+      setStudents(prev => prev.map(s => s.id === updated.id ? updated : s));
+      if (selectedStudent?.id === updated.id) {
+        setSelectedStudent(updated);
+      }
+      setToast({
+        message: targetBlock
+          ? `Lab access blocked for ${updated.full_name || updated.username}.`
+          : `Lab access restored for ${updated.full_name || updated.username}.`,
+        type: "success",
+      });
+      setBlockStudentModal(null);
+    } catch (err) {
+      setToast({ message: err.message || "Failed to update lab access.", type: "error" });
+    } finally {
+      setBlockingLoading(false);
+    }
+  };
+
   const handleDeleteConfirm = async () => {
     if (!confirmDelete) return;
     const s = confirmDelete;
@@ -547,7 +578,14 @@ export default function AdminStudents() {
                 </div>
 
                 {/* Status */}
-                <div><Badge tone={s.is_active ? "cyan" : "danger"}>{s.is_active ? "ACTIVE" : "INACTIVE"}</Badge></div>
+                <div style={{ display: "flex", gap: 5, flexWrap: "wrap", alignItems: "center" }}>
+                  <Badge tone={s.is_active ? "cyan" : "danger"}>{s.is_active ? "ACTIVE" : "INACTIVE"}</Badge>
+                  {s.is_lab_access_blocked && (
+                    <Badge tone="danger" title={s.lab_access_block_reason ? `Reason: ${s.lab_access_block_reason}` : "Practical lab access is blocked"}>
+                      BLOCKED
+                    </Badge>
+                  )}
+                </div>
 
                 {/* Joined */}
                 <span style={{ fontFamily: mono, fontSize: 11, color: C.low }}>{joined}</span>
@@ -563,7 +601,7 @@ export default function AdminStudents() {
 
                   {isMenuOpen && (
                     <div
-                      style={{ position: "absolute", right: 0, top: "calc(100% + 4px)", background: C.panel, border: `1px solid ${C.border}`, borderRadius: 8, padding: 4, minWidth: 165, zIndex: 50, boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}
+                      style={{ position: "absolute", right: 0, top: "calc(100% + 4px)", background: C.panel, border: `1px solid ${C.border}`, borderRadius: 8, padding: 4, minWidth: 175, zIndex: 50, boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}
                       onClick={e => e.stopPropagation()}
                     >
                       <button
@@ -582,6 +620,29 @@ export default function AdminStudents() {
                       >
                         <Eye size={13} /> View Details
                       </button>
+                      {s.is_lab_access_blocked ? (
+                        <button
+                          onClick={() => { setMenuOpen(null); handleToggleLabAccessQuick(s, false); }}
+                          style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "8px 10px", background: "none", border: "none", color: C.cyan, fontFamily: sans, fontSize: 12.5, cursor: "pointer", borderRadius: 5, textAlign: "left" }}
+                          onMouseEnter={e => e.currentTarget.style.background = "rgba(63,216,200,0.1)"}
+                          onMouseLeave={e => e.currentTarget.style.background = "none"}
+                        >
+                          <ShieldCheck size={13} color={C.cyan} /> Unblock Lab Access
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            setMenuOpen(null);
+                            setBlockStudentModal(s);
+                            setBlockReasonInput(s.lab_access_block_reason || "");
+                          }}
+                          style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "8px 10px", background: "none", border: "none", color: "#f87171", fontFamily: sans, fontSize: 12.5, cursor: "pointer", borderRadius: 5, textAlign: "left" }}
+                          onMouseEnter={e => e.currentTarget.style.background = "rgba(229,83,75,0.1)"}
+                          onMouseLeave={e => e.currentTarget.style.background = "none"}
+                        >
+                          <Ban size={13} color="#f87171" /> Block Lab Access
+                        </button>
+                      )}
                       <button
                         onClick={() => { setMenuOpen(null); setConfirmDelete(s); }}
                         style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "8px 10px", background: "none", border: "none", color: C.danger, fontFamily: sans, fontSize: 12.5, cursor: "pointer", borderRadius: 5, textAlign: "left" }}
@@ -629,6 +690,56 @@ export default function AdminStudents() {
 
       {confirmDelete && (
         <ConfirmDialog student={confirmDelete} onConfirm={handleDeleteConfirm} onCancel={() => setConfirmDelete(null)} />
+      )}
+
+      {blockStudentModal && (
+        <>
+          <div onClick={() => !blockingLoading && setBlockStudentModal(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", zIndex: 1100, backdropFilter: "blur(2px)" }} />
+          <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: 420, maxWidth: "90vw", background: C.panel, border: `1px solid ${C.border}`, borderRadius: 12, padding: 24, zIndex: 1101, boxShadow: "0 24px 80px rgba(0,0,0,0.6)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+              <div style={{ width: 34, height: 34, borderRadius: 8, background: "rgba(229,83,75,0.15)", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid rgba(229,83,75,0.3)" }}>
+                <Ban size={18} color="#f87171" />
+              </div>
+              <div>
+                <h3 style={{ margin: 0, fontFamily: sans, fontSize: 16, fontWeight: 700, color: C.hi }}>Block Student Lab Access</h3>
+                <span style={{ fontFamily: mono, fontSize: 11, color: C.low }}>{blockStudentModal.full_name || blockStudentModal.username}</span>
+              </div>
+            </div>
+
+            <p style={{ fontFamily: sans, fontSize: 12.5, color: C.mid, lineHeight: 1.5, margin: "0 0 16px" }}>
+              Blocking will immediately prevent this student from launching or attending any lab environments, assignments, or workspaces.
+            </p>
+
+            <div style={{ marginBottom: 18 }}>
+              <label style={{ display: "block", fontFamily: mono, fontSize: 10.5, color: C.low, letterSpacing: "0.05em", marginBottom: 6 }}>
+                REASON FOR BLOCK (OPTIONAL)
+              </label>
+              <textarea
+                value={blockReasonInput}
+                onChange={(e) => setBlockReasonInput(e.target.value)}
+                placeholder="e.g., Pending fee clearance, disciplinary review, integrity check..."
+                rows={3}
+                style={{
+                  width: "100%", boxSizing: "border-box",
+                  background: C.panel2, border: `1px solid ${C.border}`,
+                  borderRadius: 6, color: C.hi, fontFamily: sans, fontSize: 12.5,
+                  padding: "8px 10px", outline: "none", resize: "none"
+                }}
+              />
+            </div>
+
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <Btn variant="outline" disabled={blockingLoading} onClick={() => setBlockStudentModal(null)}>Cancel</Btn>
+              <Btn
+                disabled={blockingLoading}
+                onClick={() => handleToggleLabAccessQuick(blockStudentModal, true, blockReasonInput)}
+                style={{ background: "#dc2626", borderColor: "#dc2626", color: "#fff" }}
+              >
+                {blockingLoading ? "Blocking..." : "Confirm Block"}
+              </Btn>
+            </div>
+          </div>
+        </>
       )}
 
       {toast && <Toast message={toast.message} type={toast.type} onDone={() => setToast(null)} />}

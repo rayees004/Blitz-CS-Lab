@@ -27,6 +27,8 @@ class UserSerializer(serializers.ModelSerializer):
             'organization',
             'phone_number',
             'is_active',
+            'is_lab_access_blocked',
+            'lab_access_block_reason',
             'date_joined',
             'enrolled_courses',
             'courses_count',
@@ -193,7 +195,11 @@ class CreateStudentSerializer(serializers.ModelSerializer):
 class UpdateStudentSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ['first_name', 'last_name', 'email', 'phone_number', 'organization', 'is_active']
+        fields = [
+            'first_name', 'last_name', 'email', 'phone_number',
+            'organization', 'is_active', 'is_lab_access_blocked',
+            'lab_access_block_reason'
+        ]
 
 
 class LoginSerializer(serializers.Serializer):
