@@ -179,7 +179,7 @@ export default function Login({ onLogin, initialNotice }) {
               type="text"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="e.g. admin@blitzcyberlab.io"
+              placeholder="enter your mail or username"
               disabled={loading}
               autoComplete="username"
               style={{
