@@ -16,6 +16,13 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Compatibility patch: cPanel uses PostgreSQL 13.23 while Django 5.2 defaults to requiring PG 14+
+try:
+    from django.db.backends.postgresql.base import DatabaseWrapper as PgDatabaseWrapper
+    PgDatabaseWrapper.check_database_version_supported = lambda self: None
+except ImportError:
+    pass
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
