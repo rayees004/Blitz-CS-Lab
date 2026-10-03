@@ -26,6 +26,7 @@ class IsAdminOrStaff(IsAuthenticated):
 
 
 class LoginView(APIView):
+    authentication_classes = []
     permission_classes = [AllowAny]
 
     def post(self, request):
