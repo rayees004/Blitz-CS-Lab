@@ -47,6 +47,7 @@ export default function StudentDashboard({ go }) {
 
   // Find most relevant lab to attend (must be attendable and NOT already attended/locked!)
   const heroLab = labs.find((l) => !l.is_locked && !l.is_completed && l.submission_status !== "COMPLETED" && !(l.attend_count > 0));
+  const inProgressLab = labs.find((l) => l.submission_status === "IN_PROGRESS" && !l.is_locked);
 
   // Filtering labs for the Attend section
   const filteredLabs = labs.filter((lab) => {
