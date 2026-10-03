@@ -1,8 +1,8 @@
 import React from "react";
-import { Search, Bell } from "lucide-react";
+import { Bell } from "lucide-react";
 import { C, sans, mono } from "../../constants/theme";
 
-export default function Topbar({ placeholder, name, role }) {
+export default function Topbar({ name, role }) {
   return (
     <div
       style={{
@@ -10,26 +10,11 @@ export default function Topbar({ placeholder, name, role }) {
         borderBottom: `1px solid ${C.border}`,
         display: "flex",
         alignItems: "center",
-        justifyContent: "space-between",
+        justifyContent: "flex-end",
         padding: "0 22px",
         flexShrink: 0,
       }}
     >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          background: C.panel2,
-          border: `1px solid ${C.border}`,
-          borderRadius: 7,
-          padding: "7px 12px",
-          width: 340,
-        }}
-      >
-        <Search size={14} color={C.low} />
-        <span style={{ fontFamily: mono, fontSize: 12.5, color: C.low }}>{placeholder}</span>
-      </div>
       <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
         <Bell size={17} color={C.mid} strokeWidth={2} style={{ cursor: "pointer" }} />
         <div style={{ width: 1, height: 22, background: C.border }} />

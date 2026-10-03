@@ -138,7 +138,6 @@ export default function BlitzCyberLab() {
         <Sidebar items={NAV_ADMIN} active={adminPage} onSelect={setAdminPage} onSwitch={handleLogout} switchLabel="Sign out" />
         <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, height: "100%" }}>
           <Topbar
-            placeholder="Search students, courses, labs..."
             name={currentUser?.first_name ? `${currentUser.first_name} ${currentUser.last_name || ''}`.trim() : (currentUser?.username || "Admin")}
             role="Platform Administrator"
           />
@@ -173,7 +172,6 @@ export default function BlitzCyberLab() {
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, height: "100%" }}>
         {studentPage !== "lab-detail" && (
           <Topbar
-            placeholder="Search labs, topics, vulnerabilities..."
             name={currentUser?.first_name ? `${currentUser.first_name} ${currentUser.last_name || ''}`.trim() : (currentUser?.username || "Student")}
             role="Student"
           />
