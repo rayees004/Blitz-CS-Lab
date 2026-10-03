@@ -1,6 +1,6 @@
 import { getStoredToken, clearAuthSession, notifyAuthExpired } from './auth';
 
-export const API_BASE = '/api';
+export const API_BASE = import.meta.env.PROD ? 'https://backend.decodexe.com/api' : '/api';
 
 /**
  * Returns standard authentication headers, automatically attaching the auth token if present.
