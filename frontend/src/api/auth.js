@@ -1,4 +1,4 @@
-const API_BASE = '/api';
+import { API_BASE } from './client';
 
 export function clearAuthSession() {
   localStorage.removeItem('blitz_token');
