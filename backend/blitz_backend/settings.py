@@ -31,12 +31,13 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-!ccx0ozh=##v5(q**4zyb1@xkt0t%q893-$s89e7#-e$p5h6p#'
+SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-!ccx0ozh=##v5(q**4zyb1@xkt0t%q893-$s89e7#-e$p5h6p#')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv('DEBUG', 'False').lower() in ('true', '1', 't')
 
-ALLOWED_HOSTS = ['*', 'testserver', 'localhost', '127.0.0.1']
+_allowed = os.getenv('ALLOWED_HOSTS', '*')
+ALLOWED_HOSTS = [h.strip() for h in _allowed.split(',') if h.strip()]
 
 
 # Application definition
@@ -93,36 +94,16 @@ WSGI_APPLICATION = 'blitz_backend.wsgi.application'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
 db_engine = os.getenv('DB_ENGINE', '').strip()
-db_host = os.getenv('DB_HOST', 'localhost').strip()
 
 if db_engine == 'django.db.backends.postgresql':
-    pg_port = os.getenv('DB_PORT', '5432')
-    # If connecting from outside the server to decodexe.com, open an SSH tunnel
-    if db_host and db_host not in ('localhost', '127.0.0.1'):
-        ssh_user = os.getenv('SSH_USER', 'decodexe')
-        ssh_password = os.getenv('SSH_PASSWORD', '9senm1bqaTt@3S')
-        try:
-            from sshtunnel import SSHTunnelForwarder
-            _tunnel = SSHTunnelForwarder(
-                (db_host, 22),
-                ssh_username=ssh_user,
-                ssh_password=ssh_password,
-                remote_bind_address=('127.0.0.1', int(pg_port))
-            )
-            _tunnel.start()
-            db_host = '127.0.0.1'
-            pg_port = str(_tunnel.local_bind_port)
-        except Exception as e:
-            print(f"[Warning] Failed to start SSH tunnel to PostgreSQL: {e}")
-
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
             'NAME': os.getenv('DB_NAME', 'decodexe_blitz'),
             'USER': os.getenv('DB_USER', 'decodexe_blitzusr'),
             'PASSWORD': os.getenv('DB_PASSWORD', ''),
-            'HOST': db_host,
-            'PORT': pg_port,
+            'HOST': os.getenv('DB_HOST', 'localhost'),
+            'PORT': os.getenv('DB_PORT', '5432'),
         }
     }
 else:
@@ -183,6 +164,28 @@ AUTH_USER_MODEL = 'accounts.User'
 
 CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOWED_ORIGINS = [
+    'https://decodexe.com',
+    'http://decodexe.com',
+    'https://www.decodexe.com',
+    'http://www.decodexe.com',
+    'https://backend.decodexe.com',
+    'http://backend.decodexe.com',
+    'http://localhost:5173',
+    'http://localhost:3000',
+    'http://127.0.0.1:5173',
+]
+
+CSRF_TRUSTED_ORIGINS = [
+    'https://decodexe.com',
+    'http://decodexe.com',
+    'https://www.decodexe.com',
+    'http://www.decodexe.com',
+    'https://backend.decodexe.com',
+    'http://backend.decodexe.com',
+]
+
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
@@ -193,3 +196,4 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.IsAuthenticated',
     ],
 }
+
