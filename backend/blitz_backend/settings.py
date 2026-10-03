@@ -91,15 +91,37 @@ WSGI_APPLICATION = 'blitz_backend.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-if os.getenv('DB_ENGINE'):
+db_engine = os.getenv('DB_ENGINE', '').strip()
+db_host = os.getenv('DB_HOST', 'localhost').strip()
+
+if db_engine == 'django.db.backends.postgresql':
+    pg_port = os.getenv('DB_PORT', '5432')
+    # If connecting from outside the server to decodexe.com, open an SSH tunnel
+    if db_host and db_host not in ('localhost', '127.0.0.1'):
+        ssh_user = os.getenv('SSH_USER', 'decodexe')
+        ssh_password = os.getenv('SSH_PASSWORD', '9senm1bqaTt@3S')
+        try:
+            from sshtunnel import SSHTunnelForwarder
+            _tunnel = SSHTunnelForwarder(
+                (db_host, 22),
+                ssh_username=ssh_user,
+                ssh_password=ssh_password,
+                remote_bind_address=('127.0.0.1', int(pg_port))
+            )
+            _tunnel.start()
+            db_host = '127.0.0.1'
+            pg_port = str(_tunnel.local_bind_port)
+        except Exception as e:
+            print(f"[Warning] Failed to start SSH tunnel to PostgreSQL: {e}")
+
     DATABASES = {
         'default': {
-            'ENGINE': os.getenv('DB_ENGINE', 'django.db.backends.postgresql'),
+            'ENGINE': 'django.db.backends.postgresql',
             'NAME': os.getenv('DB_NAME', 'decodexe_blitz'),
             'USER': os.getenv('DB_USER', 'decodexe_blitzusr'),
             'PASSWORD': os.getenv('DB_PASSWORD', ''),
-            'HOST': os.getenv('DB_HOST', 'localhost'),
-            'PORT': os.getenv('DB_PORT', '5432'),
+            'HOST': db_host,
+            'PORT': pg_port,
         }
     }
 else:
