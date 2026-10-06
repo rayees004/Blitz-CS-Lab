@@ -29,17 +29,55 @@ class User(AbstractUser):
     )
 
     def save(self, *args, **kwargs):
-        # Automatically make superusers/staff default to admin role if still student
-        if (self.is_superuser or self.is_staff) and self.user_type == 'student':
+        # Superusers are platform administrators
+        if self.is_superuser:
             self.user_type = 'admin'
+            self.is_staff = True
+        elif self.user_type == 'admin':
+            # Platform admins have Django admin panel access (is_staff = True)
+            self.is_staff = True
+        elif self.user_type in ('instructor', 'student'):
+            # Instructors and Students NEVER have Django admin panel access
+            self.is_staff = False
+
         super().save(*args, **kwargs)
 
     @property
     def is_admin(self):
-        return self.user_type == 'admin' or self.is_superuser or self.is_staff
+        """Returns True if the user has administrative privileges (admin or instructor) for the dashboard."""
+        return self.user_type in ('admin', 'instructor') or self.is_superuser or self.is_staff
+
+    @property
+    def is_platform_admin(self):
+        """Returns True ONLY for platform admins who have Django admin access."""
+        return self.user_type == 'admin' or self.is_superuser
+
+    @property
+    def is_instructor(self):
+        return self.user_type == 'instructor'
+
+    @property
+    def is_student(self):
+        return self.user_type == 'student'
+
+    @property
+    def can_access_django_admin(self):
+        """Django admin panel is accessible ONLY to admins (and superusers)."""
+        return bool(self.is_active and (self.user_type == 'admin' or self.is_superuser))
+
+    @property
+    def can_access_admin_dashboard(self):
+        """Admin dashboard is accessible to instructors and admins."""
+        return bool(self.is_active and (self.user_type in ('admin', 'instructor') or self.is_superuser))
+
+    @property
+    def can_access_student_panel(self):
+        """Student panel is accessible to students and admins."""
+        return bool(self.is_active and (self.user_type in ('student', 'admin') or self.is_superuser))
 
     def __str__(self):
         return f"{self.username} ({self.user_type})"
+
 
 
 class AuditLog(models.Model):

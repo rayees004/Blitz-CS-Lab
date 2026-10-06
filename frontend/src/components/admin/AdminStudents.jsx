@@ -63,10 +63,11 @@ const EMPTY = {
   first_name: "", last_name: "", username: "", email: "",
   phone_number: "", organization: "Blitz Cyber Lab",
   password: "", confirm_password: "",
+  user_type: "student",
   subject_ids: [],
 };
 
-function AddStudentDrawer({ onClose, onCreated }) {
+function AddStudentDrawer({ onClose, onCreated, isPlatformAdmin = false }) {
   const [form, setForm] = useState(EMPTY);
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
@@ -164,6 +165,54 @@ function AddStudentDrawer({ onClose, onCreated }) {
           <FieldInput label="Username" required placeholder="e.g. rohith_k" value={form.username} onChange={set("username")} error={errors.username} />
           <FieldInput label="Phone Number" placeholder="+91 98765 43210" value={form.phone_number} onChange={set("phone_number")} error={errors.phone_number} />
           <FieldInput label="Organization / Batch" placeholder="Blitz Cyber Lab" value={form.organization} onChange={set("organization")} error={errors.organization} />
+
+          {/* Account Role Selector */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontFamily: mono, fontSize: 10, color: C.low, letterSpacing: "0.05em", marginBottom: 6 }}>
+              ACCOUNT ROLE
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: isPlatformAdmin ? "repeat(3, 1fr)" : "repeat(2, 1fr)", gap: 10 }}>
+              {[
+                { type: "student", label: "Student", desc: "Student panel access only" },
+                { type: "instructor", label: "Instructor", desc: "Admin dashboard access" },
+                ...(isPlatformAdmin
+                  ? [{ type: "admin", label: "Admin", desc: "Django admin + Dashboard" }]
+                  : []),
+              ].map((role) => (
+                <div
+                  key={role.type}
+                  onClick={() => setForm(f => ({ ...f, user_type: role.type }))}
+                  style={{
+                    padding: "9px 12px",
+                    borderRadius: 7,
+                    cursor: "pointer",
+                    border: `1px solid ${form.user_type === role.type ? (role.type === "admin" ? C.cyan : role.type === "instructor" ? "#c084fc" : C.amber) : C.border}`,
+                    background: form.user_type === role.type
+                      ? (role.type === "admin" ? "rgba(63, 216, 200, 0.12)" : role.type === "instructor" ? "rgba(192, 132, 252, 0.12)" : "rgba(240, 180, 41, 0.1)")
+                      : C.panel2,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 2,
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <span style={{ fontFamily: sans, fontSize: 13, fontWeight: 600, color: form.user_type === role.type ? C.hi : C.mid }}>
+                      {role.label}
+                    </span>
+                    <input
+                      type="radio"
+                      checked={form.user_type === role.type}
+                      onChange={() => {}}
+                      style={{ accentColor: role.type === "admin" ? C.cyan : role.type === "instructor" ? "#c084fc" : C.amber, cursor: "pointer" }}
+                    />
+                  </div>
+                  <span style={{ fontFamily: sans, fontSize: 10.5, color: C.low }}>
+                    {role.desc}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
 
           {/* Initial Subjects Selection */}
           <div style={{ fontFamily: mono, fontSize: 10, color: C.low, letterSpacing: "0.05em", marginBottom: 10, marginTop: 6, paddingTop: 16, borderTop: `1px solid ${C.border}` }}>
@@ -293,7 +342,9 @@ function avatarColor(name) {
 /* ─── Main Component ─────────────────────────────────── */
 const FEE_TONE = { PAID: "cyan", DUE: "danger", PARTIAL: "warn" };
 
-export default function AdminStudents() {
+export default function AdminStudents({ currentUser }) {
+  const isPlatformAdmin = currentUser?.user_type === "admin" || Boolean(currentUser?.is_superuser) || Boolean(currentUser?.can_access_django_admin);
+  const [roleFilter, setRoleFilter] = useState("all");
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -383,41 +434,83 @@ export default function AdminStudents() {
     }
   };
 
-  const activeCount = students.filter(s => s.is_active).length;
+  const filteredStudents = students.filter(s => {
+    if (roleFilter === "all") return true;
+    return s.user_type === roleFilter;
+  });
+  const activeCount = filteredStudents.filter(s => s.is_active).length;
 
   return (
     <div style={{ padding: 28, overflowY: "auto", height: "100%", boxSizing: "border-box" }}>
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <div>
-          <h1 style={{ fontFamily: sans, fontSize: 22, fontWeight: 700, color: C.hi, margin: "0 0 4px" }}>Students</h1>
+          <h1 style={{ fontFamily: sans, fontSize: 22, fontWeight: 700, color: C.hi, margin: "0 0 4px" }}>
+            Users & Students
+          </h1>
           <div style={{ fontFamily: mono, fontSize: 11, color: C.low }}>
-            {loading ? "Loading..." : `${students.length} student${students.length !== 1 ? "s" : ""} · ${activeCount} active`}
+            {loading ? "Loading..." : `${filteredStudents.length} of ${students.length} user${students.length !== 1 ? "s" : ""} · ${activeCount} active`}
           </div>
         </div>
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
           <button onClick={load} style={{ background: "none", border: "none", cursor: "pointer", color: C.low, display: "flex", padding: 4 }} title="Refresh">
             <RefreshCw size={15} style={{ animation: loading ? "spin 1s linear infinite" : "none" }} />
           </button>
-          <Btn icon={Plus} onClick={() => setShowAddDrawer(true)}>Add Student</Btn>
+          <Btn icon={Plus} onClick={() => setShowAddDrawer(true)}>
+            {isPlatformAdmin ? "Add User" : "Add Student"}
+          </Btn>
         </div>
       </div>
 
-      {/* Search */}
-      <div style={{
-        marginTop: 18, marginBottom: 16,
-        display: "flex", alignItems: "center", gap: 8,
-        background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 8,
-        padding: "8px 12px", maxWidth: 420,
-      }}>
-        <Search size={14} color={C.low} />
-        <input
-          value={searchInput}
-          onChange={e => setSearchInput(e.target.value)}
-          placeholder="Search by name or email..."
-          style={{ background: "none", border: "none", outline: "none", fontFamily: sans, fontSize: 13, color: C.hi, flex: 1 }}
-        />
-        {searchInput && <X size={13} color={C.low} style={{ cursor: "pointer" }} onClick={() => setSearchInput("")} />}
+      {/* Search and Role Filter Bar */}
+      <div style={{ marginTop: 18, marginBottom: 16, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+        <div style={{
+          display: "flex", alignItems: "center", gap: 8,
+          background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 8,
+          padding: "8px 12px", width: 340, maxWidth: "100%",
+        }}>
+          <Search size={14} color={C.low} />
+          <input
+            value={searchInput}
+            onChange={e => setSearchInput(e.target.value)}
+            placeholder="Search by name, email, or username..."
+            style={{ background: "none", border: "none", outline: "none", fontFamily: sans, fontSize: 13, color: C.hi, flex: 1 }}
+          />
+          {searchInput && <X size={13} color={C.low} style={{ cursor: "pointer" }} onClick={() => setSearchInput("")} />}
+        </div>
+
+        {/* Role Filter Tabs */}
+        <div style={{ display: "flex", gap: 5, background: C.panel2, padding: 3, borderRadius: 8, border: `1px solid ${C.border}` }}>
+          {[
+            { id: "all", label: `All Users (${students.length})` },
+            { id: "student", label: `Students (${students.filter(s => s.user_type === "student").length})` },
+            { id: "instructor", label: `Instructors (${students.filter(s => s.user_type === "instructor").length})` },
+            { id: "admin", label: `Admins (${students.filter(s => s.user_type === "admin").length})` },
+          ].map(tab => {
+            const active = roleFilter === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setRoleFilter(tab.id)}
+                style={{
+                  background: active ? C.panel3 : "transparent",
+                  border: active ? `1px solid ${C.border}` : "1px solid transparent",
+                  borderRadius: 6,
+                  padding: "5px 11px",
+                  color: active ? C.hi : C.mid,
+                  fontFamily: sans,
+                  fontSize: 12,
+                  fontWeight: active ? 600 : 500,
+                  cursor: "pointer",
+                  transition: "all 120ms ease",
+                }}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* Error */}
@@ -434,7 +527,7 @@ export default function AdminStudents() {
         <Panel style={{ overflow: "hidden" }}>
           {/* Column headers */}
           <div style={{ display: "grid", gridTemplateColumns: "1.7fr 1.5fr 1.7fr 0.8fr 0.8fr 0.4fr", padding: "10px 18px", borderBottom: `1px solid ${C.border}`, fontFamily: mono, fontSize: 10.5, color: C.low, letterSpacing: "0.04em" }}>
-            <div>NAME</div>
+            <div>NAME & ROLE</div>
             <div>EMAIL</div>
             <div>SUBJECTS</div>
             <div>STATUS</div>
@@ -443,9 +536,11 @@ export default function AdminStudents() {
           </div>
 
           {/* Empty state */}
-          {!loading && students.length === 0 && (
+          {!loading && filteredStudents.length === 0 && (
             <div style={{ padding: "48px 24px", textAlign: "center", fontFamily: sans, color: C.low, fontSize: 13 }}>
-              {search ? `No students match "${search}".` : 'No students yet. Click "Add Student" to get started.'}
+              {search || roleFilter !== "all"
+                ? `No accounts match the selected filters.`
+                : 'No accounts yet. Click "Add User" to get started.'}
             </div>
           )}
 
@@ -459,7 +554,7 @@ export default function AdminStudents() {
           ))}
 
           {/* Student rows */}
-          {!loading && students.map((s, i) => {
+          {!loading && filteredStudents.map((s, i) => {
             const initials = (s.full_name || s.username || "?")[0].toUpperCase();
             const bg = avatarColor(s.full_name || s.username || "");
             const joined = s.date_joined
@@ -498,7 +593,54 @@ export default function AdminStudents() {
                     {initials}
                   </div>
                   <div>
-                    <div style={{ fontFamily: sans, fontSize: 13, fontWeight: 600, color: C.hi }}>{s.full_name || s.username}</div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                      <span style={{ fontFamily: sans, fontSize: 13, fontWeight: 600, color: C.hi }}>{s.full_name || s.username}</span>
+                      {s.user_type === "admin" && (
+                        <span style={{
+                          fontFamily: mono,
+                          fontSize: 9.5,
+                          fontWeight: 700,
+                          color: "#38bdf8",
+                          background: "rgba(56, 189, 248, 0.14)",
+                          border: "1px solid rgba(56, 189, 248, 0.35)",
+                          padding: "1px 5px",
+                          borderRadius: 4,
+                          letterSpacing: "0.04em",
+                        }}>
+                          ADMIN
+                        </span>
+                      )}
+                      {s.user_type === "instructor" && (
+                        <span style={{
+                          fontFamily: mono,
+                          fontSize: 9.5,
+                          fontWeight: 700,
+                          color: "#c084fc",
+                          background: "rgba(192, 132, 252, 0.14)",
+                          border: "1px solid rgba(192, 132, 252, 0.35)",
+                          padding: "1px 5px",
+                          borderRadius: 4,
+                          letterSpacing: "0.04em",
+                        }}>
+                          INSTRUCTOR
+                        </span>
+                      )}
+                      {s.user_type === "student" && (
+                        <span style={{
+                          fontFamily: mono,
+                          fontSize: 9,
+                          fontWeight: 600,
+                          color: C.low,
+                          background: "rgba(255, 255, 255, 0.04)",
+                          border: `1px solid ${C.border}`,
+                          padding: "1px 5px",
+                          borderRadius: 4,
+                          letterSpacing: "0.04em",
+                        }}>
+                          STUDENT
+                        </span>
+                      )}
+                    </div>
                     <div style={{ fontFamily: mono, fontSize: 10.5, color: C.low }}>@{s.username}</div>
                   </div>
                 </div>
@@ -661,7 +803,7 @@ export default function AdminStudents() {
       )}
 
       {/* ── Modals & Panels ── */}
-      {showAddDrawer && <AddStudentDrawer onClose={() => setShowAddDrawer(false)} onCreated={handleCreated} />}
+      {showAddDrawer && <AddStudentDrawer onClose={() => setShowAddDrawer(false)} onCreated={handleCreated} isPlatformAdmin={isPlatformAdmin} />}
 
       {assignSubjectsStudent && (
         <AssignSubjectsModal

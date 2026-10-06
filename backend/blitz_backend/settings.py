@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 import os
+import sys
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -95,7 +96,14 @@ WSGI_APPLICATION = 'blitz_backend.wsgi.application'
 
 db_engine = os.getenv('DB_ENGINE', '').strip()
 
-if db_engine == 'django.db.backends.postgresql':
+if 'test' in sys.argv:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': ':memory:',
+        }
+    }
+elif db_engine == 'django.db.backends.postgresql':
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',

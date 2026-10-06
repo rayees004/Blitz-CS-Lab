@@ -411,7 +411,7 @@ class StudentEnrollmentsView(APIView):
     permission_classes = [IsAdminOrStaff]
 
     def get_student(self, pk):
-        return get_object_or_404(User, pk=pk, user_type='student')
+        return get_object_or_404(User, pk=pk, user_type__in=['student', 'instructor'])
 
     def get(self, request, pk):
         student = self.get_student(pk)
@@ -454,7 +454,7 @@ class StudentBulkEnrollView(APIView):
     permission_classes = [IsAdminOrStaff]
 
     def post(self, request, pk):
-        student = get_object_or_404(User, pk=pk, user_type='student')
+        student = get_object_or_404(User, pk=pk, user_type__in=['student', 'instructor'])
         course_ids = request.data.get('course_ids', [])
         fee_status = request.data.get('fee_status', 'DUE')
         sync = request.data.get('sync', True)
@@ -515,7 +515,7 @@ class StudentBulkAssignSubjectsView(APIView):
     permission_classes = [IsAdminOrStaff]
 
     def post(self, request, pk):
-        student = get_object_or_404(User, pk=pk, user_type='student')
+        student = get_object_or_404(User, pk=pk, user_type__in=['student', 'instructor'])
         subject_ids = request.data.get('subject_ids', [])
         sync = request.data.get('sync', True)
 
@@ -573,7 +573,7 @@ class StudentSubjectEnrollmentsView(APIView):
     permission_classes = [IsAdminOrStaff]
 
     def get(self, request, pk):
-        student = get_object_or_404(User, pk=pk, user_type='student')
+        student = get_object_or_404(User, pk=pk, user_type__in=['student', 'instructor'])
         enrollments = student.subject_enrollments.select_related('subject', 'subject__course').filter(is_active=True)
         return Response({
             'student_id': student.id,
@@ -583,7 +583,7 @@ class StudentSubjectEnrollmentsView(APIView):
         })
 
     def post(self, request, pk):
-        student = get_object_or_404(User, pk=pk, user_type='student')
+        student = get_object_or_404(User, pk=pk, user_type__in=['student', 'instructor'])
         subject_id = request.data.get('subject_id')
         if not subject_id:
             return Response({'detail': 'subject_id is required.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -966,7 +966,7 @@ def get_or_create_student_lab_batch(student):
     - If no active batch exists:
         Pick 5 random labs from eligible labs (or from all active labs not yet completed).
     """
-    if not student or student.is_staff or student.is_superuser or getattr(student, 'user_type', None) == 'admin':
+    if not student or student.is_staff or student.is_superuser or getattr(student, 'user_type', None) in ('admin', 'instructor'):
         return None
 
     # Check for current active batch
@@ -1045,8 +1045,8 @@ def can_student_attend_lab(student, lab):
     if not student:
         return False, "Authentication required to attend this lab.", None
 
-    # Admins and staff have unrestricted lab access
-    if student.is_staff or student.is_superuser or getattr(student, 'user_type', None) == 'admin':
+    # Admins, instructors and staff have unrestricted lab access
+    if student.is_staff or student.is_superuser or getattr(student, 'user_type', None) in ('admin', 'instructor'):
         return True, None, lab.subject
 
     # Administrative Lab Access Block check
@@ -1094,7 +1094,7 @@ class StudentLabListView(APIView):
 
     def get(self, request):
         student = get_current_student(request)
-        is_admin_or_staff = bool(student and (student.is_staff or student.is_superuser or getattr(student, 'user_type', None) == 'admin'))
+        is_admin_or_staff = bool(student and (student.is_staff or student.is_superuser or getattr(student, 'user_type', None) in ('admin', 'instructor')))
 
         # Fetch or generate the student's persistent 5-lab batch
         assigned_batch = None
@@ -2255,7 +2255,7 @@ class StudentMaterialsView(APIView):
         student = get_current_student(request)
         qs = StudyMaterial.objects.select_related('subject', 'subject__course', 'lab', 'uploaded_by').filter(is_active=True)
 
-        if student and not (student.is_staff or student.is_superuser or getattr(student, 'user_type', None) == 'admin'):
+        if student and not (student.is_staff or student.is_superuser or getattr(student, 'user_type', None) in ('admin', 'instructor')):
             # Filter by subjects the student is actively enrolled in
             enrolled_subject_ids = SubjectEnrollment.objects.filter(
                 student=student, is_active=True

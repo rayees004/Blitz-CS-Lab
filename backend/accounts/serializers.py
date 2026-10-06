@@ -7,6 +7,9 @@ from .models import User
 
 class UserSerializer(serializers.ModelSerializer):
     is_admin = serializers.BooleanField(read_only=True)
+    can_access_django_admin = serializers.BooleanField(read_only=True)
+    can_access_admin_dashboard = serializers.BooleanField(read_only=True)
+    can_access_student_panel = serializers.BooleanField(read_only=True)
     full_name = serializers.SerializerMethodField()
     enrolled_courses = serializers.SerializerMethodField()
     courses_count = serializers.SerializerMethodField()
@@ -24,6 +27,9 @@ class UserSerializer(serializers.ModelSerializer):
             'full_name',
             'user_type',
             'is_admin',
+            'can_access_django_admin',
+            'can_access_admin_dashboard',
+            'can_access_student_panel',
             'organization',
             'phone_number',
             'is_active',
@@ -36,7 +42,8 @@ class UserSerializer(serializers.ModelSerializer):
             'subjects_count',
         ]
         read_only_fields = [
-            'id', 'is_admin', 'full_name', 'date_joined',
+            'id', 'is_admin', 'can_access_django_admin', 'can_access_admin_dashboard',
+            'can_access_student_panel', 'full_name', 'date_joined',
             'enrolled_courses', 'courses_count',
             'enrolled_subjects', 'subjects_count'
         ]
@@ -137,6 +144,7 @@ class CreateStudentSerializer(serializers.ModelSerializer):
             'organization',
             'password',
             'confirm_password',
+            'user_type',
             'course_ids',
             'subject_ids',
         ]
@@ -165,8 +173,9 @@ class CreateStudentSerializer(serializers.ModelSerializer):
         subject_ids = validated_data.pop('subject_ids', [])
         validated_data.pop('confirm_password')
         password = validated_data.pop('password')
+        user_type = validated_data.pop('user_type', 'student')
         user = User(**validated_data)
-        user.user_type = 'student'
+        user.user_type = user_type if user_type in ('student', 'instructor', 'admin') else 'student'
         user.set_password(password)
         user.save()
 
@@ -197,7 +206,7 @@ class UpdateStudentSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'first_name', 'last_name', 'email', 'phone_number',
-            'organization', 'is_active', 'is_lab_access_blocked',
+            'organization', 'user_type', 'is_active', 'is_lab_access_blocked',
             'lab_access_block_reason'
         ]
 

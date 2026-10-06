@@ -22,11 +22,14 @@ node_modules/
 # Build artifacts
 dist/
 build/
+*/dist/
 
 # Python bytecode & cache
 __pycache__/
+**/__pycache__/
 *.py[cod]
 *$py.class
+*.pyc
 
 # Logs & OS
 *.log
@@ -38,3 +41,21 @@ scratch/
 *.timestamp-*.mjs
 *.mjs.timestamp*
 
+# Media files & user uploads
+media/
+backend/media/
+*/media/
+
+# Media file extensions
+*.mp4
+*.mkv
+*.avi
+*.mov
+*.wmv
+*.flv
+*.webm
+*.mp3
+*.wav
+*.m4a
+*.aac
+*.ogg

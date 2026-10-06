@@ -173,6 +173,15 @@ export default function StudentDetailPanel({ student, onClose, onStudentUpdate }
                   <Badge tone={currentStudent?.is_active ? "cyan" : "danger"}>
                     {currentStudent?.is_active ? "ACTIVE" : "INACTIVE"}
                   </Badge>
+                  {currentStudent?.user_type === "admin" && (
+                    <Badge tone="cyan">ADMIN</Badge>
+                  )}
+                  {currentStudent?.user_type === "instructor" && (
+                    <Badge tone="amber">INSTRUCTOR</Badge>
+                  )}
+                  {currentStudent?.user_type === "student" && (
+                    <Badge tone="neutral">STUDENT</Badge>
+                  )}
                   {currentStudent?.is_lab_access_blocked && (
                     <Badge tone="danger">LABS BLOCKED</Badge>
                   )}
@@ -186,7 +195,17 @@ export default function StudentDetailPanel({ student, onClose, onStudentUpdate }
               <InfoRow icon={Phone} label="Phone Number" value={student?.phone_number || "—"} />
               <InfoRow icon={Building2} label="Organization" value={student?.organization} />
               <InfoRow icon={Calendar} label="Enrolled On" value={joinedDate} />
-              <InfoRow icon={Shield} label="Account Type" value="Student" />
+              <InfoRow
+                icon={Shield}
+                label="Account Type"
+                value={
+                  student?.user_type === "admin"
+                    ? "Platform Administrator (Django Admin + Dashboard Access)"
+                    : student?.user_type === "instructor"
+                    ? "Instructor (Admin Dashboard Access)"
+                    : "Student (Student Panel Only)"
+                }
+              />
             </div>
 
             {/* Quick Labs & Score Progress Bar */}

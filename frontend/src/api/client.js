@@ -1,6 +1,7 @@
 import { getStoredToken, clearAuthSession, notifyAuthExpired } from './auth';
 
 export const API_BASE = import.meta.env.PROD ? 'https://backend.decodexe.com/api' : '/api';
+export const DJANGO_ADMIN_URL = import.meta.env.PROD ? 'https://backend.decodexe.com/admin/' : '/admin/';
 
 /**
  * Returns standard authentication headers, automatically attaching the auth token if present.

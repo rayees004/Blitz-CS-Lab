@@ -17,11 +17,15 @@ from django.db.models import Q
 
 
 class IsAdminOrStaff(IsAuthenticated):
-    """Custom permission: user must be authenticated and have admin/staff user_type."""
+    """Custom permission: user must be authenticated and have admin, instructor, or staff user_type."""
     def has_permission(self, request, view):
         return (
             super().has_permission(request, view)
-            and (request.user.is_staff or request.user.is_superuser or request.user.user_type == 'admin')
+            and (
+                request.user.is_staff
+                or request.user.is_superuser
+                or request.user.user_type in ('admin', 'instructor')
+            )
         )
 
 
@@ -113,7 +117,11 @@ class StudentListCreateView(APIView):
 
     def get(self, request):
         search = request.query_params.get('search', '').strip()
-        students = User.objects.filter(user_type='student').order_by('date_joined')
+        user_type_filter = request.query_params.get('user_type') or request.query_params.get('role')
+        if user_type_filter:
+            students = User.objects.filter(user_type=user_type_filter).order_by('date_joined')
+        else:
+            students = User.objects.filter(user_type__in=['student', 'instructor', 'admin']).order_by('date_joined')
 
         if search:
             from django.db.models import Q
@@ -131,6 +139,12 @@ class StudentListCreateView(APIView):
         }, status=status.HTTP_200_OK)
 
     def post(self, request):
+        target_role = request.data.get('user_type', 'student')
+        if target_role == 'admin' and getattr(request.user, 'user_type', None) != 'admin' and not request.user.is_superuser:
+            return Response({
+                'detail': 'Only Platform Administrators can create Admin accounts.'
+            }, status=status.HTTP_403_FORBIDDEN)
+
         serializer = CreateStudentSerializer(data=request.data)
         if serializer.is_valid():
             student = serializer.save()
@@ -138,18 +152,18 @@ class StudentListCreateView(APIView):
 
             record_audit_log(
                 action_type='USER_CREATE',
-                description=f"Created student account '{name}' (@{student.username}).",
+                description=f"Created {student.user_type} account '{name}' (@{student.username}).",
                 request=request,
                 actor=request.user,
                 target_entity='User',
                 target_id=student.id,
                 target_name=name,
                 severity='NOTICE',
-                details={'username': student.username, 'email': student.email}
+                details={'username': student.username, 'email': student.email, 'user_type': student.user_type}
             )
 
             return Response({
-                'message': f'Student "{name}" created successfully.',
+                'message': f'{student.get_user_type_display()} "{name}" created successfully.',
                 'student': UserSerializer(student).data,
             }, status=status.HTTP_201_CREATED)
 
@@ -180,7 +194,7 @@ class StudentDetailView(APIView):
     permission_classes = [IsAdminOrStaff]
 
     def get_student(self, pk):
-        return get_object_or_404(User, pk=pk, user_type='student')
+        return get_object_or_404(User, pk=pk, user_type__in=['student', 'instructor', 'admin'])
 
     def get(self, request, pk):
         student = self.get_student(pk)

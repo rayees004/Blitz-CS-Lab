@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import {
   Users, Activity, Wallet, TrendingUp, Plus, FlaskConical,
-  HelpCircle, Lightbulb, CheckCircle, ChevronRight, ExternalLink
+  HelpCircle, Lightbulb, CheckCircle, ChevronRight, ExternalLink, Shield
 } from "lucide-react";
 import Panel from "../common/Panel";
 import StatCard from "../common/StatCard";
@@ -12,9 +12,11 @@ import { C, sans, mono } from "../../constants/theme";
 import { LABS as MOCK_LABS } from "../../data/mockData";
 import { fetchLabs, createLab } from "../../api/labs";
 import { fetchAdminDashboardStats } from "../../api/students";
+import { DJANGO_ADMIN_URL } from "../../api/client";
 import AddLabModal from "./AddLabModal";
 
-export default function AdminDashboard({ onNavigate }) {
+export default function AdminDashboard({ onNavigate, currentUser }) {
+  const isAdmin = currentUser?.user_type === "admin" || Boolean(currentUser?.is_superuser) || Boolean(currentUser?.can_access_django_admin);
   const [modalOpen, setModalOpen] = useState(false);
   const [labs, setLabs] = useState([]);
   const [dbStats, setDbStats] = useState({
@@ -109,11 +111,41 @@ export default function AdminDashboard({ onNavigate }) {
             Admin Dashboard
           </h1>
           <p style={{ fontFamily: sans, fontSize: 13.5, color: C.mid, marginTop: 6 }}>
-            Overview across courses, students, and interactive labs.
+            {isAdmin
+              ? "Platform Administrator overview across courses, students, and lab infrastructure."
+              : "Instructor dashboard for monitoring students, curriculum, and practical labs."}
           </p>
         </div>
 
-        <div style={{ display: "flex", gap: 10 }}>
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          {isAdmin && (
+            <a
+              href={DJANGO_ADMIN_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Access low-level Django model administration (/admin/)"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 7,
+                padding: "8px 14px",
+                borderRadius: 7,
+                background: "rgba(16, 185, 129, 0.12)",
+                border: "1px solid rgba(16, 185, 129, 0.35)",
+                color: "#34d399",
+                fontFamily: sans,
+                fontSize: 13,
+                fontWeight: 600,
+                textDecoration: "none",
+                cursor: "pointer",
+                transition: "all 150ms ease",
+              }}
+            >
+              <Shield size={14} />
+              <span>Django Admin</span>
+              <ExternalLink size={12} style={{ opacity: 0.8 }} />
+            </a>
+          )}
           {onNavigate && (
             <Btn
               variant="subtle"

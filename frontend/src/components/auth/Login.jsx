@@ -33,10 +33,14 @@ export default function Login({ onLogin, initialNotice }) {
       const response = await loginUser(email, password);
       const userType = response.user_type || response.user?.user_type || "student";
 
-      if (userType === "admin") {
-        onLogin("admin", response.user);
-      } else {
+      // Strictly route by user type:
+      // - student -> Student panel only
+      // - instructor -> Admin dashboard
+      // - admin -> Admin dashboard (with django admin access available)
+      if (userType === "student") {
         onLogin("student", response.user);
+      } else {
+        onLogin("admin", response.user);
       }
     } catch (err) {
       setError(err.message || "Failed to authenticate. Ensure the backend server is running.");
@@ -102,14 +106,14 @@ export default function Login({ onLogin, initialNotice }) {
       {/* Right Login Form section */}
       <div
         style={{
-          width: 460,
+          width: 470,
           flexShrink: 0,
           background: C.panel,
           borderLeft: `1px solid ${C.border}`,
           display: "flex",
           flexDirection: "column",
           justifyContent: "center",
-          padding: "0 44px",
+          padding: "0 40px",
           boxSizing: "border-box",
         }}
       >
@@ -117,11 +121,11 @@ export default function Login({ onLogin, initialNotice }) {
           <KeyRound size={13} />
           AUTHENTICATION GATEWAY
         </div>
-        <h2 style={{ fontFamily: sans, fontSize: 22, fontWeight: 700, color: C.hi, margin: "0 0 10px" }}>
+        <h2 style={{ fontFamily: sans, fontSize: 22, fontWeight: 700, color: C.hi, margin: "0 0 8px" }}>
           Sign in to your account
         </h2>
-        <p style={{ fontFamily: sans, fontSize: 13, color: C.mid, margin: "0 0 20px" }}>
-          Enter your Blitz Cyber Lab credentials to access your dashboard.
+        <p style={{ fontFamily: sans, fontSize: 13, color: C.mid, margin: "0 0 18px" }}>
+          Enter your Blitz Cyber Lab credentials to access your platform portal.
         </p>
 
         {/* Session expiry notice banner */}
@@ -171,15 +175,15 @@ export default function Login({ onLogin, initialNotice }) {
         )}
 
         <form onSubmit={handleSubmit}>
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ fontFamily: sans, fontSize: 12.5, color: C.mid, marginBottom: 6 }}>
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ fontFamily: sans, fontSize: 12.5, color: C.mid, marginBottom: 5 }}>
               Email address or Username
             </div>
             <input
               type="text"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="enter your mail or username"
+              placeholder="enter your email or username"
               disabled={loading}
               autoComplete="username"
               style={{
@@ -188,7 +192,7 @@ export default function Login({ onLogin, initialNotice }) {
                 border: `1px solid ${C.border}`,
                 borderRadius: 7,
                 background: C.panel2,
-                padding: "10px 12px",
+                padding: "9px 12px",
                 fontFamily: mono,
                 fontSize: 13,
                 color: C.hi,
@@ -197,8 +201,8 @@ export default function Login({ onLogin, initialNotice }) {
             />
           </div>
 
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ fontFamily: sans, fontSize: 12.5, color: C.mid, marginBottom: 6 }}>Password</div>
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ fontFamily: sans, fontSize: 12.5, color: C.mid, marginBottom: 5 }}>Password</div>
             <input
               type="password"
               value={password}
@@ -212,7 +216,7 @@ export default function Login({ onLogin, initialNotice }) {
                 border: `1px solid ${C.border}`,
                 borderRadius: 7,
                 background: C.panel2,
-                padding: "10px 12px",
+                padding: "9px 12px",
                 fontFamily: mono,
                 fontSize: 13,
                 color: C.hi,
@@ -221,7 +225,7 @@ export default function Login({ onLogin, initialNotice }) {
             />
           </div>
 
-          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 20 }}>
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 16 }}>
             <span style={{ fontFamily: sans, fontSize: 12, color: C.cyan, cursor: "pointer" }}>
               Forgot password?
             </span>
@@ -230,12 +234,95 @@ export default function Login({ onLogin, initialNotice }) {
           <Btn
             type="submit"
             disabled={loading}
-            style={{ width: "100%", padding: "11px 0" }}
+            style={{ width: "100%", padding: "10px 0" }}
             icon={loading ? Loader2 : ArrowRight}
           >
-            {loading ? "Verifying..." : "Sign in"}
+            {loading ? "Authenticating..." : "Sign in"}
           </Btn>
         </form>
+
+        {/* Quick Role Fillers for fast switching and testing */}
+        <div style={{ marginTop: 20, paddingTop: 14, borderTop: `1px solid ${C.border}` }}>
+          <div style={{ fontFamily: mono, fontSize: 10, color: C.low, letterSpacing: "0.06em", marginBottom: 8 }}>
+            DEMO ROLES (CLICK TO AUTOFILL):
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {[
+              {
+                role: "Platform Admin",
+                badge: "ADMIN",
+                badgeColor: "#38bdf8",
+                desc: "Django Admin + Admin Dashboard",
+                email: "admin@blitzcyberlab.io",
+                pass: "Admin@12345",
+              },
+              {
+                role: "Instructor",
+                badge: "INSTRUCTOR",
+                badgeColor: "#c084fc",
+                desc: "Admin Dashboard Access",
+                email: "instructor@blitzcyberlab.io",
+                pass: "Instructor@12345",
+              },
+              {
+                role: "Student",
+                badge: "STUDENT",
+                badgeColor: "#34d399",
+                desc: "Student Panel Only Access",
+                email: "rohith@blitzcyberlab.io",
+                pass: "Student@12345",
+              },
+            ].map((account) => (
+              <div
+                key={account.role}
+                onClick={() => {
+                  setEmail(account.email);
+                  setPassword(account.pass);
+                  setError(null);
+                }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "6px 10px",
+                  borderRadius: 6,
+                  background: C.panel2,
+                  border: `1px solid ${C.border}`,
+                  cursor: "pointer",
+                  transition: "all 120ms ease",
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.borderColor = account.badgeColor)}
+                onMouseLeave={(e) => (e.currentTarget.style.borderColor = C.border)}
+              >
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ fontFamily: sans, fontSize: 12, fontWeight: 600, color: C.hi }}>
+                      {account.role}
+                    </span>
+                    <span
+                      style={{
+                        fontFamily: mono,
+                        fontSize: 8.5,
+                        fontWeight: 700,
+                        color: account.badgeColor,
+                        padding: "1px 5px",
+                        borderRadius: 3,
+                        background: `${account.badgeColor}18`,
+                        border: `1px solid ${account.badgeColor}40`,
+                      }}
+                    >
+                      {account.badge}
+                    </span>
+                  </div>
+                  <div style={{ fontFamily: mono, fontSize: 9.5, color: C.low, marginTop: 2 }}>
+                    {account.desc}
+                  </div>
+                </div>
+                <span style={{ fontFamily: mono, fontSize: 10, color: C.cyan, fontWeight: 600 }}>Fill</span>
+              </div>
+            ))}
+          </div>
+        </div>
 
         <p style={{ fontFamily: sans, fontSize: 11.5, color: C.low, marginTop: 28, lineHeight: 1.6 }}>
           By signing in you agree to use Blitz Cyber Lab's isolated lab environments only for
