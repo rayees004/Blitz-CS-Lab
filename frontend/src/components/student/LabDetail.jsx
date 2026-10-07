@@ -464,6 +464,25 @@ export default function LabDetail({ lab, back }) {
 
         {/* Center: Live Questions & Flag Submission */}
         <div style={{ flex: 1, display: "flex", flexDirection: "column", overflowY: "auto", padding: 24, gap: 18 }}>
+          {l.target_url && (
+            <div style={{ display: "flex", flexDirection: "column", minHeight: 500, border: `1px solid ${C.border}`, borderRadius: 8, overflow: "hidden", marginBottom: 12 }}>
+               <div style={{ background: C.panel2, padding: "8px 12px", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <div style={{ fontFamily: mono, fontSize: 11, color: C.cyan, display: "flex", alignItems: "center", gap: 6 }}>
+                    <Globe size={13} />
+                    STUDENT PLATFORM ENVIRONMENT
+                  </div>
+                  <a href={l.target_url} target="_blank" rel="noreferrer" style={{ fontFamily: sans, fontSize: 11, color: C.mid, textDecoration: "none", display: "flex", alignItems: "center", gap: 4 }}>
+                    Open in new tab <ExternalLink size={11} />
+                  </a>
+               </div>
+               <iframe
+                 src={l.target_url}
+                 style={{ width: "100%", flex: 1, border: "none", background: "#fff" }}
+                 title="Student Platform"
+               />
+            </div>
+          )}
+
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <h2 style={{ fontFamily: sans, fontSize: 18, fontWeight: 700, color: C.hi, margin: 0 }}>
               Practical Challenges & Flag Submission
