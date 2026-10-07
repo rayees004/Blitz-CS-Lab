@@ -47,7 +47,7 @@ export const NAV_STUDENT = [
   { label: "Leaderboard", icon: Trophy, key: "leaderboard" },
   { label: "Achievements", icon: Award, key: "achievements" },
   { label: "Certificates", icon: FileBadge, key: "certificates" },
-  { label: "Profile", icon: User, key: "profile" },
+
 ];
 
 export const NAV_ADMIN = [

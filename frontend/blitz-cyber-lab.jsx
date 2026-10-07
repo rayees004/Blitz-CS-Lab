@@ -209,7 +209,6 @@ export default function BlitzCyberLab() {
     progress: <StudentProgressView go={goLab} />,
     leaderboard: <Placeholder title="Leaderboard" blurb="Rankings within your class and across Blitz Cyber Lab." icon={Trophy} />,
     achievements: <Placeholder title="Achievements" blurb="Badges earned from labs, streaks, and challenges." icon={Award} />,
-    profile: <Placeholder title="Profile" blurb="Manage your account and notification preferences." icon={User} />,
   };
 
   const studentFullName = currentUser?.first_name
