@@ -49,15 +49,20 @@ export default function Learning({ go, onSelect }) {
 
   // Compute category statistics based on video-enabled labs and platform categories
   const categoryStats = CATEGORIES.map((cat) => {
+    const matchingLabs = labs.filter(
+      (l) => (l.category || l.cat || "").toLowerCase() === cat.name.toLowerCase()
+    );
     const matchingVideoLabs = videoLabs.filter(
       (l) => (l.category || l.cat || "").toLowerCase() === cat.name.toLowerCase()
     );
+    const labCount = matchingLabs.length;
     const videoCount = matchingVideoLabs.length;
     const completedCount = matchingVideoLabs.filter((l) => l.is_completed || l.pct === 100).length;
-    const computedPct = videoCount > 0 ? Math.round((completedCount / videoCount) * 100) : cat.pct;
+    const computedPct = videoCount > 0 ? Math.round((completedCount / videoCount) * 100) : 0;
 
     return {
       ...cat,
+      labs: labCount,
       videoCount,
       videoLabs: matchingVideoLabs,
       computedPct,
