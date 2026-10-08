@@ -1096,13 +1096,14 @@ class StudentLabListView(APIView):
         student = get_current_student(request)
         is_admin_or_staff = bool(student and (student.is_staff or student.is_superuser or getattr(student, 'user_type', None) in ('admin', 'instructor')))
 
-        # Fetch or generate the student's persistent 5-lab batch
         assigned_batch = None
         if student and not is_admin_or_staff:
-            assigned_batch = get_or_create_student_lab_batch(student)
-
-        if assigned_batch:
-            labs = assigned_batch.labs.select_related('course', 'subject', 'subject__course').prefetch_related('questions__hints').filter(is_active=True).order_by('id')
+            enrolled_subject_ids = SubjectEnrollment.objects.filter(
+                student=student, is_active=True
+            ).values_list('subject_id', flat=True)
+            labs = Lab.objects.select_related('course', 'subject', 'subject__course').prefetch_related('questions__hints').filter(
+                is_active=True, subject_id__in=enrolled_subject_ids
+            ).order_by('-created_at')
         else:
             labs = Lab.objects.select_related('course', 'subject', 'subject__course').prefetch_related('questions__hints').filter(is_active=True).order_by('-created_at')
 

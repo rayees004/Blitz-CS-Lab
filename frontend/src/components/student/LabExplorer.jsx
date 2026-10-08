@@ -20,7 +20,7 @@ export default function LabExplorer({ go }) {
       .then((data) => {
         if (!isMounted) return;
         setLabs(data.labs || []);
-        if (data.batch || data.stats?.batch_index) {
+        if (data.batch || (data.stats && data.stats.is_batch_active)) {
           setBatchInfo(data.batch || { batch_index: data.stats?.batch_index });
         }
       })
@@ -102,7 +102,8 @@ export default function LabExplorer({ go }) {
             )}
           </div>
           <p style={{ fontFamily: sans, fontSize: 13.5, color: C.mid, marginTop: 6 }}>
-            {labs.length} isolated environments across {Math.max(1, cats.length - 1)} security domains. Only this 5-lab batch is visible until all 5 labs are attended.
+            {labs.length} isolated environments across {Math.max(1, cats.length - 1)} security domains.
+            {batchInfo ? " Only this 5-lab batch is visible until all 5 labs are attended." : " Assigned interactive security labs for your enrolled courses."}
           </p>
         </div>
 
