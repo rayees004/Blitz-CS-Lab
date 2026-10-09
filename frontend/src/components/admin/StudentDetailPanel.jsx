@@ -2,13 +2,13 @@ import React, { useState, useEffect, useCallback } from "react";
 import {
   X, AlertCircle, Loader2, Mail,
   Phone, Building2, Calendar, Shield, Layers,
-  FlaskConical, TrendingUp, ShieldAlert, ShieldCheck, Ban, CheckCircle2
+  FlaskConical, TrendingUp, ShieldAlert, ShieldCheck, Ban, CheckCircle2, RotateCcw
 } from "lucide-react";
 import Btn from "../common/Btn";
 import Badge from "../common/Badge";
 import ProgressBar from "../common/ProgressBar";
 import { C, sans, mono } from "../../constants/theme";
-import { fetchStudentProgress, updateStudent } from "../../api/students";
+import { fetchStudentProgress, updateStudent, grantLabRetakePermission } from "../../api/students";
 
 /* ─── Helpers ─────────────────────────────────────────── */
 
@@ -46,6 +46,11 @@ export default function StudentDetailPanel({ student, onClose, onStudentUpdate }
   const [showBlockModal, setShowBlockModal] = useState(false);
   const [blockReasonInput, setBlockReasonInput] = useState(student?.lab_access_block_reason || "");
 
+  const [retakeModalLab, setRetakeModalLab] = useState(null);
+  const [resetScoreChecked, setResetScoreChecked] = useState(true);
+  const [retakeLoading, setRetakeLoading] = useState(false);
+  const [retakeSuccessMsg, setRetakeSuccessMsg] = useState("");
+
   useEffect(() => {
     setCurrentStudent(student);
     setBlockReasonInput(student?.lab_access_block_reason || "");
@@ -66,6 +71,22 @@ export default function StudentDetailPanel({ student, onClose, onStudentUpdate }
       setError(err.message || "Failed to update lab access.");
     } finally {
       setBlockingLoading(false);
+    }
+  };
+
+  const handleGrantRetake = async () => {
+    if (!retakeModalLab || !currentStudent?.id) return;
+    setRetakeLoading(true);
+    try {
+      const res = await grantLabRetakePermission(currentStudent.id, retakeModalLab.lab_id, resetScoreChecked);
+      setRetakeSuccessMsg(res.message || "Retake permission granted successfully!");
+      setRetakeModalLab(null);
+      await loadData();
+      setTimeout(() => setRetakeSuccessMsg(""), 5000);
+    } catch (err) {
+      alert(err.message || "Failed to grant retake permission.");
+    } finally {
+      setRetakeLoading(false);
     }
   };
 
@@ -406,6 +427,26 @@ export default function StudentDetailPanel({ student, onClose, onStudentUpdate }
               <div style={{ fontFamily: mono, fontSize: 11, color: C.low, marginBottom: 12 }}>
                 Verified practical lab attempts, question flags, and scores.
               </div>
+
+              {retakeSuccessMsg && (
+                <div style={{
+                  marginBottom: 12,
+                  padding: "10px 14px",
+                  borderRadius: 6,
+                  background: "rgba(0, 230, 118, 0.12)",
+                  border: "1px solid rgba(0, 230, 118, 0.35)",
+                  color: C.green,
+                  fontFamily: sans,
+                  fontSize: 12.5,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                }}>
+                  <CheckCircle2 size={15} style={{ flexShrink: 0 }} />
+                  <span>{retakeSuccessMsg}</span>
+                </div>
+              )}
+
               {(!progressData?.lab_scores || progressData.lab_scores.length === 0) ? (
                 <div style={{
                   background: C.panel,
@@ -441,7 +482,7 @@ export default function StudentDetailPanel({ student, onClose, onStudentUpdate }
                           </div>
                         </div>
                         {lab.is_completed ? (
-                          <Badge tone="cyan">COMPLETED</Badge>
+                          <Badge tone="cyan">COMPLETED (LOCKED)</Badge>
                         ) : (
                           <Badge tone="warn">IN PROGRESS</Badge>
                         )}
@@ -455,9 +496,40 @@ export default function StudentDetailPanel({ student, onClose, onStudentUpdate }
                       </div>
                       <ProgressBar pct={lab.score_pct} color={lab.is_completed ? "#4ade80" : C.cyan} />
 
-                      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 10, fontSize: 11, fontFamily: mono, color: C.low }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 10, fontSize: 11, fontFamily: mono, color: C.low }}>
                         <span>Attended: {lab.attend_count}x session(s)</span>
                         <span>Questions Solved: {lab.solved_questions}/{lab.total_questions}</span>
+                      </div>
+
+                      {/* Retake Permission Action Button */}
+                      <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px dashed ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span style={{ fontFamily: mono, fontSize: 10.5, color: lab.is_completed ? "#fca5a5" : C.low }}>
+                          {lab.is_completed ? "Lab completed & blocked for student" : "Lab attempt is currently in progress"}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRetakeModalLab(lab);
+                            setResetScoreChecked(true);
+                          }}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 5,
+                            padding: "5px 11px",
+                            borderRadius: 5,
+                            background: lab.is_completed ? "rgba(0, 229, 255, 0.12)" : "rgba(255, 255, 255, 0.05)",
+                            border: `1px solid ${lab.is_completed ? "rgba(0, 229, 255, 0.35)" : C.border}`,
+                            color: lab.is_completed ? C.cyan : C.mid,
+                            fontFamily: mono,
+                            fontSize: 11,
+                            fontWeight: 600,
+                            cursor: "pointer",
+                          }}
+                        >
+                          <RotateCcw size={12} />
+                          {lab.is_completed ? "Grant Retake Permission" : "Reset / Allow Retake"}
+                        </button>
                       </div>
                     </div>
                   ))}
@@ -657,6 +729,129 @@ export default function StudentDetailPanel({ student, onClose, onStudentUpdate }
               >
                 {blockingLoading ? <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> : <Ban size={14} />}
                 Confirm Block
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Retake Permission Confirmation Modal ── */}
+      {retakeModalLab && (
+        <div style={{
+          position: "fixed",
+          inset: 0,
+          background: "rgba(0,0,0,0.65)",
+          backdropFilter: "blur(4px)",
+          zIndex: 1000,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: 16,
+        }}>
+          <div style={{
+            background: C.panel,
+            border: `1px solid ${C.border}`,
+            borderRadius: 12,
+            padding: "24px 22px",
+            width: "100%",
+            maxWidth: 450,
+            boxShadow: "0 20px 50px rgba(0,0,0,0.6)",
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+              <div style={{
+                width: 36, height: 36, borderRadius: 8,
+                background: "rgba(0,229,255,0.15)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                color: C.cyan, flexShrink: 0
+              }}>
+                <RotateCcw size={18} />
+              </div>
+              <div>
+                <div style={{ fontFamily: sans, fontSize: 15, fontWeight: 700, color: C.hi }}>
+                  Grant Lab Retake Permission
+                </div>
+                <div style={{ fontFamily: mono, fontSize: 11, color: C.low, marginTop: 2 }}>
+                  Student: @{currentStudent?.username} • Lab: {retakeModalLab.lab_name}
+                </div>
+              </div>
+            </div>
+
+            <p style={{ fontFamily: sans, fontSize: 13, color: C.mid, lineHeight: 1.5, marginBottom: 16 }}>
+              This will remove the completed / blocked lock on this practical lab for the student.
+              The student will be allowed to re-enter, open the live workspace, and submit flags.
+            </p>
+
+            <div style={{
+              background: C.panel2,
+              border: `1px solid ${C.border}`,
+              borderRadius: 8,
+              padding: "12px 14px",
+              marginBottom: 20,
+              display: "flex",
+              alignItems: "flex-start",
+              gap: 10,
+              cursor: "pointer",
+            }}
+            onClick={() => setResetScoreChecked(!resetScoreChecked)}
+            >
+              <input
+                type="checkbox"
+                id="resetScoreCheck"
+                checked={resetScoreChecked}
+                onChange={(e) => setResetScoreChecked(e.target.checked)}
+                style={{ marginTop: 2, cursor: "pointer" }}
+              />
+              <label htmlFor="resetScoreCheck" style={{ cursor: "pointer", fontFamily: sans, fontSize: 12.5, color: C.hi, lineHeight: 1.4 }}>
+                <strong>Reset progress and marks to 0 (Fresh Retake)</strong>
+                <div style={{ fontFamily: mono, fontSize: 11, color: C.low, marginTop: 2 }}>
+                  Clears previously solved questions and score so the student starts completely fresh.
+                </div>
+              </label>
+            </div>
+
+            <div style={{ display: "flex", gap: 10 }}>
+              <button
+                type="button"
+                onClick={() => setRetakeModalLab(null)}
+                disabled={retakeLoading}
+                style={{
+                  flex: 1,
+                  padding: "9px 0",
+                  borderRadius: 6,
+                  background: C.panel2,
+                  border: `1px solid ${C.border}`,
+                  color: C.mid,
+                  fontFamily: sans,
+                  fontSize: 12.5,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleGrantRetake}
+                disabled={retakeLoading}
+                style={{
+                  flex: 1.6,
+                  padding: "9px 0",
+                  borderRadius: 6,
+                  background: C.cyan,
+                  border: "none",
+                  color: "#000",
+                  fontFamily: sans,
+                  fontSize: 12.5,
+                  fontWeight: 700,
+                  cursor: retakeLoading ? "wait" : "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 6,
+                }}
+              >
+                {retakeLoading ? <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> : <RotateCcw size={14} />}
+                Confirm & Allow Retake
               </button>
             </div>
           </div>

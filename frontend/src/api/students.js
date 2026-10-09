@@ -55,4 +55,17 @@ export async function fetchAdminDashboardStats() {
   return apiFetch('/admin/dashboard-stats/');
 }
 
+/** Grant student retake permission for a completed or blocked practical lab */
+export async function grantLabRetakePermission(studentId, labId, resetScore = true) {
+  return apiFetch('/admin/labs/retake-permission/', {
+    method: 'POST',
+    body: JSON.stringify({
+      student_id: studentId,
+      lab_id: labId,
+      reset_score: resetScore,
+    }),
+  });
+}
+
+
 

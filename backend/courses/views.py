@@ -1540,19 +1540,13 @@ class StudentLabSubmitMarkView(APIView):
                     if isinstance(item, dict) and item.get('is_correct')
                 )
 
-                if solved_count >= total_questions and total_questions > 0:
-                    submission.status = 'COMPLETED'
-                    submission.submitted_at = timezone.now()
-
+                # Only explicit finalize_submission action completes and blocks the lab
                 submission.save()
 
                 # Sync with ForeignKey LabScore
                 lab_score.score = final_lab_score
                 lab_score.solved_questions_count = solved_count
                 lab_score.total_questions_count = total_questions
-                if submission.status == 'COMPLETED':
-                    lab_score.is_completed = True
-                    lab_score.completed_at = timezone.now()
                 lab_score.save()
 
                 return Response({
@@ -1591,6 +1585,19 @@ class StudentLabSubmitMarkView(APIView):
             lab_score.completed_at = timezone.now()
             lab_score.save()
 
+            try:
+                record_audit_log(
+                    action_type='lab_finalized',
+                    description=f"Student {student.username} finalized lab '{lab.name}' with score {lab_score.score}/{lab.points}",
+                    actor=student,
+                    target_entity='Lab',
+                    target_id=str(lab.id),
+                    target_name=lab.name,
+                    request=request
+                )
+            except Exception:
+                pass
+
             return Response({
                 'success': True,
                 'status': 'COMPLETED',
@@ -1602,6 +1609,96 @@ class StudentLabSubmitMarkView(APIView):
             })
 
         return Response({'detail': f'Unknown action "{action}".'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class AdminStudentLabRetakePermissionView(APIView):
+    """
+    POST /api/admin/labs/retake-permission/
+    Grants retake permission for a student on a completed/blocked practical lab.
+    Unlocks the lab, resets completion status to IN_PROGRESS so the student can
+    attend and submit flags again. Optionally resets score/answers to 0 for a clean retake.
+    """
+    permission_classes = [IsAdminOrStaff]
+
+    def post(self, request):
+        student_id = request.data.get('student_id')
+        lab_id = request.data.get('lab_id')
+        reset_score = request.data.get('reset_score', True)
+
+        if not student_id or not lab_id:
+            return Response(
+                {'detail': 'student_id and lab_id are required fields.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        student = get_object_or_404(User, pk=student_id)
+        lab = get_object_or_404(Lab, pk=lab_id)
+
+        lab_score = LabScore.objects.filter(student=student, lab=lab).first()
+        submission = LabSubmission.objects.filter(student=student, lab=lab).first()
+
+        # Unlock submission
+        if submission:
+            submission.status = 'IN_PROGRESS'
+            submission.submitted_at = None
+            if reset_score:
+                submission.score = 0
+                submission.answers = {}
+            submission.save()
+        else:
+            submission = LabSubmission.objects.create(
+                student=student,
+                lab=lab,
+                status='IN_PROGRESS',
+                score=0,
+                max_score=lab.points,
+                answers={}
+            )
+
+        # Unlock lab score
+        if lab_score:
+            lab_score.is_completed = False
+            lab_score.completed_at = None
+            if reset_score:
+                lab_score.score = 0
+                lab_score.solved_questions_count = 0
+            lab_score.save()
+        else:
+            lab_score = LabScore.objects.create(
+                student=student,
+                lab=lab,
+                score=0,
+                max_score=lab.points,
+                attend_count=1,
+                is_completed=False,
+                total_questions_count=lab.questions.count(),
+                solved_questions_count=0
+            )
+
+        try:
+            record_audit_log(
+                action_type='lab_retake_permission_granted',
+                description=f"Retake permission granted to {student.username} for lab '{lab.name}' (Reset score: {reset_score})",
+                actor=request.user if request.user.is_authenticated else None,
+                target_entity='Lab',
+                target_id=str(lab.id),
+                target_name=lab.name,
+                request=request
+            )
+        except Exception:
+            pass
+
+        return Response({
+            'success': True,
+            'message': f"Retake permission granted for student '{student.username}' on lab '{lab.name}'. Student can now reopen and retake this lab.",
+            'student_id': student.id,
+            'student_username': student.username,
+            'lab_id': lab.id,
+            'lab_name': lab.name,
+            'status': submission.status,
+            'is_completed': lab_score.is_completed,
+            'score': lab_score.score,
+        })
 
 
 class StudentLabScoreListView(APIView):
