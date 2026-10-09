@@ -1057,14 +1057,12 @@ def can_student_attend_lab(student, lab):
 
     # Check if student has already attended / submitted this lab
     prior_score = LabScore.objects.filter(student=student, lab=lab).first()
-    if prior_score and (prior_score.attend_count > 0 or prior_score.is_completed):
+    if prior_score and prior_score.is_completed:
         return False, "Lab already attended. Reopening this lab is blocked.", lab.subject
 
     prior_sub = LabSubmission.objects.filter(student=student, lab=lab).first()
-    if prior_sub and (prior_sub.status == 'COMPLETED' or prior_sub.status == 'IN_PROGRESS'):
-        # If in progress and never attended (score 0, attend_count 0), allow, else block
-        if prior_score and prior_score.attend_count > 0:
-            return False, "Lab already attended. Reopening this lab is blocked.", lab.subject
+    if prior_sub and prior_sub.status == 'COMPLETED':
+        return False, "Lab already attended. Reopening this lab is blocked.", lab.subject
 
     if not lab.subject:
         return False, "This lab has not been assigned to any subject yet. Attendance is not available.", None
