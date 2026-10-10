@@ -3,8 +3,9 @@ import {
   X, FlaskConical, CheckCircle2, AlertCircle, HelpCircle,
   Lightbulb, ExternalLink, Copy, Check, Send, Trophy,
   Terminal, ShieldCheck, Clock, Lock, Unlock, RefreshCw,
-  FolderArchive, Download, Code
+  FolderArchive, Download, Code, FileBadge
 } from "lucide-react";
+import CertificateModal from "./CertificateModal";
 import Panel from "../common/Panel";
 import Btn from "../common/Btn";
 import Badge, { DiffBadge } from "../common/Badge";
@@ -21,6 +22,7 @@ export default function StudentLabAttendModal({ lab, onClose, onUpdated }) {
   const [loading, setLoading] = useState(true);
   const [workspace, setWorkspace] = useState(null);
   const [error, setError] = useState(null);
+  const [showCert, setShowCert] = useState(false);
 
   // Per-question flag input state: { [qId]: string }
   const [flagInputs, setFlagInputs] = useState({});
@@ -131,6 +133,14 @@ export default function StudentLabAttendModal({ lab, onClose, onUpdated }) {
 
   // Finalize lab and submit marks
   const handleFinalize = async () => {
+    const isPartial = solvedQuestionsCount < questions.length;
+    const confirmMsg = isPartial
+      ? `You have answered and solved ${solvedQuestionsCount} of ${questions.length} questions.\n\nSubmitting now will record your final score based ONLY on your attended questions (${currentScore} / ${maxScore} pts) and lock the lab.\n\nProceed with final submission?`
+      : `You have completed all questions! Finalize and record your marks (${currentScore} / ${maxScore} pts)?`;
+
+    const ok = window.confirm(confirmMsg);
+    if (!ok) return;
+
     setFinalizing(true);
     try {
       const res = await finalizeStudentLab(lab.id);
@@ -860,6 +870,28 @@ export default function StudentLabAttendModal({ lab, onClose, onUpdated }) {
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            {isCompleted && (
+              <button
+                type="button"
+                onClick={() => setShowCert(true)}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  background: "rgba(245, 166, 35, 0.15)",
+                  border: "1px solid rgba(245, 166, 35, 0.45)",
+                  color: C.amber,
+                  padding: "6px 14px",
+                  borderRadius: 6,
+                  fontFamily: sans,
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                <FileBadge size={14} /> View Certificate
+              </button>
+            )}
             <Btn onClick={onClose} tone="ghost" sm>
               Close
             </Btn>
@@ -877,6 +909,25 @@ export default function StudentLabAttendModal({ lab, onClose, onUpdated }) {
           </div>
         </div>
       </div>
+
+      {showCert && (
+        <CertificateModal
+          certificate={{
+            certId: `BLITZ-CERT-${String(lab?.id || 1).padStart(3, "0")}-${Math.floor(1000 + Math.random() * 9000)}`,
+            studentName: workspace?.student_name || "Student",
+            labName: l.name || lab?.name || "Security Lab",
+            labDesc: l.description || lab?.description || "",
+            category: l.category || lab?.category || "Cyber Security",
+            subjectName: l.subject_name || lab?.subject_name || "",
+            score: currentScore,
+            maxScore: maxScore,
+            solvedQuestions: solvedQuestionsCount,
+            totalQuestions: questions.length || 1,
+            completedAt: submission.submitted_at || new Date().toISOString(),
+          }}
+          onClose={() => setShowCert(false)}
+        />
+      )}
     </div>
   );
 }

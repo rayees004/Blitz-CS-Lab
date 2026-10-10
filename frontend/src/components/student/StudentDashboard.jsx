@@ -4,8 +4,9 @@ import {
   Play, Award, RefreshCw, Search, Filter, HelpCircle,
   Lightbulb, ExternalLink, Activity, ArrowRight, ShieldCheck,
   ShieldAlert, Sparkles, Check, Clock, Eye, Layers, Lock,
-  RotateCcw, Loader2
+  RotateCcw, Loader2, FileBadge
 } from "lucide-react";
+import CertificateModal from "./CertificateModal";
 import Panel from "../common/Panel";
 import StatCard from "../common/StatCard";
 import Btn from "../common/Btn";
@@ -25,6 +26,7 @@ export default function StudentDashboard({ go }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL"); // ALL | MY_COURSES | IN_PROGRESS | COMPLETED | LOCKED
   const [lockedLabNotice, setLockedLabNotice] = useState(null);
+  const [viewingCert, setViewingCert] = useState(null);
 
   // Retake request state
   const [retakeModalLab, setRetakeModalLab] = useState(null);
@@ -377,7 +379,44 @@ export default function StudentDashboard({ go }) {
                   </div>
 
                   {/* Right: Actions */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    {isCompleted && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setViewingCert({
+                            certId: `BLITZ-CERT-${String(sc.lab || sc.lab_id).padStart(3, "0")}-${String(sc.id).padStart(4, "0")}`,
+                            studentName: stats?.student_name || "Student",
+                            labName: sc.lab_name,
+                            labDesc: matchingLab?.description || matchingLab?.desc || "Hands-on cybersecurity evaluation.",
+                            category: sc.lab_category,
+                            subjectName: sc.subject_name || "",
+                            score: typeof sc.score === "number" ? sc.score : 0,
+                            maxScore: sc.max_score,
+                            solvedQuestions: typeof sc.solved_questions_count === "number" ? sc.solved_questions_count : 0,
+                            totalQuestions: sc.total_questions_count || 1,
+                            completedAt: sc.updated_at || new Date().toISOString(),
+                          })
+                        }
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 5,
+                          fontFamily: sans,
+                          fontSize: 11.5,
+                          fontWeight: 700,
+                          color: C.amber,
+                          background: "rgba(245, 166, 35, 0.12)",
+                          padding: "5px 12px",
+                          borderRadius: 6,
+                          border: "1px solid rgba(245, 166, 35, 0.35)",
+                          cursor: "pointer",
+                          transition: "all 0.15s ease",
+                        }}
+                      >
+                        <FileBadge size={13} /> View Certificate
+                      </button>
+                    )}
                     <span
                       style={{
                         display: "inline-flex",
@@ -385,14 +424,14 @@ export default function StudentDashboard({ go }) {
                         gap: 5,
                         fontFamily: mono,
                         fontSize: 11,
-                        color: C.danger,
-                        background: "rgba(229, 83, 75, 0.12)",
+                        color: isCompleted ? C.green : C.danger,
+                        background: isCompleted ? "rgba(0, 230, 118, 0.1)" : "rgba(229, 83, 75, 0.12)",
                         padding: "4px 10px",
                         borderRadius: 5,
-                        border: "1px solid rgba(229, 83, 75, 0.3)",
+                        border: isCompleted ? "1px solid rgba(0, 230, 118, 0.25)" : "1px solid rgba(229, 83, 75, 0.3)",
                       }}
                     >
-                      <Lock size={12} /> Locked (Recorded)
+                      <Lock size={12} /> {isCompleted ? "Completed (Recorded)" : "Locked (Recorded)"}
                     </span>
                   </div>
                 </Panel>
@@ -519,7 +558,7 @@ export default function StudentDashboard({ go }) {
               )}
             </div>
             <div style={{ fontFamily: sans, fontSize: 12.5, color: C.mid, marginTop: 2 }}>
-              Only this 5-lab batch is visible. Once all 5 labs in this batch are attended, the next batch of 5 labs is loaded. Attended labs are permanently locked.
+              Only this 5-lab batch is visible. Once all 5 labs in this batch are completed, the next batch of 5 labs is loaded. Completed labs have marks locked.
             </div>
           </div>
 
@@ -1086,6 +1125,14 @@ export default function StudentDashboard({ go }) {
           lab={attendingLab}
           onClose={() => setAttendingLab(null)}
           onUpdated={loadData}
+        />
+      )}
+
+      {/* Certificate Modal */}
+      {viewingCert && (
+        <CertificateModal
+          certificate={viewingCert}
+          onClose={() => setViewingCert(null)}
         />
       )}
     </div>

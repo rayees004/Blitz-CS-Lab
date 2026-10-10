@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import {
   FlaskConical, BookOpen, ClipboardList, Wallet, Activity,
-  BarChart3, ScrollText, Settings, Target, TrendingUp,
+  BarChart3, ScrollText, Target, TrendingUp,
   Trophy, Award, FileBadge, User, ShieldAlert, ArrowLeft
 } from "lucide-react";
 
@@ -20,6 +20,7 @@ import Learning from "./src/components/student/Learning";
 import LabExplorer from "./src/components/student/LabExplorer";
 import LabDetail from "./src/components/student/LabDetail";
 import Materials from "./src/components/student/Materials";
+import StudentCertificates from "./src/components/student/StudentCertificates";
 
 // Admin Views
 import AdminDashboard from "./src/components/admin/AdminDashboard";
@@ -30,6 +31,7 @@ import AdminLabs from "./src/components/admin/AdminLabs";
 import AdminMaterials from "./src/components/admin/AdminMaterials";
 import AdminActivity from "./src/components/admin/AdminActivity";
 import AdminAuditLogs from "./src/components/admin/AdminAuditLogs";
+import AdminRetakeRequests from "./src/components/admin/AdminRetakeRequests";
 import StudentProgressView from "./src/components/student/StudentProgressView";
 
 // Export modular subcomponents for external consumption
@@ -162,6 +164,7 @@ export default function BlitzCyberLab() {
       "a-materials": <AdminMaterials />,
       "a-activity": <AdminActivity onSelectStudent={() => setAdminPage("a-students")} />,
       "a-audit": <AdminAuditLogs />,
+      "a-retakes": <AdminRetakeRequests />,
     };
 
     const userFullName = currentUser?.first_name
@@ -208,7 +211,7 @@ export default function BlitzCyberLab() {
     materials: <Materials />,
     progress: <StudentProgressView go={goLab} />,
     leaderboard: <Placeholder title="Leaderboard" blurb="Rankings within your class and across Blitz Cyber Lab." icon={Trophy} />,
-    achievements: <Placeholder title="Achievements" blurb="Badges earned from labs, streaks, and challenges." icon={Award} />,
+    certificates: <StudentCertificates currentUser={currentUser} go={goLab} />,
   };
 
   const studentFullName = currentUser?.first_name

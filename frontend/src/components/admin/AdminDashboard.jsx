@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import {
   Users, Activity, Wallet, TrendingUp, Plus, FlaskConical,
   HelpCircle, Lightbulb, CheckCircle, ChevronRight, ExternalLink, Shield,
-  RotateCcw, Check, X, Clock, Loader2
+  RotateCcw, Check, X, Clock, Loader2, RefreshCw
 } from "lucide-react";
 import Panel from "../common/Panel";
 import StatCard from "../common/StatCard";

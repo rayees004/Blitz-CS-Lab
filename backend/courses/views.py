@@ -1593,10 +1593,24 @@ class StudentLabSubmitMarkView(APIView):
 
         # 3. Finalize Lab Submission & Marks
         if action == 'finalize_submission':
+            answers = submission.answers if isinstance(submission.answers, dict) else {}
+            solved_count = sum(1 for a in answers.values() if isinstance(a, dict) and a.get('is_correct'))
+            total_questions = lab.questions.count()
+            raw_total = sum(
+                item.get('points_awarded', 0)
+                for item in answers.values()
+                if isinstance(item, dict) and item.get('is_correct')
+            )
+            final_lab_score = min(lab.points, max(0, raw_total))
+
+            submission.score = final_lab_score
             submission.status = 'COMPLETED'
             submission.submitted_at = timezone.now()
             submission.save()
 
+            lab_score.score = final_lab_score
+            lab_score.solved_questions_count = solved_count
+            lab_score.total_questions_count = total_questions
             lab_score.is_completed = True
             lab_score.completed_at = timezone.now()
             lab_score.save()
@@ -1604,7 +1618,7 @@ class StudentLabSubmitMarkView(APIView):
             try:
                 record_audit_log(
                     action_type='lab_finalized',
-                    description=f"Student {student.username} finalized lab '{lab.name}' with score {lab_score.score}/{lab.points}",
+                    description=f"Student {student.username} finalized lab '{lab.name}' with score {lab_score.score}/{lab.points} ({solved_count}/{total_questions} solved)",
                     actor=student,
                     target_entity='Lab',
                     target_id=str(lab.id),
@@ -1619,9 +1633,11 @@ class StudentLabSubmitMarkView(APIView):
                 'status': 'COMPLETED',
                 'final_score': lab_score.score,
                 'max_score': lab_score.max_score,
+                'solved_questions_count': solved_count,
+                'total_questions': total_questions,
                 'attend_count': lab_score.attend_count,
                 'submitted_at': submission.submitted_at,
-                'message': f"Lab officially submitted! Marks recorded: {lab_score.score} / {lab_score.max_score} points (Attended {lab_score.attend_count}x).",
+                'message': f"Lab officially submitted! Marks recorded: {lab_score.score} / {lab_score.max_score} points ({solved_count} of {total_questions} questions solved).",
             })
 
         return Response({'detail': f'Unknown action "{action}".'}, status=status.HTTP_400_BAD_REQUEST)

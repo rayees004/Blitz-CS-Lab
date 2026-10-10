@@ -3,8 +3,9 @@ import {
   ChevronRight, Wifi, Clock, AlertTriangle, FileText, Globe,
   Terminal as TerminalIcon, Flag, Play, CheckCircle2, Lock,
   Unlock, Lightbulb, Trophy, Send, AlertCircle, RefreshCw, ExternalLink, Video,
-  FolderArchive, Download, Copy, Check, FileCode
+  FolderArchive, Download, Copy, Check, FileCode, FileBadge
 } from "lucide-react";
+import CertificateModal from "./CertificateModal";
 import Panel from "../common/Panel";
 import Btn from "../common/Btn";
 import Badge, { DiffBadge } from "../common/Badge";
@@ -28,6 +29,7 @@ export default function LabDetail({ lab, back }) {
   const [unlockingHint, setUnlockingHint] = useState({});
   const [finalizing, setFinalizing] = useState(false);
   const [copiedCommands, setCopiedCommands] = useState(false);
+  const [showCert, setShowCert] = useState(false);
 
   const labId = lab?.id;
 
@@ -114,6 +116,14 @@ export default function LabDetail({ lab, back }) {
   };
 
   const handleFinalize = async () => {
+    const isPartial = solvedCount < questions.length;
+    const confirmMsg = isPartial
+      ? `You have answered and solved ${solvedCount} of ${questions.length} questions.\n\nSubmitting now will record your final score based ONLY on your attended questions (${currentScore} / ${maxScore} pts) and lock the lab.\n\nProceed with final submission?`
+      : `You have completed all questions! Finalize and record your marks (${currentScore} / ${maxScore} pts)?`;
+
+    const ok = window.confirm(confirmMsg);
+    if (!ok) return;
+
     setFinalizing(true);
     try {
       const res = await finalizeStudentLab(labId);
@@ -760,24 +770,67 @@ export default function LabDetail({ lab, back }) {
                 {finalizing ? "Submitting Marks..." : "Finalize & Submit Lab"}
               </Btn>
             ) : (
-              <div
-                style={{
-                  padding: "10px 12px",
-                  borderRadius: 6,
-                  background: "rgba(0, 230, 118, 0.1)",
-                  border: "1px solid rgba(0, 230, 118, 0.3)",
-                  color: C.green,
-                  fontFamily: sans,
-                  fontSize: 12,
-                  textAlign: "center",
-                }}
-              >
-                ✓ Lab Officially Submitted
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <div
+                  style={{
+                    padding: "10px 12px",
+                    borderRadius: 6,
+                    background: "rgba(0, 230, 118, 0.1)",
+                    border: "1px solid rgba(0, 230, 118, 0.3)",
+                    color: C.green,
+                    fontFamily: sans,
+                    fontSize: 12,
+                    textAlign: "center",
+                  }}
+                >
+                  ✓ Lab Officially Submitted
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowCert(true)}
+                  style={{
+                    width: "100%",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 6,
+                    background: "rgba(245, 166, 35, 0.15)",
+                    border: "1px solid rgba(245, 166, 35, 0.45)",
+                    color: C.amber,
+                    padding: "8px 14px",
+                    borderRadius: 6,
+                    fontFamily: sans,
+                    fontSize: 12.5,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  <FileBadge size={14} /> View Certificate
+                </button>
               </div>
             )}
           </div>
         </div>
       </div>
+
+      {showCert && (
+        <CertificateModal
+          certificate={{
+            certId: `BLITZ-CERT-${String(labId).padStart(3, "0")}-${Math.floor(1000 + Math.random() * 9000)}`,
+            studentName: workspace?.student_name || "Student",
+            labName: l.name || lab?.name || "Security Lab",
+            labDesc: l.description || lab?.description || "",
+            category: l.category || lab?.category || "Cyber Security",
+            subjectName: l.subject_name || lab?.subject_name || "",
+            score: currentScore,
+            maxScore: maxScore,
+            solvedQuestions: solvedCount,
+            totalQuestions: questions.length || 1,
+            completedAt: submission.submitted_at || new Date().toISOString(),
+          }}
+          onClose={() => setShowCert(false)}
+        />
+      )}
     </div>
   );
 }

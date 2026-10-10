@@ -1,5 +1,5 @@
 import React from "react";
-import { Shield, HelpCircle, Settings, LogOut, ExternalLink, Eye, LayoutDashboard } from "lucide-react";
+import { Shield, HelpCircle, LogOut, ExternalLink, Eye, LayoutDashboard } from "lucide-react";
 import Logo from "./Logo";
 import { C, sans } from "../../constants/theme";
 import { DJANGO_ADMIN_URL } from "../../api/client";
@@ -131,7 +131,6 @@ export default function Sidebar({
 
         {[
           { label: "Help", icon: HelpCircle },
-          { label: "Settings", icon: Settings },
           { label: switchLabel, icon: LogOut, onClick: onSwitch },
         ].map((it) => (
           <div

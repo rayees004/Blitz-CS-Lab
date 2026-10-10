@@ -1,7 +1,7 @@
 import {
   LayoutGrid, GraduationCap, FlaskConical, BookOpen, Trophy, TrendingUp, Award,
   FileBadge, User, Users, Layers, ClipboardList, Wallet, Activity, BarChart3,
-  ScrollText, Settings, Target, BookMarked
+  ScrollText, RotateCcw, Target, BookMarked
 } from "lucide-react";
 
 export const LABS = [
@@ -45,9 +45,7 @@ export const NAV_STUDENT = [
   { label: "Study Materials", icon: BookOpen, key: "materials" },
   { label: "Progress", icon: TrendingUp, key: "progress" },
   { label: "Leaderboard", icon: Trophy, key: "leaderboard" },
-  { label: "Achievements", icon: Award, key: "achievements" },
   { label: "Certificates", icon: FileBadge, key: "certificates" },
-
 ];
 
 export const NAV_ADMIN = [
@@ -58,5 +56,5 @@ export const NAV_ADMIN = [
   { label: "Study Materials", icon: BookOpen, key: "a-materials" },
   { label: "Activity", icon: Activity, key: "a-activity" },
   { label: "Audit Logs", icon: ScrollText, key: "a-audit" },
-  { label: "Settings", icon: Settings, key: "a-settings" },
+  { label: "Retake Requests", icon: RotateCcw, key: "a-retakes" },
 ];

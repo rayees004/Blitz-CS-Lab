@@ -103,7 +103,7 @@ export default function LabExplorer({ go }) {
           </div>
           <p style={{ fontFamily: sans, fontSize: 13.5, color: C.mid, marginTop: 6 }}>
             {labs.length} isolated environments across {Math.max(1, cats.length - 1)} security domains.
-            {batchInfo ? " Only this 5-lab batch is visible until all 5 labs are attended." : " Assigned interactive security labs for your enrolled courses."}
+            {batchInfo ? " Only this 5-lab batch is visible until all 5 labs are completed." : " Assigned interactive security labs for your enrolled courses."}
           </p>
         </div>
 
