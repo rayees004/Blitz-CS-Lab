@@ -1,3 +1,4 @@
+import React, { useState, useEffect, useCallback } from "react";
 import {
   CheckCircle2, FlaskConical, TrendingUp, Zap, Trophy,
   Play, Award, RefreshCw, Search, Filter, HelpCircle,
