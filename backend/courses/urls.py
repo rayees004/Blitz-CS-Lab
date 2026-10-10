@@ -26,6 +26,9 @@ from .views import (
     StudentProgressReportView,
     AdminDashboardStatsView,
     AdminStudentLabRetakePermissionView,
+    StudentLabRetakeRequestView,
+    AdminLabRetakeRequestListView,
+    AdminLabRetakeRequestActionView,
     StudyMaterialListCreateView,
     StudyMaterialDetailView,
     StudentMaterialsView,
@@ -35,12 +38,15 @@ urlpatterns = [
     # Admin live dashboard stats & lab retake permission
     path('admin/dashboard-stats/', AdminDashboardStatsView.as_view(), name='api_admin_dashboard_stats'),
     path('admin/labs/retake-permission/', AdminStudentLabRetakePermissionView.as_view(), name='api_admin_lab_retake_permission'),
+    path('admin/labs/retake-requests/', AdminLabRetakeRequestListView.as_view(), name='api_admin_lab_retake_requests'),
+    path('admin/labs/retake-requests/<int:pk>/action/', AdminLabRetakeRequestActionView.as_view(), name='api_admin_lab_retake_request_action'),
 
     # Student Labs & Attend / Submit Marks
     path('student/labs/', StudentLabListView.as_view(), name='api_student_labs'),
     path('student/lab-scores/', StudentLabScoreListView.as_view(), name='api_student_lab_scores'),
     path('student/labs/<int:pk>/attend/', StudentLabAttendView.as_view(), name='api_student_lab_attend'),
     path('student/labs/<int:pk>/submit/', StudentLabSubmitMarkView.as_view(), name='api_student_lab_submit'),
+    path('student/labs/<int:pk>/retake-request/', StudentLabRetakeRequestView.as_view(), name='api_student_lab_retake_request'),
     path('lab-submissions/', LabSubmissionListView.as_view(), name='api_lab_submissions'),
     path('student-activity/', StudentActivityFeedView.as_view(), name='api_student_activity'),
     path('student-progress/', StudentProgressReportView.as_view(), name='api_student_progress'),

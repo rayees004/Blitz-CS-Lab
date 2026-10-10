@@ -31,6 +31,8 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.pyc
+*.sqlite3
+*.sqlite
 
 # Logs & OS
 *.log

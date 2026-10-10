@@ -67,5 +67,36 @@ export async function grantLabRetakePermission(studentId, labId, resetScore = tr
   });
 }
 
+/** Student sends a retake request for a completed or locked lab */
+export async function requestStudentLabRetake(labId, reason = '') {
+  return apiFetch(`/student/labs/${labId}/retake-request/`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  });
+}
+
+/** Check student retake request status for a specific lab */
+export async function fetchStudentLabRetakeStatus(labId) {
+  return apiFetch(`/student/labs/${labId}/retake-request/`);
+}
+
+/** Admin fetches list of student retake requests */
+export async function fetchAdminRetakeRequests(status = 'PENDING') {
+  const qs = status ? `?status=${status}` : '';
+  return apiFetch(`/admin/labs/retake-requests/${qs}`);
+}
+
+/** Admin reviews (approve or reject) a student retake request */
+export async function reviewAdminRetakeRequest(requestId, action, note = '', resetScore = false) {
+  return apiFetch(`/admin/labs/retake-requests/${requestId}/action/`, {
+    method: 'POST',
+    body: JSON.stringify({
+      action,
+      note,
+      reset_score: resetScore,
+    }),
+  });
+}
+
 
 

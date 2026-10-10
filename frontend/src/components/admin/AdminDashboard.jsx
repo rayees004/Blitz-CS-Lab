@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback } from "react";
 import {
   Users, Activity, Wallet, TrendingUp, Plus, FlaskConical,
-  HelpCircle, Lightbulb, CheckCircle, ChevronRight, ExternalLink, Shield
+  HelpCircle, Lightbulb, CheckCircle, ChevronRight, ExternalLink, Shield,
+  RotateCcw, Check, X, Clock, Loader2
 } from "lucide-react";
 import Panel from "../common/Panel";
 import StatCard from "../common/StatCard";
@@ -11,7 +11,7 @@ import ProgressBar from "../common/ProgressBar";
 import { C, sans, mono } from "../../constants/theme";
 import { LABS as MOCK_LABS } from "../../data/mockData";
 import { fetchLabs, createLab } from "../../api/labs";
-import { fetchAdminDashboardStats } from "../../api/students";
+import { fetchAdminDashboardStats, reviewAdminRetakeRequest } from "../../api/students";
 import { DJANGO_ADMIN_URL } from "../../api/client";
 import AddLabModal from "./AddLabModal";
 
@@ -34,10 +34,13 @@ export default function AdminDashboard({ onNavigate, currentUser }) {
       "90D": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
     },
     active_labs: [],
+    pending_retake_requests_count: 0,
+    pending_retake_requests: [],
   });
   const [chartTimeframe, setChartTimeframe] = useState("30D"); // 7D | 30D | 90D
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState(null);
+  const [reviewingId, setReviewingId] = useState(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -94,6 +97,23 @@ export default function AdminDashboard({ onNavigate, currentUser }) {
       setLabs((prev) => [newLocalLab, ...prev]);
       setNotice({ type: "success", text: `Lab "${payload.name}" created with ${payload.questions.length} questions!` });
       setTimeout(() => setNotice(null), 5000);
+    }
+  };
+
+  const handleReviewRetake = async (requestId, action, studentName, labName) => {
+    setReviewingId(requestId);
+    try {
+      const res = await reviewAdminRetakeRequest(requestId, action);
+      setNotice({
+        type: action === "approve" ? "success" : "default",
+        text: res.message || `Retake request for ${studentName} on ${labName} ${action === "approve" ? "approved" : "rejected"}.`,
+      });
+      await loadData();
+      setTimeout(() => setNotice(null), 5000);
+    } catch (err) {
+      alert(err.message || `Failed to ${action} retake request.`);
+    } finally {
+      setReviewingId(null);
     }
   };
 
@@ -213,6 +233,191 @@ export default function AdminDashboard({ onNavigate, currentUser }) {
           tone="green"
         />
       </div>
+
+      {/* Lab Retake Requests Panel */}
+      <Panel
+        style={{
+          padding: 20,
+          marginTop: 24,
+          border: (dbStats.pending_retake_requests && dbStats.pending_retake_requests.length > 0)
+            ? `1px solid rgba(245, 166, 35, 0.4)`
+            : `1px solid ${C.border}`,
+          background: (dbStats.pending_retake_requests && dbStats.pending_retake_requests.length > 0)
+            ? "rgba(245, 166, 35, 0.03)"
+            : C.panel,
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 8,
+                background: "rgba(245, 166, 35, 0.12)",
+                border: "1px solid rgba(245, 166, 35, 0.25)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <RotateCcw size={16} color={C.amber} />
+            </div>
+            <div>
+              <div style={{ fontFamily: sans, fontSize: 14, fontWeight: 700, color: C.hi, display: "flex", alignItems: "center", gap: 8 }}>
+                <span>Student Lab Retake Requests</span>
+                {(dbStats.pending_retake_requests_count > 0 || (dbStats.pending_retake_requests && dbStats.pending_retake_requests.length > 0)) && (
+                  <span
+                    style={{
+                      background: "rgba(245, 166, 35, 0.2)",
+                      color: C.amber,
+                      fontFamily: mono,
+                      fontSize: 11,
+                      fontWeight: 700,
+                      padding: "2px 8px",
+                      borderRadius: 12,
+                      border: "1px solid rgba(245, 166, 35, 0.4)",
+                    }}
+                  >
+                    {dbStats.pending_retake_requests_count || dbStats.pending_retake_requests.length} Pending
+                  </span>
+                )}
+              </div>
+              <div style={{ fontFamily: sans, fontSize: 12, color: C.mid, marginTop: 2 }}>
+                Students who completed all questions requesting one more attempt
+              </div>
+            </div>
+          </div>
+          <Btn sm tone="ghost" icon={RefreshCw} onClick={loadData}>
+            Refresh Requests
+          </Btn>
+        </div>
+
+        {(!dbStats.pending_retake_requests || dbStats.pending_retake_requests.length === 0) ? (
+          <div
+            style={{
+              padding: "18px 14px",
+              textAlign: "center",
+              fontFamily: sans,
+              fontSize: 12.5,
+              color: C.low,
+              background: C.panel2,
+              borderRadius: 8,
+              border: `1px dashed ${C.border}`,
+            }}
+          >
+            No pending retake requests. All student lab statuses are up to date.
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {dbStats.pending_retake_requests.map((req) => (
+              <div
+                key={req.id}
+                style={{
+                  background: C.panel2,
+                  border: `1px solid ${C.border}`,
+                  borderRadius: 8,
+                  padding: "12px 16px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 16,
+                  flexWrap: "wrap",
+                }}
+              >
+                <div style={{ flex: 1, minWidth: 260 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontFamily: sans, fontSize: 13.5, fontWeight: 700, color: C.hi }}>
+                      {req.student_name || req.student_username}
+                    </span>
+                    <span style={{ fontFamily: mono, fontSize: 11, color: C.cyan }}>
+                      @{req.student_username}
+                    </span>
+                    <span style={{ color: C.border }}>•</span>
+                    <span style={{ fontFamily: sans, fontSize: 13, fontWeight: 600, color: C.amber }}>
+                      {req.lab_name}
+                    </span>
+                    {req.lab_difficulty && <DiffBadge level={req.lab_difficulty} />}
+                  </div>
+
+                  {req.reason && (
+                    <div style={{ fontFamily: sans, fontSize: 12, color: C.mid, marginTop: 4, fontStyle: "italic" }}>
+                      "{req.reason}"
+                    </div>
+                  )}
+
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 5, fontFamily: mono, fontSize: 10.5, color: C.low }}>
+                    {req.subject_name && <span>Subject: {req.subject_name}</span>}
+                    {req.created_at && (
+                      <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                        <Clock size={10} /> {new Date(req.created_at).toLocaleString()}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <button
+                    type="button"
+                    disabled={reviewingId === req.id}
+                    onClick={() => handleReviewRetake(req.id, "approve", req.student_username, req.lab_name)}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 6,
+                      background: "rgba(0, 230, 118, 0.15)",
+                      border: "1px solid rgba(0, 230, 118, 0.4)",
+                      color: "#a7f3d0",
+                      padding: "6px 14px",
+                      borderRadius: 6,
+                      fontFamily: sans,
+                      fontSize: 12,
+                      fontWeight: 700,
+                      cursor: reviewingId === req.id ? "wait" : "pointer",
+                      transition: "all 0.15s ease",
+                    }}
+                  >
+                    {reviewingId === req.id ? (
+                      <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} />
+                    ) : (
+                      <Check size={14} />
+                    )}
+                    Approve
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={reviewingId === req.id}
+                    onClick={() => handleReviewRetake(req.id, "reject", req.student_username, req.lab_name)}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 6,
+                      background: "rgba(229, 83, 75, 0.1)",
+                      border: "1px solid rgba(229, 83, 75, 0.35)",
+                      color: "#fca5a5",
+                      padding: "6px 14px",
+                      borderRadius: 6,
+                      fontFamily: sans,
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: reviewingId === req.id ? "wait" : "pointer",
+                      transition: "all 0.15s ease",
+                    }}
+                  >
+                    {reviewingId === req.id ? (
+                      <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} />
+                    ) : (
+                      <X size={14} />
+                    )}
+                    Reject
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Panel>
 
       {/* Main Grid */}
       <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1.1fr", gap: 16, marginTop: 24 }}>

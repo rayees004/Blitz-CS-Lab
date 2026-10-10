@@ -14,7 +14,7 @@ from accounts.audit import record_audit_log
 from .models import (
     Course, Enrollment, Module, Subject, SubjectEnrollment,
     Lab, LabQuestion, QuestionHint, LabSubmission, LabScore,
-    StudyMaterial, StudentAssignedBatch
+    StudyMaterial, StudentAssignedBatch, LabRetakeRequest
 )
 from .serializers import (
     CourseSerializer,
@@ -1055,14 +1055,14 @@ def can_student_attend_lab(student, lab):
         detail_msg = f"Practical lab access has been blocked by administrator. Reason: {reason}" if reason else "Practical lab access has been blocked by administrator. Please contact support."
         return False, detail_msg, lab.subject
 
-    # Check if student has already attended / submitted this lab
+    # Check if student has completed this lab (all questions submitted / completed)
     prior_score = LabScore.objects.filter(student=student, lab=lab).first()
-    if prior_score and prior_score.is_completed:
-        return False, "Lab already attended. Reopening this lab is blocked.", lab.subject
-
     prior_sub = LabSubmission.objects.filter(student=student, lab=lab).first()
-    if prior_sub and prior_sub.status == 'COMPLETED':
-        return False, "Lab already attended. Reopening this lab is blocked.", lab.subject
+    is_completed = (prior_score and prior_score.is_completed) or (prior_sub and prior_sub.status == 'COMPLETED')
+    if is_completed:
+        pending_retake = LabRetakeRequest.objects.filter(student=student, lab=lab, status='PENDING').exists()
+        msg = "Lab completed (All questions submitted). Retake request is pending administrator approval." if pending_retake else "Lab completed (All questions submitted). You can request a retake to attend again."
+        return False, msg, lab.subject
 
     if not lab.subject:
         return False, "This lab has not been assigned to any subject yet. Attendance is not available.", None
@@ -1114,6 +1114,11 @@ class StudentLabListView(APIView):
         if student:
             for sub in LabSubmission.objects.filter(student=student):
                 submissions[sub.lab_id] = sub
+
+        retake_requests_by_lab = {}
+        if student:
+            for rr in LabRetakeRequest.objects.filter(student=student):
+                retake_requests_by_lab[rr.lab_id] = rr
 
         enriched_labs = []
         total_points_earned = 0
@@ -1215,6 +1220,8 @@ class StudentLabListView(APIView):
                 'started_at': ls.first_attended_at if ls else (sub.started_at if sub else None),
                 'last_activity_at': ls.last_attended_at if ls else (sub.last_activity_at if sub else None),
                 'submitted_at': ls.completed_at if ls else (sub.submitted_at if sub else None),
+                'retake_request_status': retake_requests_by_lab.get(lab.id).status if retake_requests_by_lab.get(lab.id) else None,
+                'retake_request_id': retake_requests_by_lab.get(lab.id).id if retake_requests_by_lab.get(lab.id) else None,
             })
 
         overall_pct = round((total_points_earned / total_possible_points) * 100) if total_possible_points > 0 else 0
@@ -1540,7 +1547,14 @@ class StudentLabSubmitMarkView(APIView):
                     if isinstance(item, dict) and item.get('is_correct')
                 )
 
-                # Only explicit finalize_submission action completes and blocks the lab
+                # When all questions in the lab are solved, complete and block the lab!
+                all_solved = (total_questions > 0 and solved_count >= total_questions)
+                if all_solved:
+                    submission.status = 'COMPLETED'
+                    submission.submitted_at = timezone.now()
+                    lab_score.is_completed = True
+                    lab_score.completed_at = timezone.now()
+
                 submission.save()
 
                 # Sync with ForeignKey LabScore
@@ -1555,6 +1569,8 @@ class StudentLabSubmitMarkView(APIView):
                     'points_awarded': points_awarded,
                     'total_score': lab_score.score,
                     'status': submission.status,
+                    'is_completed': lab_score.is_completed,
+                    'all_solved': all_solved,
                     'solved_count': solved_count,
                     'total_questions': total_questions,
                     'message': f"Correct Flag! +{points_awarded} marks awarded.",
@@ -1699,6 +1715,205 @@ class AdminStudentLabRetakePermissionView(APIView):
             'is_completed': lab_score.is_completed,
             'score': lab_score.score,
         })
+
+
+class StudentLabRetakeRequestView(APIView):
+    """
+    POST /api/student/labs/<id>/retake-request/
+    Allows a student to submit a retake request for a completed or locked lab.
+    GET  /api/student/labs/<id>/retake-request/
+    Retrieves the status of the retake request for this lab.
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request, pk):
+        student = get_current_student(request)
+        if not student:
+            return Response({'detail': 'Authentication required.'}, status=status.HTTP_401_UNAUTHORIZED)
+        lab = get_object_or_404(Lab, pk=pk)
+        req = LabRetakeRequest.objects.filter(student=student, lab=lab).order_by('-created_at').first()
+        if not req:
+            return Response({'has_request': False, 'status': None})
+        return Response({
+            'has_request': True,
+            'id': req.id,
+            'status': req.status,
+            'reason': req.reason,
+            'created_at': req.created_at,
+            'reviewed_at': req.reviewed_at,
+        })
+
+    def post(self, request, pk):
+        student = get_current_student(request)
+        if not student:
+            return Response({'detail': 'Authentication required.'}, status=status.HTTP_401_UNAUTHORIZED)
+        lab = get_object_or_404(Lab, pk=pk)
+
+        # Check if there is already a PENDING request
+        existing = LabRetakeRequest.objects.filter(student=student, lab=lab, status='PENDING').first()
+        if existing:
+            return Response({
+                'detail': 'A retake request for this lab is already pending administrator approval.',
+                'request_id': existing.id,
+                'status': existing.status,
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        reason = request.data.get('reason', '').strip()
+        new_req = LabRetakeRequest.objects.create(
+            student=student,
+            lab=lab,
+            status='PENDING',
+            reason=reason
+        )
+
+        try:
+            record_audit_log(
+                action_type='lab_retake_requested',
+                description=f"Student '{student.username}' requested retake for lab '{lab.name}'. Reason: {reason or 'None'}",
+                actor=student,
+                target_entity='Lab',
+                target_id=str(lab.id),
+                target_name=lab.name,
+                request=request
+            )
+        except Exception:
+            pass
+
+        return Response({
+            'success': True,
+            'message': f"Retake request for '{lab.name}' sent successfully! An instructor or admin will review it.",
+            'request_id': new_req.id,
+            'status': new_req.status,
+        }, status=status.HTTP_201_CREATED)
+
+
+class AdminLabRetakeRequestListView(APIView):
+    """
+    GET /api/admin/labs/retake-requests/
+    Lists retake requests with optional status filter (e.g. ?status=PENDING).
+    """
+    permission_classes = [IsAdminOrStaff]
+
+    def get(self, request):
+        req_status = request.query_params.get('status')
+        qs = LabRetakeRequest.objects.select_related('student', 'lab', 'lab__subject', 'reviewed_by').all()
+        if req_status:
+            qs = qs.filter(status=req_status)
+
+        results = []
+        for r in qs[:100]:
+            results.append({
+                'id': r.id,
+                'student_id': r.student.id,
+                'student_username': r.student.username,
+                'student_name': getattr(r.student, 'full_name', '') or r.student.get_full_name() or r.student.username,
+                'student_email': r.student.email,
+                'lab_id': r.lab.id,
+                'lab_name': r.lab.name,
+                'lab_difficulty': r.lab.difficulty,
+                'subject_name': r.lab.subject.name if r.lab.subject else None,
+                'status': r.status,
+                'reason': r.reason,
+                'admin_response_note': r.admin_response_note,
+                'created_at': r.created_at,
+                'reviewed_at': r.reviewed_at,
+                'reviewed_by_username': r.reviewed_by.username if r.reviewed_by else None,
+            })
+        return Response({'count': len(results), 'results': results})
+
+
+class AdminLabRetakeRequestActionView(APIView):
+    """
+    POST /api/admin/labs/retake-requests/<id>/action/
+    Action: 'approve' or 'reject'
+    """
+    permission_classes = [IsAdminOrStaff]
+
+    def post(self, request, pk):
+        req_obj = get_object_or_404(LabRetakeRequest.objects.select_related('student', 'lab'), pk=pk)
+        action = request.data.get('action', '').lower()
+        note = request.data.get('note', '').strip()
+        reset_score = request.data.get('reset_score', False)
+
+        if action not in ('approve', 'reject'):
+            return Response({'detail': "Action must be either 'approve' or 'reject'."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if action == 'approve':
+            req_obj.status = 'APPROVED'
+            req_obj.admin_response_note = note
+            req_obj.reviewed_by = request.user if request.user.is_authenticated else None
+            req_obj.reviewed_at = timezone.now()
+            req_obj.save()
+
+            # Unlock the lab for the student so they can attend again
+            student = req_obj.student
+            lab = req_obj.lab
+
+            lab_score = LabScore.objects.filter(student=student, lab=lab).first()
+            submission = LabSubmission.objects.filter(student=student, lab=lab).first()
+
+            if submission:
+                submission.status = 'IN_PROGRESS'
+                submission.submitted_at = None
+                if reset_score:
+                    submission.score = 0
+                    submission.answers = {}
+                submission.save()
+
+            if lab_score:
+                lab_score.is_completed = False
+                lab_score.completed_at = None
+                if reset_score:
+                    lab_score.score = 0
+                    lab_score.solved_questions_count = 0
+                lab_score.save()
+
+            try:
+                record_audit_log(
+                    action_type='lab_retake_approved',
+                    description=f"Retake request approved for {student.username} on '{lab.name}'. Lab is now unlocked.",
+                    actor=request.user if request.user.is_authenticated else None,
+                    target_entity='Lab',
+                    target_id=str(lab.id),
+                    target_name=lab.name,
+                    request=request
+                )
+            except Exception:
+                pass
+
+            return Response({
+                'success': True,
+                'message': f"Retake request approved for student '{student.username}' on lab '{lab.name}'. Lab is now unlocked for student!",
+                'request_id': req_obj.id,
+                'status': req_obj.status,
+            })
+
+        elif action == 'reject':
+            req_obj.status = 'REJECTED'
+            req_obj.admin_response_note = note
+            req_obj.reviewed_by = request.user if request.user.is_authenticated else None
+            req_obj.reviewed_at = timezone.now()
+            req_obj.save()
+
+            try:
+                record_audit_log(
+                    action_type='lab_retake_rejected',
+                    description=f"Retake request rejected for {req_obj.student.username} on '{req_obj.lab.name}'.",
+                    actor=request.user if request.user.is_authenticated else None,
+                    target_entity='Lab',
+                    target_id=str(req_obj.lab.id),
+                    target_name=req_obj.lab.name,
+                    request=request
+                )
+            except Exception:
+                pass
+
+            return Response({
+                'success': True,
+                'message': f"Retake request for '{req_obj.student.username}' has been rejected.",
+                'request_id': req_obj.id,
+                'status': req_obj.status,
+            })
 
 
 class StudentLabScoreListView(APIView):
@@ -2153,6 +2368,24 @@ class AdminDashboardStatsView(APIView):
                 'subject_name': lab.subject.name if lab.subject else None,
             })
 
+        # 5. Pending Retake Requests
+        pending_retake_requests_qs = LabRetakeRequest.objects.filter(status='PENDING').select_related('student', 'lab', 'lab__subject')
+        pending_retake_requests = [
+            {
+                'id': r.id,
+                'student_id': r.student.id,
+                'student_username': r.student.username,
+                'student_name': getattr(r.student, 'full_name', '') or r.student.get_full_name() or r.student.username,
+                'lab_id': r.lab.id,
+                'lab_name': r.lab.name,
+                'lab_difficulty': r.lab.difficulty,
+                'subject_name': r.lab.subject.name if r.lab.subject else None,
+                'reason': r.reason,
+                'created_at': r.created_at.isoformat() if r.created_at else None,
+            }
+            for r in pending_retake_requests_qs[:20]
+        ]
+
         return Response({
             'total_students': total_students,
             'active_students': active_students,
@@ -2168,6 +2401,8 @@ class AdminDashboardStatsView(APIView):
                 '90D': chart_90d,
             },
             'active_labs': active_labs,
+            'pending_retake_requests_count': pending_retake_requests_qs.count(),
+            'pending_retake_requests': pending_retake_requests,
         })
 
 

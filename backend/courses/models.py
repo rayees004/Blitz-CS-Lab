@@ -405,4 +405,42 @@ class StudentAssignedBatch(models.Model):
         return f"Batch #{self.batch_index} for {self.student.username} (active={self.is_active})"
 
 
+class LabRetakeRequest(models.Model):
+    """
+    Model for student requests to retake a completed or locked lab.
+    Reviewed, approved, or rejected by instructor/admin.
+    """
+    STATUS_CHOICES = [
+        ('PENDING', 'Pending'),
+        ('APPROVED', 'Approved'),
+        ('REJECTED', 'Rejected'),
+    ]
 
+    student = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='retake_requests'
+    )
+    lab = models.ForeignKey(
+        Lab,
+        on_delete=models.CASCADE,
+        related_name='retake_requests'
+    )
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
+    reason = models.TextField(blank=True, default='')
+    admin_response_note = models.TextField(blank=True, default='')
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='reviewed_retake_requests'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"RetakeRequest: {self.student.username} → {self.lab.name} [{self.status}]"
