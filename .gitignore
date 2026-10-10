@@ -23,6 +23,7 @@ node_modules/
 dist/
 build/
 */dist/
+*.zip
 
 # Python bytecode & cache
 __pycache__/

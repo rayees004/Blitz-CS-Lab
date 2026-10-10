@@ -1,7 +1,21 @@
 import { getStoredToken, clearAuthSession, notifyAuthExpired } from './auth';
 
-export const API_BASE = import.meta.env.PROD ? 'https://backend.decodexe.com/api' : '/api';
-export const DJANGO_ADMIN_URL = import.meta.env.PROD ? 'https://backend.decodexe.com/admin/' : '/admin/';
+// Backend and API URLs configured via Vite environment variables (.env)
+export const API_BASE =
+  import.meta.env.VITE_API_URL ||
+  (import.meta.env.VITE_BACKEND_URL
+    ? `${import.meta.env.VITE_BACKEND_URL.replace(/\/+$/, '')}/api`
+    : import.meta.env.PROD
+    ? 'https://backend.decodexe.com/api'
+    : '/api');
+
+export const DJANGO_ADMIN_URL =
+  import.meta.env.VITE_ADMIN_URL ||
+  (import.meta.env.VITE_BACKEND_URL
+    ? `${import.meta.env.VITE_BACKEND_URL.replace(/\/+$/, '')}/admin/`
+    : import.meta.env.PROD
+    ? 'https://backend.decodexe.com/admin/'
+    : '/admin/');
 
 /**
  * Returns standard authentication headers, automatically attaching the auth token if present.
