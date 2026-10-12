@@ -1117,7 +1117,7 @@ class StudentLabListView(APIView):
 
         retake_requests_by_lab = {}
         if student:
-            for rr in LabRetakeRequest.objects.filter(student=student):
+            for rr in LabRetakeRequest.objects.filter(student=student).order_by('created_at'):
                 retake_requests_by_lab[rr.lab_id] = rr
 
         enriched_labs = []
@@ -1707,6 +1707,18 @@ class AdminStudentLabRetakePermissionView(APIView):
                 solved_questions_count=0
             )
 
+        # Resolve any pending retake request for this student and lab
+        try:
+            pending_reqs = LabRetakeRequest.objects.filter(student=student, lab=lab, status='PENDING')
+            for pr in pending_reqs:
+                pr.status = 'APPROVED'
+                pr.reviewed_by = request.user if request.user.is_authenticated else None
+                pr.reviewed_at = timezone.now()
+                pr.admin_response_note = "Retake permission granted directly by administrator."
+                pr.save()
+        except Exception:
+            pass
+
         try:
             record_audit_log(
                 action_type='lab_retake_permission_granted',
@@ -1841,18 +1853,22 @@ class AdminLabRetakeRequestListView(APIView):
 class AdminLabRetakeRequestActionView(APIView):
     """
     POST /api/admin/labs/retake-requests/<id>/action/
-    Action: 'approve' or 'reject'
+    Action: 'approve'/'accept' or 'reject'/'decline'
     """
     permission_classes = [IsAdminOrStaff]
 
     def post(self, request, pk):
         req_obj = get_object_or_404(LabRetakeRequest.objects.select_related('student', 'lab'), pk=pk)
-        action = request.data.get('action', '').lower()
+        raw_action = request.data.get('action', '').strip().lower()
         note = request.data.get('note', '').strip()
         reset_score = request.data.get('reset_score', False)
 
-        if action not in ('approve', 'reject'):
-            return Response({'detail': "Action must be either 'approve' or 'reject'."}, status=status.HTTP_400_BAD_REQUEST)
+        if raw_action in ('approve', 'accept'):
+            action = 'approve'
+        elif raw_action in ('reject', 'decline'):
+            action = 'reject'
+        else:
+            return Response({'detail': "Action must be either 'accept'/'approve' or 'reject'."}, status=status.HTTP_400_BAD_REQUEST)
 
         if action == 'approve':
             req_obj.status = 'APPROVED'
@@ -1875,6 +1891,15 @@ class AdminLabRetakeRequestActionView(APIView):
                     submission.score = 0
                     submission.answers = {}
                 submission.save()
+            else:
+                submission = LabSubmission.objects.create(
+                    student=student,
+                    lab=lab,
+                    status='IN_PROGRESS',
+                    score=0,
+                    max_score=lab.points,
+                    answers={}
+                )
 
             if lab_score:
                 lab_score.is_completed = False
@@ -1883,11 +1908,22 @@ class AdminLabRetakeRequestActionView(APIView):
                     lab_score.score = 0
                     lab_score.solved_questions_count = 0
                 lab_score.save()
+            else:
+                lab_score = LabScore.objects.create(
+                    student=student,
+                    lab=lab,
+                    score=0,
+                    max_score=lab.points,
+                    attend_count=1,
+                    is_completed=False,
+                    total_questions_count=lab.questions.count(),
+                    solved_questions_count=0
+                )
 
             try:
                 record_audit_log(
                     action_type='lab_retake_approved',
-                    description=f"Retake request approved for {student.username} on '{lab.name}'. Lab is now unlocked.",
+                    description=f"Retake request accepted for {student.username} on '{lab.name}'. Lab is now unlocked (Reset score: {reset_score}). Note: {note or 'None'}",
                     actor=request.user if request.user.is_authenticated else None,
                     target_entity='Lab',
                     target_id=str(lab.id),
@@ -1899,9 +1935,11 @@ class AdminLabRetakeRequestActionView(APIView):
 
             return Response({
                 'success': True,
-                'message': f"Retake request approved for student '{student.username}' on lab '{lab.name}'. Lab is now unlocked for student!",
+                'message': f"Retake request accepted for student '{student.username}' on lab '{lab.name}'. Lab is now unlocked for student!",
                 'request_id': req_obj.id,
                 'status': req_obj.status,
+                'student_username': student.username,
+                'lab_name': lab.name,
             })
 
         elif action == 'reject':
@@ -1914,7 +1952,7 @@ class AdminLabRetakeRequestActionView(APIView):
             try:
                 record_audit_log(
                     action_type='lab_retake_rejected',
-                    description=f"Retake request rejected for {req_obj.student.username} on '{req_obj.lab.name}'.",
+                    description=f"Retake request rejected for {req_obj.student.username} on '{req_obj.lab.name}'. Note: {note or 'None'}",
                     actor=request.user if request.user.is_authenticated else None,
                     target_entity='Lab',
                     target_id=str(req_obj.lab.id),
@@ -1926,9 +1964,11 @@ class AdminLabRetakeRequestActionView(APIView):
 
             return Response({
                 'success': True,
-                'message': f"Retake request for '{req_obj.student.username}' has been rejected.",
+                'message': f"Retake request for '{req_obj.student.username}' on '{req_obj.lab.name}' has been rejected.",
                 'request_id': req_obj.id,
                 'status': req_obj.status,
+                'student_username': req_obj.student.username,
+                'lab_name': req_obj.lab.name,
             })
 
 
@@ -2392,6 +2432,7 @@ class AdminDashboardStatsView(APIView):
                 'student_id': r.student.id,
                 'student_username': r.student.username,
                 'student_name': getattr(r.student, 'full_name', '') or r.student.get_full_name() or r.student.username,
+                'student_email': r.student.email,
                 'lab_id': r.lab.id,
                 'lab_name': r.lab.name,
                 'lab_difficulty': r.lab.difficulty,

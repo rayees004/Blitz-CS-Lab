@@ -15,19 +15,21 @@ export default function StatCard({ label, value, sub, icon: Icon, tone }) {
             </div>
           )}
         </div>
-        <div
-          style={{
-            width: 30,
-            height: 30,
-            borderRadius: 7,
-            background: C.panel3,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <Icon size={15} color={C.amber} strokeWidth={2} />
-        </div>
+        {Icon && (
+          <div
+            style={{
+              width: 30,
+              height: 30,
+              borderRadius: 7,
+              background: C.panel3,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Icon size={15} color={C.amber} strokeWidth={2} />
+          </div>
+        )}
       </div>
     </Panel>
   );

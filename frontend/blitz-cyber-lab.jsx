@@ -164,7 +164,7 @@ export default function BlitzCyberLab() {
       "a-materials": <AdminMaterials />,
       "a-activity": <AdminActivity onSelectStudent={() => setAdminPage("a-students")} />,
       "a-audit": <AdminAuditLogs />,
-      "a-retakes": <AdminRetakeRequests />,
+      "a-retakes": <AdminRetakeRequests currentUser={currentUser} onNavigate={setAdminPage} />,
     };
 
     const userFullName = currentUser?.first_name

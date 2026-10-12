@@ -11,7 +11,7 @@ import StatCard from "../common/StatCard";
 import { C, sans, mono } from "../../constants/theme";
 import { fetchAdminRetakeRequests, reviewAdminRetakeRequest } from "../../api/students";
 
-export default function AdminRetakeRequests() {
+export default function AdminRetakeRequests({ currentUser, onNavigate }) {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -26,16 +26,16 @@ export default function AdminRetakeRequests() {
     setLoading(true);
     setErrorMessage(null);
     try {
-      const param = statusFilter === "ALL" ? "" : statusFilter;
-      const res = await fetchAdminRetakeRequests(param);
-      setRequests(res.results || []);
+      const res = await fetchAdminRetakeRequests("");
+      const list = Array.isArray(res) ? res : (res?.results || []);
+      setRequests(list);
     } catch (err) {
       console.error("Failed to fetch retake requests:", err);
-      setErrorMessage("Failed to load retake requests. Please try again.");
+      setErrorMessage(err.message || "Failed to load retake requests. Please try again.");
     } finally {
       setLoading(false);
     }
-  }, [statusFilter]);
+  }, []);
 
   useEffect(() => {
     loadRequests();
@@ -57,9 +57,9 @@ export default function AdminRetakeRequests() {
       const res = await reviewAdminRetakeRequest(requestId, action, note, resetScore);
       
       triggerToast(
-        action === "approve"
-          ? (res.message || "Retake request approved! The lab is now unlocked for the student.")
-          : "Retake request was rejected."
+        action === "approve" || action === "accept"
+          ? (res.message || "Retake request accepted! The lab is now unlocked for the student.")
+          : (res.message || "Retake request was rejected.")
       );
 
       // Refresh list
@@ -72,14 +72,17 @@ export default function AdminRetakeRequests() {
     }
   };
 
-  // Compute stats across all loaded or filtered items
+  // Compute stats across all recorded requests
   const totalCount = requests.length;
   const pendingCount = requests.filter((r) => r.status === "PENDING").length;
   const approvedCount = requests.filter((r) => r.status === "APPROVED").length;
   const rejectedCount = requests.filter((r) => r.status === "REJECTED").length;
 
-  // Filter based on search query
+  // Filter based on tab and search query
   const filteredRequests = requests.filter((r) => {
+    if (statusFilter !== "ALL" && r.status !== statusFilter) {
+      return false;
+    }
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
     const studentName = (r.student_name || "").toLowerCase();
@@ -211,25 +214,26 @@ export default function AdminRetakeRequests() {
         <StatCard
           label="Total Requests"
           value={totalCount}
-          delta={statusFilter !== "ALL" ? `Filter: ${statusFilter}` : "All Recorded"}
+          icon={RotateCcw}
           sub="Platform lab retakes"
         />
         <StatCard
           label="Pending Review"
           value={pendingCount}
-          delta={pendingCount > 0 ? "Requires Attention" : "All cleared"}
-          sub="Awaiting admin action"
+          icon={Clock}
+          tone="cyan"
+          sub={pendingCount > 0 ? "Requires admin review" : "All cleared"}
         />
         <StatCard
-          label="Approved"
+          label="Approved / Accepted"
           value={approvedCount}
-          delta="Granted"
+          icon={CheckCircle2}
           sub="Labs unlocked for retake"
         />
         <StatCard
           label="Rejected"
           value={rejectedCount}
-          delta="Denied"
+          icon={XCircle}
           sub="Requests declined"
         />
       </div>
@@ -375,7 +379,7 @@ export default function AdminRetakeRequests() {
             gap: 12,
           }}
         >
-          <RefreshCw size={26} className="spin" color={C.amber} />
+          <RefreshCw size={26} color={C.amber} style={{ animation: "spin 1s linear infinite" }} />
           <div style={{ fontSize: 14 }}>Loading retake requests...</div>
         </div>
       ) : filteredRequests.length === 0 ? (
@@ -677,7 +681,7 @@ export default function AdminRetakeRequests() {
                             color: "#ffffff",
                           }}
                         >
-                          {isProcessing ? "Processing..." : "Approve"}
+                          {isProcessing ? "Processing..." : "Accept Request"}
                         </Btn>
 
                         <Btn

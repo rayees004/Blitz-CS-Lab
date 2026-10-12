@@ -102,12 +102,26 @@ export default function AdminDashboard({ onNavigate, currentUser }) {
   };
 
   const handleReviewRetake = async (requestId, action, studentName, labName) => {
+    let note = "";
+    if (action === "reject") {
+      const confirmReject = window.confirm(
+        `Are you sure you want to reject the retake request for ${studentName} on "${labName}"?`
+      );
+      if (!confirmReject) return;
+      note = window.prompt("Optional rejection note / feedback for student (or leave blank):", "") || "";
+    } else {
+      const confirmAccept = window.confirm(
+        `Accept retake request for ${studentName} on "${labName}"?\nThis will unlock the lab and allow the student to retake it.`
+      );
+      if (!confirmAccept) return;
+    }
+
     setReviewingId(requestId);
     try {
-      const res = await reviewAdminRetakeRequest(requestId, action);
+      const res = await reviewAdminRetakeRequest(requestId, action, note, true);
       setNotice({
         type: action === "approve" ? "success" : "default",
-        text: res.message || `Retake request for ${studentName} on ${labName} ${action === "approve" ? "approved" : "rejected"}.`,
+        text: res.message || `Retake request for ${studentName} on ${labName} ${action === "approve" ? "accepted" : "rejected"} successfully.`,
       });
       await loadData();
       setTimeout(() => setNotice(null), 5000);
@@ -289,15 +303,28 @@ export default function AdminDashboard({ onNavigate, currentUser }) {
               </div>
             </div>
           </div>
-          <Btn sm tone="ghost" icon={RefreshCw} onClick={loadData}>
-            Refresh Requests
-          </Btn>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {onNavigate && (
+              <Btn
+                sm
+                variant="subtle"
+                icon={RotateCcw}
+                onClick={() => onNavigate("a-retakes")}
+                title="Open dedicated retake requests review dashboard"
+              >
+                All Retake Requests
+              </Btn>
+            )}
+            <Btn sm tone="ghost" icon={RefreshCw} onClick={loadData}>
+              Refresh Requests
+            </Btn>
+          </div>
         </div>
 
         {(!dbStats.pending_retake_requests || dbStats.pending_retake_requests.length === 0) ? (
           <div
             style={{
-              padding: "18px 14px",
+              padding: "20px 14px",
               textAlign: "center",
               fontFamily: sans,
               fontSize: 12.5,
@@ -305,9 +332,34 @@ export default function AdminDashboard({ onNavigate, currentUser }) {
               background: C.panel2,
               borderRadius: 8,
               border: `1px dashed ${C.border}`,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 8,
             }}
           >
-            No pending retake requests. All student lab statuses are up to date.
+            <span>No pending retake requests. All student lab statuses are up to date.</span>
+            {onNavigate && (
+              <button
+                type="button"
+                onClick={() => onNavigate("a-retakes")}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: C.amber,
+                  fontFamily: sans,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 4,
+                }}
+              >
+                <span>View all retake requests history & records</span>
+                <ChevronRight size={13} />
+              </button>
+            )}
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -348,6 +400,7 @@ export default function AdminDashboard({ onNavigate, currentUser }) {
                   )}
 
                   <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 5, fontFamily: mono, fontSize: 10.5, color: C.low }}>
+                    {req.student_email && <span>{req.student_email}</span>}
                     {req.subject_name && <span>Subject: {req.subject_name}</span>}
                     {req.created_at && (
                       <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
@@ -361,7 +414,8 @@ export default function AdminDashboard({ onNavigate, currentUser }) {
                   <button
                     type="button"
                     disabled={reviewingId === req.id}
-                    onClick={() => handleReviewRetake(req.id, "approve", req.student_username, req.lab_name)}
+                    onClick={() => handleReviewRetake(req.id, "approve", req.student_name || req.student_username, req.lab_name)}
+                    title="Accept retake request and unlock lab"
                     style={{
                       display: "inline-flex",
                       alignItems: "center",
@@ -383,13 +437,14 @@ export default function AdminDashboard({ onNavigate, currentUser }) {
                     ) : (
                       <Check size={14} />
                     )}
-                    Approve
+                    Accept
                   </button>
 
                   <button
                     type="button"
                     disabled={reviewingId === req.id}
-                    onClick={() => handleReviewRetake(req.id, "reject", req.student_username, req.lab_name)}
+                    onClick={() => handleReviewRetake(req.id, "reject", req.student_name || req.student_username, req.lab_name)}
+                    title="Reject student retake request"
                     style={{
                       display: "inline-flex",
                       alignItems: "center",
