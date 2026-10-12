@@ -1,7 +1,7 @@
 from django.contrib import admin
 from .models import (
     Course, Enrollment, Lab, LabQuestion, QuestionHint,
-    LabSubmission, LabScore, StudyMaterial, LabRetakeRequest
+    LabSubmission, LabScore, StudyMaterial, LabRetakeRequest, StudentClass
 )
 
 
@@ -80,4 +80,13 @@ class LabRetakeRequestAdmin(admin.ModelAdmin):
     list_filter = ('status', 'created_at')
     search_fields = ('student__username', 'student__email', 'lab__name')
     raw_id_fields = ('student', 'lab', 'reviewed_by')
+
+
+@admin.register(StudentClass)
+class StudentClassAdmin(admin.ModelAdmin):
+    list_display = ('name', 'code', 'lab_count', 'student_count', 'is_active', 'created_at')
+    list_filter = ('is_active', 'created_at')
+    search_fields = ('name', 'code', 'description')
+    filter_horizontal = ('labs',)
+
 

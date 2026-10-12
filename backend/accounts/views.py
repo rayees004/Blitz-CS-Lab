@@ -119,9 +119,22 @@ class StudentListCreateView(APIView):
         search = request.query_params.get('search', '').strip()
         user_type_filter = request.query_params.get('user_type') or request.query_params.get('role')
         if user_type_filter:
-            students = User.objects.filter(user_type=user_type_filter).order_by('date_joined')
+            students = User.objects.filter(user_type=user_type_filter)
         else:
-            students = User.objects.filter(user_type__in=['student', 'instructor', 'admin']).order_by('date_joined')
+            students = User.objects.filter(user_type__in=['student', 'instructor', 'admin'])
+
+        students = students.select_related('assigned_class').order_by('date_joined')
+
+        class_id = request.query_params.get('class_id') or request.query_params.get('assigned_class')
+        if class_id:
+            if class_id in ('unassigned', 'none'):
+                students = students.filter(assigned_class__isnull=True)
+            else:
+                students = students.filter(assigned_class_id=class_id)
+
+        access_mode = request.query_params.get('lab_access_mode')
+        if access_mode:
+            students = students.filter(lab_access_mode=access_mode)
 
         if search:
             from django.db.models import Q

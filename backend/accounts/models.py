@@ -27,6 +27,23 @@ class User(AbstractUser):
         default='',
         help_text='Administrative reason explaining why lab access is blocked'
     )
+    assigned_class = models.ForeignKey(
+        'courses.StudentClass',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='students',
+        help_text='Assigned class for class-based lab access and organization'
+    )
+    lab_access_mode = models.CharField(
+        max_length=20,
+        choices=(
+            ('unrestricted', 'Unrestricted Access'),
+            ('class_based', 'Class-Based Access'),
+        ),
+        default='unrestricted',
+        help_text='Access mode: class_based restricts labs to assigned class; unrestricted gives access to all labs'
+    )
 
     def save(self, *args, **kwargs):
         # Superusers are platform administrators
@@ -59,6 +76,10 @@ class User(AbstractUser):
     @property
     def is_student(self):
         return self.user_type == 'student'
+
+    @property
+    def is_class_restricted(self):
+        return bool(self.user_type == 'student' and self.lab_access_mode == 'class_based' and self.assigned_class_id)
 
     @property
     def can_access_django_admin(self):

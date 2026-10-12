@@ -15,6 +15,10 @@ class UserSerializer(serializers.ModelSerializer):
     courses_count = serializers.SerializerMethodField()
     enrolled_subjects = serializers.SerializerMethodField()
     subjects_count = serializers.SerializerMethodField()
+    assigned_class_id = serializers.IntegerField(source='assigned_class.id', read_only=True, allow_null=True)
+    assigned_class_name = serializers.CharField(source='assigned_class.name', read_only=True, allow_null=True)
+    assigned_class_code = serializers.CharField(source='assigned_class.code', read_only=True, allow_null=True)
+    is_class_restricted = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = User
@@ -35,6 +39,11 @@ class UserSerializer(serializers.ModelSerializer):
             'is_active',
             'is_lab_access_blocked',
             'lab_access_block_reason',
+            'assigned_class_id',
+            'assigned_class_name',
+            'assigned_class_code',
+            'lab_access_mode',
+            'is_class_restricted',
             'date_joined',
             'enrolled_courses',
             'courses_count',
@@ -44,6 +53,7 @@ class UserSerializer(serializers.ModelSerializer):
         read_only_fields = [
             'id', 'is_admin', 'can_access_django_admin', 'can_access_admin_dashboard',
             'can_access_student_panel', 'full_name', 'date_joined',
+            'assigned_class_id', 'assigned_class_name', 'assigned_class_code', 'is_class_restricted',
             'enrolled_courses', 'courses_count',
             'enrolled_subjects', 'subjects_count'
         ]
@@ -132,6 +142,16 @@ class CreateStudentSerializer(serializers.ModelSerializer):
         write_only=True,
         default=list
     )
+    assigned_class_id = serializers.IntegerField(
+        required=False,
+        allow_null=True,
+        write_only=True,
+        default=None
+    )
+    lab_access_mode = serializers.CharField(
+        required=False,
+        default='unrestricted'
+    )
 
     class Meta:
         model = User
@@ -147,6 +167,8 @@ class CreateStudentSerializer(serializers.ModelSerializer):
             'user_type',
             'course_ids',
             'subject_ids',
+            'assigned_class_id',
+            'lab_access_mode',
         ]
 
     def validate_email(self, value):
@@ -171,11 +193,25 @@ class CreateStudentSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         course_ids = validated_data.pop('course_ids', [])
         subject_ids = validated_data.pop('subject_ids', [])
+        assigned_class_id = validated_data.pop('assigned_class_id', None)
+        lab_access_mode = validated_data.pop('lab_access_mode', 'unrestricted')
         validated_data.pop('confirm_password')
         password = validated_data.pop('password')
         user_type = validated_data.pop('user_type', 'student')
         user = User(**validated_data)
         user.user_type = user_type if user_type in ('student', 'instructor', 'admin') else 'student'
+
+        if assigned_class_id:
+            from courses.models import StudentClass
+            student_class = StudentClass.objects.filter(id=assigned_class_id, is_active=True).first()
+            if student_class:
+                user.assigned_class = student_class
+                user.lab_access_mode = lab_access_mode or 'class_based'
+            else:
+                user.lab_access_mode = lab_access_mode or 'unrestricted'
+        else:
+            user.lab_access_mode = lab_access_mode or 'unrestricted'
+
         user.set_password(password)
         user.save()
 
@@ -202,13 +238,29 @@ class CreateStudentSerializer(serializers.ModelSerializer):
 
 
 class UpdateStudentSerializer(serializers.ModelSerializer):
+    assigned_class_id = serializers.IntegerField(required=False, allow_null=True, write_only=True)
+
     class Meta:
         model = User
         fields = [
             'first_name', 'last_name', 'email', 'phone_number',
             'organization', 'user_type', 'is_active', 'is_lab_access_blocked',
-            'lab_access_block_reason'
+            'lab_access_block_reason', 'assigned_class_id', 'lab_access_mode'
         ]
+
+    def update(self, instance, validated_data):
+        if 'assigned_class_id' in validated_data:
+            assigned_class_id = validated_data.pop('assigned_class_id')
+            if assigned_class_id:
+                from courses.models import StudentClass
+                instance.assigned_class = StudentClass.objects.filter(id=assigned_class_id).first()
+                if not validated_data.get('lab_access_mode'):
+                    instance.lab_access_mode = 'class_based'
+            else:
+                instance.assigned_class = None
+                if not validated_data.get('lab_access_mode'):
+                    instance.lab_access_mode = 'unrestricted'
+        return super().update(instance, validated_data)
 
 
 class LoginSerializer(serializers.Serializer):

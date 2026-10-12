@@ -444,3 +444,34 @@ class LabRetakeRequest(models.Model):
 
     def __str__(self):
         return f"RetakeRequest: {self.student.username} → {self.lab.name} [{self.status}]"
+
+
+class StudentClass(models.Model):
+    """
+    Class / Batch entity for organizing students and assigning specific practical labs.
+    Students assigned to a class in 'class_based' access mode can only view and attend labs assigned to this class.
+    """
+    name = models.CharField(max_length=200, unique=True)
+    code = models.CharField(max_length=50, blank=True, default='')  # e.g., "CYBER-A", "BATCH-2026"
+    description = models.TextField(blank=True, default='')
+    labs = models.ManyToManyField(Lab, blank=True, related_name='assigned_classes')
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['name']
+        verbose_name = 'Class'
+        verbose_name_plural = 'Classes'
+
+    def __str__(self):
+        return f"{self.name} ({self.code})" if self.code else self.name
+
+    @property
+    def student_count(self):
+        return self.students.filter(is_active=True).count()
+
+    @property
+    def lab_count(self):
+        return self.labs.filter(is_active=True).count()
+

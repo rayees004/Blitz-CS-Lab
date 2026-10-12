@@ -32,6 +32,11 @@ from .views import (
     StudyMaterialListCreateView,
     StudyMaterialDetailView,
     StudentMaterialsView,
+    StudentClassListCreateView,
+    StudentClassDetailView,
+    StudentClassAssignLabsView,
+    StudentClassAssignStudentsView,
+    StudentClassStudentsView,
 )
 
 urlpatterns = [
@@ -84,4 +89,11 @@ urlpatterns = [
     path('students/<int:pk>/assign-subjects/', StudentBulkAssignSubjectsView.as_view(), name='api_student_bulk_assign_subjects'),
     path('students/<int:pk>/subjects/', StudentSubjectEnrollmentsView.as_view(), name='api_student_subjects'),
     path('enrollments/<int:pk>/', EnrollmentDetailView.as_view(), name='api_enrollment_detail'),
+
+    # Classes Management (StudentClass)
+    path('classes/', StudentClassListCreateView.as_view(), name='api_classes'),
+    path('classes/<int:pk>/', StudentClassDetailView.as_view(), name='api_class_detail'),
+    path('classes/<int:pk>/assign-labs/', StudentClassAssignLabsView.as_view(), name='api_class_assign_labs'),
+    path('classes/<int:pk>/assign-students/', StudentClassAssignStudentsView.as_view(), name='api_class_assign_students'),
+    path('classes/<int:pk>/students/', StudentClassStudentsView.as_view(), name='api_class_students'),
 ]

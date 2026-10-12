@@ -3,7 +3,7 @@ from rest_framework import serializers
 from .models import (
     Course, Enrollment, Module, Subject, SubjectEnrollment,
     Lab, LabQuestion, QuestionHint, LabSubmission, LabScore,
-    StudyMaterial
+    StudyMaterial, StudentClass
 )
 
 
@@ -403,4 +403,145 @@ class CreateStudyMaterialSerializer(serializers.ModelSerializer):
             validated_data['uploaded_by'] = user
 
         return super().create(validated_data)
+
+
+class StudentClassListSerializer(serializers.ModelSerializer):
+    student_count = serializers.IntegerField(read_only=True)
+    lab_count = serializers.IntegerField(read_only=True)
+    lab_ids = serializers.PrimaryKeyRelatedField(many=True, read_only=True, source='labs')
+
+    class Meta:
+        model = StudentClass
+        fields = [
+            'id', 'name', 'code', 'description', 'student_count', 'lab_count',
+            'lab_ids', 'is_active', 'created_at', 'updated_at'
+        ]
+
+
+class StudentClassDetailSerializer(serializers.ModelSerializer):
+    student_count = serializers.SerializerMethodField()
+    lab_count = serializers.SerializerMethodField()
+    labs = serializers.SerializerMethodField()
+    students = serializers.SerializerMethodField()
+
+    class Meta:
+        model = StudentClass
+        fields = [
+            'id', 'name', 'code', 'description', 'student_count', 'lab_count',
+            'labs', 'students', 'is_active', 'created_at', 'updated_at'
+        ]
+
+    def get_student_count(self, obj):
+        return obj.students.filter(is_active=True).count()
+
+    def get_lab_count(self, obj):
+        return obj.labs.filter(is_active=True).count()
+
+    def get_labs(self, obj):
+        return [
+            {
+                'id': l.id,
+                'name': l.name,
+                'category': l.category,
+                'difficulty': l.difficulty,
+                'points': l.points,
+                'subject_name': l.subject.name if l.subject else None,
+            }
+            for l in obj.labs.filter(is_active=True).select_related('subject')
+        ]
+
+    def get_students(self, obj):
+        return [
+            {
+                'id': s.id,
+                'username': s.username,
+                'email': s.email,
+                'first_name': s.first_name,
+                'last_name': s.last_name,
+                'full_name': f"{s.first_name} {s.last_name}".strip() or s.username,
+                'lab_access_mode': s.lab_access_mode,
+                'is_lab_access_blocked': s.is_lab_access_blocked,
+            }
+            for s in obj.students.filter(is_active=True).order_by('username')
+        ]
+
+
+class CreateStudentClassSerializer(serializers.ModelSerializer):
+    lab_ids = serializers.ListField(
+        child=serializers.IntegerField(),
+        required=False,
+        write_only=True,
+        default=list
+    )
+    student_ids = serializers.ListField(
+        child=serializers.IntegerField(),
+        required=False,
+        write_only=True,
+        default=list
+    )
+
+    class Meta:
+        model = StudentClass
+        fields = ['id', 'name', 'code', 'description', 'lab_ids', 'student_ids']
+
+    def validate_name(self, value):
+        val = value.strip()
+        if not val:
+            raise serializers.ValidationError('Class name is required.')
+        qs = StudentClass.objects.filter(name__iexact=val)
+        if self.instance:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise serializers.ValidationError(f"A class named '{val}' already exists.")
+        return val
+
+    def create(self, validated_data):
+        lab_ids = validated_data.pop('lab_ids', [])
+        student_ids = validated_data.pop('student_ids', [])
+        instance = StudentClass.objects.create(**validated_data)
+
+        if lab_ids:
+            labs = Lab.objects.filter(id__in=lab_ids, is_active=True)
+            instance.labs.set(labs)
+
+        if student_ids:
+            from accounts.models import User
+            students = User.objects.filter(id__in=student_ids, user_type='student')
+            for s in students:
+                s.assigned_class = instance
+                s.lab_access_mode = 'class_based'
+                s.save(update_fields=['assigned_class', 'lab_access_mode'])
+
+        return instance
+
+    def update(self, instance, validated_data):
+        lab_ids = validated_data.pop('lab_ids', None)
+        student_ids = validated_data.pop('student_ids', None)
+
+        for attr, val in validated_data.items():
+            setattr(instance, attr, val)
+        instance.save()
+
+        if lab_ids is not None:
+            labs = Lab.objects.filter(id__in=lab_ids, is_active=True)
+            instance.labs.set(labs)
+
+        if student_ids is not None:
+            from accounts.models import User
+            # Students previously assigned to this class that were removed
+            removed = instance.students.exclude(id__in=student_ids)
+            for r in removed:
+                r.assigned_class = None
+                r.lab_access_mode = 'unrestricted'
+                r.save(update_fields=['assigned_class', 'lab_access_mode'])
+
+            # Add newly assigned students
+            to_assign = User.objects.filter(id__in=student_ids, user_type='student')
+            for a in to_assign:
+                a.assigned_class = instance
+                a.lab_access_mode = 'class_based'
+                a.save(update_fields=['assigned_class', 'lab_access_mode'])
+
+        return instance
+
 

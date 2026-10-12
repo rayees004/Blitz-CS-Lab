@@ -9,12 +9,13 @@ from django.utils import timezone
 from django.db import transaction
 import random
 from accounts.models import User
+from accounts.serializers import UserSerializer, CreateStudentSerializer
 from accounts.views import IsAdminOrStaff
 from accounts.audit import record_audit_log
 from .models import (
     Course, Enrollment, Module, Subject, SubjectEnrollment,
     Lab, LabQuestion, QuestionHint, LabSubmission, LabScore,
-    StudyMaterial, StudentAssignedBatch, LabRetakeRequest
+    StudyMaterial, StudentAssignedBatch, LabRetakeRequest, StudentClass
 )
 from .serializers import (
     CourseSerializer,
@@ -32,6 +33,9 @@ from .serializers import (
     LabScoreSerializer,
     StudyMaterialSerializer,
     CreateStudyMaterialSerializer,
+    StudentClassListSerializer,
+    StudentClassDetailSerializer,
+    CreateStudentClassSerializer,
 )
 
 
@@ -1065,19 +1069,27 @@ def can_student_attend_lab(student, lab):
         return False, msg, lab.subject
 
     if not lab.subject:
-        return False, "This lab has not been assigned to any subject yet. Attendance is not available.", None
+        # If class-based, subject is not strictly mandatory as long as it's assigned to class
+        pass
 
-    # Check student active subject enrollments
-    is_enrolled = SubjectEnrollment.objects.filter(
-        student=student,
-        subject=lab.subject,
-        is_active=True
-    ).exists()
+    # Class-Based Lab Access Check
+    access_mode = getattr(student, 'lab_access_mode', 'unrestricted')
+    if access_mode == 'class_based':
+        if not student.assigned_class:
+            return False, "Access restricted. You are in Class-Based access mode but have not been assigned to a class.", lab.subject
+        if not student.assigned_class.labs.filter(id=lab.id).exists():
+            return False, f"Access restricted. This lab is not assigned to your class '{student.assigned_class.name}'.", lab.subject
+        return True, None, lab.subject
 
-    if not is_enrolled:
-        subj_name = lab.subject.name
-        subj_code = f" ({lab.subject.code})" if lab.subject.code else ""
-        return False, f"Access restricted. You must be assigned to subject '{subj_name}{subj_code}' to attend this lab.", lab.subject
+    # Unrestricted Lab Access Mode (maintain existing behavior)
+    if lab.subject:
+        enrolled_subjects = SubjectEnrollment.objects.filter(student=student, is_active=True)
+        if enrolled_subjects.exists():
+            is_enrolled = enrolled_subjects.filter(subject=lab.subject).exists()
+            if not is_enrolled:
+                subj_name = lab.subject.name
+                subj_code = f" ({lab.subject.code})" if lab.subject.code else ""
+                return False, f"Access restricted. You must be assigned to subject '{subj_name}{subj_code}' to attend this lab.", lab.subject
 
     return True, None, lab.subject
 
@@ -1085,7 +1097,7 @@ def can_student_attend_lab(student, lab):
 class StudentLabListView(APIView):
     """
     GET /api/student/labs/
-    Returns active labs enriched with subject-based access locking,
+    Returns active labs enriched with subject-based or class-based access locking,
     the current student's lab score (ForeignKey based), attend count, and submission status.
     """
     permission_classes = [AllowAny]
@@ -1096,12 +1108,23 @@ class StudentLabListView(APIView):
 
         assigned_batch = None
         if student and not is_admin_or_staff:
-            enrolled_subject_ids = SubjectEnrollment.objects.filter(
-                student=student, is_active=True
-            ).values_list('subject_id', flat=True)
-            labs = Lab.objects.select_related('course', 'subject', 'subject__course').prefetch_related('questions__hints').filter(
-                is_active=True, subject_id__in=enrolled_subject_ids
-            ).order_by('-created_at')
+            access_mode = getattr(student, 'lab_access_mode', 'unrestricted')
+            if access_mode == 'class_based':
+                if student.assigned_class:
+                    labs = student.assigned_class.labs.select_related('course', 'subject', 'subject__course').prefetch_related('questions__hints').filter(is_active=True).order_by('-created_at')
+                else:
+                    labs = Lab.objects.none()
+            else:
+                # Unrestricted Access (existing system)
+                enrolled_subject_ids = SubjectEnrollment.objects.filter(
+                    student=student, is_active=True
+                ).values_list('subject_id', flat=True)
+                if enrolled_subject_ids.exists():
+                    labs = Lab.objects.select_related('course', 'subject', 'subject__course').prefetch_related('questions__hints').filter(
+                        is_active=True, subject_id__in=enrolled_subject_ids
+                    ).order_by('-created_at')
+                else:
+                    labs = Lab.objects.select_related('course', 'subject', 'subject__course').prefetch_related('questions__hints').filter(is_active=True).order_by('-created_at')
         else:
             labs = Lab.objects.select_related('course', 'subject', 'subject__course').prefetch_related('questions__hints').filter(is_active=True).order_by('-created_at')
 
@@ -1252,6 +1275,11 @@ class StudentLabListView(APIView):
             'is_batch_active': bool(assigned_batch),
             'is_lab_access_blocked': getattr(student, 'is_lab_access_blocked', False) if student else False,
             'lab_access_block_reason': getattr(student, 'lab_access_block_reason', '') if student else '',
+            'lab_access_mode': getattr(student, 'lab_access_mode', 'unrestricted') if student else 'unrestricted',
+            'assigned_class_id': student.assigned_class_id if student else None,
+            'assigned_class_name': student.assigned_class.name if student and student.assigned_class else None,
+            'assigned_class_code': student.assigned_class.code if student and student.assigned_class else None,
+            'is_class_restricted': getattr(student, 'is_class_restricted', False) if student else False,
         }
 
         return Response({
@@ -2668,6 +2696,285 @@ class StudentMaterialsView(APIView):
 
         serializer = StudyMaterialSerializer(qs, many=True, context={'request': request})
         return Response({'count': qs.count(), 'results': serializer.data})
+
+
+# ============================================================================
+# CLASS MANAGEMENT (StudentClass)
+# ============================================================================
+
+class StudentClassListCreateView(APIView):
+    """
+    GET  /api/classes/  — List all classes (with lab and student counts)
+    POST /api/classes/  — Create a new class
+    """
+    permission_classes = [IsAdminOrStaff]
+
+    def get(self, request):
+        qs = StudentClass.objects.all().prefetch_related('labs', 'students')
+        search = request.query_params.get('search') or request.query_params.get('q')
+        if search:
+            from django.db.models import Q
+            qs = qs.filter(Q(name__icontains=search) | Q(code__icontains=search) | Q(description__icontains=search))
+
+        is_active = request.query_params.get('is_active')
+        if is_active is not None and is_active != '':
+            qs = qs.filter(is_active=is_active.lower() in ('true', '1'))
+
+        serializer = StudentClassListSerializer(qs.order_by('-created_at'), many=True)
+        return Response({'count': qs.count(), 'results': serializer.data})
+
+    def post(self, request):
+        serializer = CreateStudentClassSerializer(data=request.data)
+        if serializer.is_valid():
+            class_obj = serializer.save()
+
+            record_audit_log(
+                action_type='CLASS_CREATE',
+                description=f"Created class '{class_obj.name}' ({class_obj.code}) with {class_obj.labs.count()} labs.",
+                request=request,
+                actor=request.user,
+                target_entity='StudentClass',
+                target_id=class_obj.id,
+                target_name=class_obj.name,
+                severity='NOTICE',
+                details={'code': class_obj.code, 'lab_count': class_obj.labs.count()}
+            )
+            return Response(StudentClassDetailSerializer(class_obj).data, status=status.HTTP_201_CREATED)
+
+        errors = serializer.errors
+        first_field = next(iter(errors))
+        first_msg = errors[first_field]
+        if isinstance(first_msg, list):
+            first_msg = first_msg[0]
+        return Response({'detail': str(first_msg), 'errors': errors}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class StudentClassDetailView(APIView):
+    """
+    GET    /api/classes/<pk>/  — Get class details (with assigned labs & students)
+    PATCH  /api/classes/<pk>/  — Update class details
+    DELETE /api/classes/<pk>/  — Delete class (unassigns students and sets their mode to unrestricted)
+    """
+    permission_classes = [IsAdminOrStaff]
+
+    def get(self, request, pk):
+        class_obj = get_object_or_404(StudentClass.objects.prefetch_related('labs', 'students'), pk=pk)
+        return Response(StudentClassDetailSerializer(class_obj).data)
+
+    def patch(self, request, pk):
+        class_obj = get_object_or_404(StudentClass, pk=pk)
+        name = request.data.get('name')
+        if name is not None:
+            class_obj.name = name.strip()
+        code = request.data.get('code')
+        if code is not None:
+            class_obj.code = code.strip()
+        description = request.data.get('description')
+        if description is not None:
+            class_obj.description = description.strip()
+        is_active = request.data.get('is_active')
+        if is_active is not None:
+            class_obj.is_active = bool(is_active)
+
+        lab_ids = request.data.get('lab_ids')
+        if lab_ids is not None:
+            class_obj.labs.set(lab_ids)
+
+        class_obj.save()
+
+        record_audit_log(
+            action_type='CLASS_UPDATE',
+            description=f"Updated class '{class_obj.name}' ({class_obj.code}).",
+            request=request,
+            actor=request.user,
+            target_entity='StudentClass',
+            target_id=class_obj.id,
+            target_name=class_obj.name,
+            severity='NOTICE',
+            details={'code': class_obj.code}
+        )
+        return Response(StudentClassDetailSerializer(class_obj).data)
+
+    def delete(self, request, pk):
+        class_obj = get_object_or_404(StudentClass, pk=pk)
+        name = class_obj.name
+        # Unassign students and return them to unrestricted access
+        User.objects.filter(assigned_class=class_obj).update(assigned_class=None, lab_access_mode='unrestricted')
+        class_obj.delete()
+
+        record_audit_log(
+            action_type='CLASS_DELETE',
+            description=f"Deleted class '{name}'.",
+            request=request,
+            actor=request.user,
+            target_entity='StudentClass',
+            target_id=pk,
+            target_name=name,
+            severity='WARNING'
+        )
+        return Response({'message': f"Class '{name}' deleted successfully."}, status=status.HTTP_200_OK)
+
+
+class StudentClassAssignLabsView(APIView):
+    """
+    POST /api/classes/<pk>/assign-labs/
+    Assign or remove specific labs for a class.
+    Body:
+      - lab_ids: list of int IDs to replace all assigned labs
+      - add_lab_ids: list of int IDs to append
+      - remove_lab_ids: list of int IDs to remove
+    """
+    permission_classes = [IsAdminOrStaff]
+
+    def post(self, request, pk):
+        class_obj = get_object_or_404(StudentClass, pk=pk)
+        lab_ids = request.data.get('lab_ids')
+        add_lab_ids = request.data.get('add_lab_ids')
+        remove_lab_ids = request.data.get('remove_lab_ids')
+
+        if lab_ids is not None:
+            class_obj.labs.set(lab_ids)
+        if add_lab_ids:
+            class_obj.labs.add(*add_lab_ids)
+        if remove_lab_ids:
+            class_obj.labs.remove(*remove_lab_ids)
+
+        record_audit_log(
+            action_type='CLASS_ASSIGN_LABS',
+            description=f"Updated assigned labs for class '{class_obj.name}'. Total labs now: {class_obj.labs.count()}.",
+            request=request,
+            actor=request.user,
+            target_entity='StudentClass',
+            target_id=class_obj.id,
+            target_name=class_obj.name,
+            severity='NOTICE',
+            details={'lab_count': class_obj.labs.count()}
+        )
+        return Response({
+            'message': f"Labs updated for class '{class_obj.name}'.",
+            'class': StudentClassDetailSerializer(class_obj).data
+        })
+
+
+class StudentClassAssignStudentsView(APIView):
+    """
+    POST /api/classes/<pk>/assign-students/
+    Assign or remove students to/from a class.
+    Body:
+      - student_ids: list of student IDs
+      - action: 'assign' | 'add' | 'remove' | 'set' (default 'assign')
+      - access_mode: 'class_based' | 'unrestricted' (default 'class_based')
+    """
+    permission_classes = [IsAdminOrStaff]
+
+    def post(self, request, pk):
+        class_obj = get_object_or_404(StudentClass, pk=pk)
+        student_ids = request.data.get('student_ids', [])
+        action = request.data.get('action', 'assign')
+        access_mode = request.data.get('access_mode', 'class_based')
+        if access_mode not in ('class_based', 'unrestricted'):
+            access_mode = 'class_based'
+
+        if not isinstance(student_ids, list):
+            return Response({'detail': 'student_ids must be a list of IDs.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if action in ('assign', 'add'):
+            updated_count = User.objects.filter(id__in=student_ids).update(
+                assigned_class=class_obj,
+                lab_access_mode=access_mode
+            )
+            msg = f"Assigned {updated_count} student(s) to class '{class_obj.name}' with access mode '{access_mode}'."
+        elif action == 'remove':
+            updated_count = User.objects.filter(id__in=student_ids, assigned_class=class_obj).update(
+                assigned_class=None,
+                lab_access_mode='unrestricted'
+            )
+            msg = f"Removed {updated_count} student(s) from class '{class_obj.name}'."
+        elif action == 'set':
+            # Unassign students not in list
+            User.objects.filter(assigned_class=class_obj).exclude(id__in=student_ids).update(
+                assigned_class=None,
+                lab_access_mode='unrestricted'
+            )
+            # Assign students in list
+            updated_count = User.objects.filter(id__in=student_ids).update(
+                assigned_class=class_obj,
+                lab_access_mode=access_mode
+            )
+            msg = f"Updated enrolled students for class '{class_obj.name}' ({updated_count} students)."
+        else:
+            return Response({'detail': f"Unsupported action '{action}'."}, status=status.HTTP_400_BAD_REQUEST)
+
+        record_audit_log(
+            action_type='CLASS_ASSIGN_STUDENTS',
+            description=msg,
+            request=request,
+            actor=request.user,
+            target_entity='StudentClass',
+            target_id=class_obj.id,
+            target_name=class_obj.name,
+            severity='NOTICE',
+            details={'action': action, 'student_count': class_obj.students.count()}
+        )
+
+        return Response({
+            'message': msg,
+            'class': StudentClassDetailSerializer(class_obj).data
+        })
+
+
+class StudentClassStudentsView(APIView):
+    """
+    GET  /api/classes/<pk>/students/ — List students enrolled in this class
+    POST /api/classes/<pk>/students/ — Create a new student directly in this class
+    """
+    permission_classes = [IsAdminOrStaff]
+
+    def get(self, request, pk):
+        class_obj = get_object_or_404(StudentClass, pk=pk)
+        students = class_obj.students.all().order_by('date_joined')
+        return Response({
+            'class_id': class_obj.id,
+            'class_name': class_obj.name,
+            'count': students.count(),
+            'results': UserSerializer(students, many=True).data
+        })
+
+    def post(self, request, pk):
+        class_obj = get_object_or_404(StudentClass, pk=pk)
+        data = request.data.copy()
+        data['assigned_class_id'] = class_obj.id
+        if 'lab_access_mode' not in data:
+            data['lab_access_mode'] = 'class_based'
+
+        serializer = CreateStudentSerializer(data=data)
+        if serializer.is_valid():
+            student = serializer.save()
+            name = student.get_full_name() or student.username
+            record_audit_log(
+                action_type='USER_CREATE',
+                description=f"Created student '{name}' in class '{class_obj.name}'.",
+                request=request,
+                actor=request.user,
+                target_entity='User',
+                target_id=student.id,
+                target_name=name,
+                severity='NOTICE',
+                details={'class': class_obj.name, 'username': student.username}
+            )
+            return Response({
+                'message': f"Student '{name}' created and assigned to class '{class_obj.name}'.",
+                'student': UserSerializer(student).data,
+                'class': StudentClassDetailSerializer(class_obj).data
+            }, status=status.HTTP_201_CREATED)
+
+        errors = serializer.errors
+        first_field = next(iter(errors))
+        first_msg = errors[first_field]
+        if isinstance(first_msg, list):
+            first_msg = first_msg[0]
+        return Response({'detail': str(first_msg), 'errors': errors}, status=status.HTTP_400_BAD_REQUEST)
+
 
 
 
