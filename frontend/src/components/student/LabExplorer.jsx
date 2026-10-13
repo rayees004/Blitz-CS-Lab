@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Search, Filter, RefreshCw, Database } from "lucide-react";
+import { Search, Filter, RefreshCw, Database, GraduationCap } from "lucide-react";
 import LabCard from "./LabCard";
 import Btn from "../common/Btn";
 import { C, sans, mono } from "../../constants/theme";
@@ -11,8 +11,8 @@ export default function LabExplorer({ go }) {
   const [loading, setLoading] = useState(true);
   const [cat, setCat] = useState("All");
   const [search, setSearch] = useState("");
-
   const [batchInfo, setBatchInfo] = useState(null);
+  const [classInfo, setClassInfo] = useState(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -22,6 +22,13 @@ export default function LabExplorer({ go }) {
         setLabs(data.labs || []);
         if (data.batch || (data.stats && data.stats.is_batch_active)) {
           setBatchInfo(data.batch || { batch_index: data.stats?.batch_index });
+        }
+        if (data.stats?.assigned_class_name && data.stats?.is_class_restricted) {
+          setClassInfo({
+            name: data.stats.assigned_class_name,
+            code: data.stats.assigned_class_code,
+            mode: data.stats.lab_access_mode,
+          });
         }
       })
       .catch((err) => {
@@ -64,7 +71,25 @@ export default function LabExplorer({ go }) {
             <h1 style={{ fontFamily: sans, fontSize: 22, fontWeight: 700, color: C.hi, margin: 0 }}>
               Lab Explorer
             </h1>
-            {batchInfo ? (
+            {classInfo ? (
+              <span
+                style={{
+                  fontFamily: mono,
+                  fontSize: 11,
+                  color: C.amber,
+                  background: "rgba(240, 180, 41, 0.12)",
+                  padding: "2px 8px",
+                  borderRadius: 4,
+                  border: `1px solid rgba(240, 180, 41, 0.3)`,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 5,
+                  fontWeight: 600,
+                }}
+              >
+                <GraduationCap size={12} /> Class: {classInfo.name} {classInfo.code ? `(${classInfo.code})` : ""}
+              </span>
+            ) : batchInfo ? (
               <span
                 style={{
                   fontFamily: mono,
@@ -102,8 +127,10 @@ export default function LabExplorer({ go }) {
             )}
           </div>
           <p style={{ fontFamily: sans, fontSize: 13.5, color: C.mid, marginTop: 6 }}>
-            {labs.length} isolated environments across {Math.max(1, cats.length - 1)} security domains.
-            {batchInfo ? " Only this 5-lab batch is visible until all 5 labs are completed." : " Assigned interactive security labs for your enrolled courses."}
+            {classInfo
+              ? `Showing ${labs.length} practical environments assigned to your class "${classInfo.name}".`
+              : `${labs.length} isolated environments across ${Math.max(1, cats.length - 1)} security domains.`}
+            {batchInfo ? " Only this 5-lab batch is visible until all 5 labs are completed." : (!classInfo ? " Assigned interactive security labs for your enrolled courses." : "")}
           </p>
         </div>
 

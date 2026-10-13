@@ -2765,7 +2765,12 @@ class StudentClassDetailView(APIView):
         class_obj = get_object_or_404(StudentClass, pk=pk)
         name = request.data.get('name')
         if name is not None:
-            class_obj.name = name.strip()
+            clean_name = name.strip()
+            if not clean_name:
+                return Response({'detail': 'Class name cannot be empty.'}, status=status.HTTP_400_BAD_REQUEST)
+            if StudentClass.objects.filter(name__iexact=clean_name).exclude(pk=pk).exists():
+                return Response({'detail': f"A class named '{clean_name}' already exists."}, status=status.HTTP_400_BAD_REQUEST)
+            class_obj.name = clean_name
         code = request.data.get('code')
         if code is not None:
             class_obj.code = code.strip()

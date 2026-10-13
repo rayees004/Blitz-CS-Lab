@@ -2,13 +2,15 @@ import React, { useState, useEffect, useCallback } from "react";
 import {
   X, AlertCircle, Loader2, Mail,
   Phone, Building2, Calendar, Shield, Layers,
-  FlaskConical, TrendingUp, ShieldAlert, ShieldCheck, Ban, CheckCircle2, RotateCcw
+  FlaskConical, TrendingUp, ShieldAlert, ShieldCheck, Ban, CheckCircle2, RotateCcw,
+  GraduationCap
 } from "lucide-react";
 import Btn from "../common/Btn";
 import Badge from "../common/Badge";
 import ProgressBar from "../common/ProgressBar";
 import { C, sans, mono } from "../../constants/theme";
 import { fetchStudentProgress, updateStudent, grantLabRetakePermission } from "../../api/students";
+import { fetchClasses } from "../../api/classes";
 
 /* ─── Helpers ─────────────────────────────────────────── */
 
@@ -50,6 +52,36 @@ export default function StudentDetailPanel({ student, onClose, onStudentUpdate }
   const [resetScoreChecked, setResetScoreChecked] = useState(true);
   const [retakeLoading, setRetakeLoading] = useState(false);
   const [retakeSuccessMsg, setRetakeSuccessMsg] = useState("");
+
+  const [availableClasses, setAvailableClasses] = useState([]);
+  const [classUpdateLoading, setClassUpdateLoading] = useState(false);
+  const [classSuccessMsg, setClassSuccessMsg] = useState("");
+
+  useEffect(() => {
+    fetchClasses().then(res => setAvailableClasses(res.results || [])).catch(() => {});
+  }, []);
+
+  const handleUpdateClassAndAccess = async (newClassId, newAccessMode) => {
+    if (!currentStudent?.id) return;
+    setClassUpdateLoading(true);
+    setClassSuccessMsg("");
+    try {
+      const payload = {
+        assigned_class_id: newClassId ? Number(newClassId) : null,
+        lab_access_mode: newAccessMode || currentStudent?.lab_access_mode || 'unrestricted',
+      };
+      const res = await updateStudent(currentStudent.id, payload);
+      const updated = res.student || res;
+      setCurrentStudent(updated);
+      if (onStudentUpdate) onStudentUpdate(updated);
+      setClassSuccessMsg("Class & Access Mode updated!");
+      setTimeout(() => setClassSuccessMsg(""), 3500);
+    } catch (err) {
+      alert(err.message || "Failed to update class assignment.");
+    } finally {
+      setClassUpdateLoading(false);
+    }
+  };
 
   useEffect(() => {
     setCurrentStudent(student);
@@ -227,6 +259,69 @@ export default function StudentDetailPanel({ student, onClose, onStudentUpdate }
                     : "Student (Student Panel Only)"
                 }
               />
+            </div>
+
+            {/* Class Assignment & Lab Access Control */}
+            <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 16, marginTop: 14 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <GraduationCap size={15} color={C.amber} />
+                  <span style={{ fontFamily: mono, fontSize: 11, fontWeight: 700, color: C.hi, letterSpacing: "0.04em" }}>
+                    CLASS & LAB ACCESS CONTROL
+                  </span>
+                </div>
+                {classSuccessMsg && (
+                  <span style={{ fontFamily: sans, fontSize: 11, color: C.cyan }}>
+                    ✓ {classSuccessMsg}
+                  </span>
+                )}
+              </div>
+
+              <div style={{ background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 8, padding: "12px 14px" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: 12, marginBottom: 10 }}>
+                  <div>
+                    <div style={{ fontFamily: sans, fontSize: 11, color: C.low, marginBottom: 4 }}>Assigned Class</div>
+                    <select
+                      disabled={classUpdateLoading}
+                      value={currentStudent?.assigned_class_id || ""}
+                      onChange={e => handleUpdateClassAndAccess(e.target.value, currentStudent?.lab_access_mode)}
+                      style={{
+                        width: "100%", background: C.panel3, border: `1px solid ${C.border}`,
+                        borderRadius: 6, padding: "6px 8px", color: C.hi, fontFamily: sans, fontSize: 12,
+                        outline: "none", cursor: "pointer",
+                      }}
+                    >
+                      <option value="">Independent / No Class (Unassigned)</option>
+                      {availableClasses.map(c => (
+                        <option key={c.id} value={c.id}>{c.name} {c.code ? `(${c.code})` : ""}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <div style={{ fontFamily: sans, fontSize: 11, color: C.low, marginBottom: 4 }}>Lab Access Mode</div>
+                    <select
+                      disabled={classUpdateLoading}
+                      value={currentStudent?.lab_access_mode || "unrestricted"}
+                      onChange={e => handleUpdateClassAndAccess(currentStudent?.assigned_class_id, e.target.value)}
+                      style={{
+                        width: "100%", background: C.panel3, border: `1px solid ${C.border}`,
+                        borderRadius: 6, padding: "6px 8px", color: C.hi, fontFamily: sans, fontSize: 12,
+                        outline: "none", cursor: "pointer",
+                      }}
+                    >
+                      <option value="class_based">Class-Based Access</option>
+                      <option value="unrestricted">Unrestricted Access</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div style={{ fontFamily: sans, fontSize: 11, color: C.low, lineHeight: 1.4 }}>
+                  {currentStudent?.lab_access_mode === "class_based"
+                    ? `🔒 Restricts student's lab catalog and attendance solely to practical labs assigned to ${currentStudent?.assigned_class_name || 'their class'}.`
+                    : "🌐 Unrestricted Mode: Student can view and attend all available practical labs."}
+                </div>
+              </div>
             </div>
 
             {/* Quick Labs & Score Progress Bar */}

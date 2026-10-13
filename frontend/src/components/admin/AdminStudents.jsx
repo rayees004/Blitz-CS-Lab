@@ -3,7 +3,7 @@ import {
   Plus, MoreHorizontal, Search, X,
   Eye, EyeOff, Loader2, AlertCircle, CheckCircle,
   UserPlus, Trash2, RefreshCw, BookOpen, Layers,
-  Ban, ShieldCheck, ShieldAlert
+  Ban, ShieldCheck, ShieldAlert, GraduationCap
 } from "lucide-react";
 import Panel from "../common/Panel";
 import Btn from "../common/Btn";
@@ -11,6 +11,7 @@ import Badge from "../common/Badge";
 import { C, sans, mono } from "../../constants/theme";
 import { fetchStudents, createStudent, deleteStudent, updateStudent } from "../../api/students";
 import { fetchSubjects } from "../../api/subjects";
+import { fetchClasses } from "../../api/classes";
 import StudentDetailPanel from "./StudentDetailPanel";
 import AssignSubjectsModal from "./AssignSubjectsModal";
 
@@ -65,6 +66,8 @@ const EMPTY = {
   password: "", confirm_password: "",
   user_type: "student",
   subject_ids: [],
+  assigned_class_id: null,
+  lab_access_mode: "unrestricted",
 };
 
 function AddStudentDrawer({ onClose, onCreated, isPlatformAdmin = false }) {
@@ -73,6 +76,7 @@ function AddStudentDrawer({ onClose, onCreated, isPlatformAdmin = false }) {
   const [loading, setLoading] = useState(false);
   const [globalError, setGlobalError] = useState("");
   const [availableSubjects, setAvailableSubjects] = useState([]);
+  const [availableClasses, setAvailableClasses] = useState([]);
   const [loadingSubjects, setLoadingSubjects] = useState(true);
 
   useEffect(() => {
@@ -80,6 +84,10 @@ function AddStudentDrawer({ onClose, onCreated, isPlatformAdmin = false }) {
       .then(res => setAvailableSubjects(res.results || []))
       .catch(() => {})
       .finally(() => setLoadingSubjects(false));
+
+    fetchClasses()
+      .then(res => setAvailableClasses(res.results || []))
+      .catch(() => {});
   }, []);
 
   const set = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.value }));
@@ -214,6 +222,50 @@ function AddStudentDrawer({ onClose, onCreated, isPlatformAdmin = false }) {
             </div>
           </div>
 
+          {/* Class Assignment & Access Mode */}
+          <div style={{ padding: "14px", background: C.panel2, borderRadius: 8, border: `1px solid ${C.border}`, marginBottom: 16 }}>
+            <div style={{ fontFamily: mono, fontSize: 10, color: C.low, letterSpacing: "0.05em", marginBottom: 10 }}>
+              CLASS ASSIGNMENT & LAB ACCESS MODE
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontFamily: sans, fontSize: 12, color: C.mid, marginBottom: 5 }}>Assign to Class (Optional)</div>
+              <select
+                style={inputStyle(false)}
+                value={form.assigned_class_id || ""}
+                onChange={e => {
+                  const val = e.target.value;
+                  setForm(f => ({
+                    ...f,
+                    assigned_class_id: val ? Number(val) : null,
+                    lab_access_mode: val ? "class_based" : f.lab_access_mode,
+                  }));
+                }}
+              >
+                <option value="">Independent / No Class (Unassigned)</option>
+                {availableClasses.map(c => (
+                  <option key={c.id} value={c.id}>{c.name} {c.code ? `(${c.code})` : ""}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <div style={{ fontFamily: sans, fontSize: 12, color: C.mid, marginBottom: 5 }}>Lab Access Mode</div>
+              <select
+                style={inputStyle(false)}
+                value={form.lab_access_mode || "unrestricted"}
+                onChange={e => setForm(f => ({ ...f, lab_access_mode: e.target.value }))}
+              >
+                <option value="class_based">Class-Based Access (Restricted to class labs)</option>
+                <option value="unrestricted">Unrestricted Access (Access all available labs)</option>
+              </select>
+              <div style={{ fontFamily: sans, fontSize: 11, color: C.low, marginTop: 4 }}>
+                {form.lab_access_mode === "class_based"
+                  ? "🔒 Student will only have access to the labs assigned to their class."
+                  : "🌐 Student can access and attend all available practical labs."}
+              </div>
+            </div>
+          </div>
+
           {/* Initial Subjects Selection */}
           <div style={{ fontFamily: mono, fontSize: 10, color: C.low, letterSpacing: "0.05em", marginBottom: 10, marginTop: 6, paddingTop: 16, borderTop: `1px solid ${C.border}` }}>
             ASSIGN SUBJECTS (OPTIONAL)
@@ -345,6 +397,8 @@ const FEE_TONE = { PAID: "cyan", DUE: "danger", PARTIAL: "warn" };
 export default function AdminStudents({ currentUser }) {
   const isPlatformAdmin = currentUser?.user_type === "admin" || Boolean(currentUser?.is_superuser) || Boolean(currentUser?.can_access_django_admin);
   const [roleFilter, setRoleFilter] = useState("all");
+  const [classFilter, setClassFilter] = useState("all");
+  const [classes, setClasses] = useState([]);
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -360,8 +414,18 @@ export default function AdminStudents({ currentUser }) {
   const load = useCallback(async () => {
     setLoading(true); setError("");
     try {
-      const data = await fetchStudents(search);
-      setStudents(data.results || []);
+      const [dataRes, classRes] = await Promise.allSettled([
+        fetchStudents(search),
+        fetchClasses(),
+      ]);
+      if (dataRes.status === "fulfilled") {
+        setStudents(dataRes.value?.results || []);
+      } else {
+        throw dataRes.reason || new Error("Failed to load students.");
+      }
+      if (classRes.status === "fulfilled") {
+        setClasses(classRes.value?.results || []);
+      }
     } catch (err) {
       setError(err.message || "Failed to load students.");
     } finally {
@@ -435,8 +499,15 @@ export default function AdminStudents({ currentUser }) {
   };
 
   const filteredStudents = students.filter(s => {
-    if (roleFilter === "all") return true;
-    return s.user_type === roleFilter;
+    if (roleFilter !== "all" && s.user_type !== roleFilter) return false;
+    if (classFilter !== "all") {
+      if (classFilter === "unassigned") {
+        if (s.assigned_class_id) return false;
+      } else {
+        if (String(s.assigned_class_id) !== String(classFilter)) return false;
+      }
+    }
+    return true;
   });
   const activeCount = filteredStudents.filter(s => s.is_active).length;
 
@@ -464,19 +535,47 @@ export default function AdminStudents({ currentUser }) {
 
       {/* Search and Role Filter Bar */}
       <div style={{ marginTop: 18, marginBottom: 16, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-        <div style={{
-          display: "flex", alignItems: "center", gap: 8,
-          background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 8,
-          padding: "8px 12px", width: 340, maxWidth: "100%",
-        }}>
-          <Search size={14} color={C.low} />
-          <input
-            value={searchInput}
-            onChange={e => setSearchInput(e.target.value)}
-            placeholder="Search by name, email, or username..."
-            style={{ background: "none", border: "none", outline: "none", fontFamily: sans, fontSize: 13, color: C.hi, flex: 1 }}
-          />
-          {searchInput && <X size={13} color={C.low} style={{ cursor: "pointer" }} onClick={() => setSearchInput("")} />}
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+          <div style={{
+            display: "flex", alignItems: "center", gap: 8,
+            background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 8,
+            padding: "8px 12px", width: 300, maxWidth: "100%",
+          }}>
+            <Search size={14} color={C.low} />
+            <input
+              value={searchInput}
+              onChange={e => setSearchInput(e.target.value)}
+              placeholder="Search by name, email, or username..."
+              style={{ background: "none", border: "none", outline: "none", fontFamily: sans, fontSize: 13, color: C.hi, flex: 1 }}
+            />
+            {searchInput && <X size={13} color={C.low} style={{ cursor: "pointer" }} onClick={() => setSearchInput("")} />}
+          </div>
+
+          {/* Class Filter Selector */}
+          <div style={{ display: "flex", alignItems: "center", gap: 6, background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 8, padding: "4px 10px" }}>
+            <GraduationCap size={14} color={C.amber} />
+            <select
+              value={classFilter}
+              onChange={e => setClassFilter(e.target.value)}
+              style={{
+                background: "transparent",
+                border: "none",
+                color: C.hi,
+                fontFamily: sans,
+                fontSize: 12,
+                outline: "none",
+                cursor: "pointer",
+              }}
+            >
+              <option value="all" style={{ background: C.panel, color: C.hi }}>All Classes</option>
+              <option value="unassigned" style={{ background: C.panel, color: C.hi }}>Independent / No Class</option>
+              {classes.map(c => (
+                <option key={c.id} value={c.id} style={{ background: C.panel, color: C.hi }}>
+                  Class: {c.name} {c.code ? `(${c.code})` : ""}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {/* Role Filter Tabs */}
@@ -526,12 +625,12 @@ export default function AdminStudents({ currentUser }) {
       {!error && (
         <Panel style={{ overflow: "hidden" }}>
           {/* Column headers */}
-          <div style={{ display: "grid", gridTemplateColumns: "1.7fr 1.5fr 1.7fr 0.8fr 0.8fr 0.4fr", padding: "10px 18px", borderBottom: `1px solid ${C.border}`, fontFamily: mono, fontSize: 10.5, color: C.low, letterSpacing: "0.04em" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1.3fr 1.3fr 1.3fr 0.8fr 0.4fr", padding: "10px 18px", borderBottom: `1px solid ${C.border}`, fontFamily: mono, fontSize: 10.5, color: C.low, letterSpacing: "0.04em" }}>
             <div>NAME & ROLE</div>
             <div>EMAIL</div>
+            <div>CLASS & LAB ACCESS</div>
             <div>SUBJECTS</div>
             <div>STATUS</div>
-            <div>JOINED</div>
             <div />
           </div>
 
@@ -546,8 +645,8 @@ export default function AdminStudents({ currentUser }) {
 
           {/* Loading skeletons */}
           {loading && [1, 2, 3].map(i => (
-            <div key={i} style={{ display: "grid", gridTemplateColumns: "1.7fr 1.5fr 1.7fr 0.8fr 0.8fr 0.4fr", padding: "13px 18px", alignItems: "center", borderTop: `1px solid ${C.border}`, gap: 12 }}>
-              {[120, 160, 110, 60, 50, 20].map((w, j) => (
+            <div key={i} style={{ display: "grid", gridTemplateColumns: "1.5fr 1.3fr 1.3fr 1.3fr 0.8fr 0.4fr", padding: "13px 18px", alignItems: "center", borderTop: `1px solid ${C.border}`, gap: 12 }}>
+              {[120, 140, 110, 110, 60, 20].map((w, j) => (
                 <div key={j} style={{ height: 12, width: w, borderRadius: 4, background: C.panel3, animation: "pulse 1.4s ease infinite" }} />
               ))}
             </div>
@@ -570,7 +669,7 @@ export default function AdminStudents({ currentUser }) {
                 onClick={() => setSelectedStudent(s)}
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "1.7fr 1.5fr 1.7fr 0.8fr 0.8fr 0.4fr",
+                  gridTemplateColumns: "1.5fr 1.3fr 1.3fr 1.3fr 0.8fr 0.4fr",
                   padding: "13px 18px",
                   alignItems: "center",
                   borderTop: i === 0 ? "none" : `1px solid ${C.border}`,
@@ -647,6 +746,41 @@ export default function AdminStudents({ currentUser }) {
 
                 {/* Email */}
                 <span style={{ fontFamily: mono, fontSize: 11.5, color: C.mid }}>{s.email || "—"}</span>
+
+                {/* Class & Lab Access Mode */}
+                <div>
+                  {s.assigned_class_name ? (
+                    <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 3 }}>
+                      <GraduationCap size={12} color={C.amber} />
+                      <span style={{ fontFamily: sans, fontSize: 12, fontWeight: 600, color: C.hi }}>
+                        {s.assigned_class_name}
+                      </span>
+                      {s.assigned_class_code && (
+                        <span style={{ fontFamily: mono, fontSize: 9.5, color: C.cyan, background: "rgba(63,216,200,0.1)", padding: "1px 4px", borderRadius: 3 }}>
+                          {s.assigned_class_code}
+                        </span>
+                      )}
+                    </div>
+                  ) : (
+                    <div style={{ fontFamily: mono, fontSize: 11, color: C.low, marginBottom: 3 }}>
+                      Independent
+                    </div>
+                  )}
+
+                  <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                    <span style={{
+                      width: 5, height: 5, borderRadius: "50%",
+                      background: s.lab_access_mode === "class_based" ? C.amber : C.cyan,
+                    }} />
+                    <span style={{
+                      fontFamily: mono, fontSize: 10,
+                      color: s.lab_access_mode === "class_based" ? C.amber : C.cyan,
+                      fontWeight: 600,
+                    }}>
+                      {s.lab_access_mode === "class_based" ? "CLASS-BASED" : "UNRESTRICTED"}
+                    </span>
+                  </div>
+                </div>
 
                 {/* Subjects pills with click to assign */}
                 <div

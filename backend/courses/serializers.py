@@ -423,12 +423,13 @@ class StudentClassDetailSerializer(serializers.ModelSerializer):
     lab_count = serializers.SerializerMethodField()
     labs = serializers.SerializerMethodField()
     students = serializers.SerializerMethodField()
+    lab_ids = serializers.PrimaryKeyRelatedField(many=True, read_only=True, source='labs')
 
     class Meta:
         model = StudentClass
         fields = [
             'id', 'name', 'code', 'description', 'student_count', 'lab_count',
-            'labs', 'students', 'is_active', 'created_at', 'updated_at'
+            'lab_ids', 'labs', 'students', 'is_active', 'created_at', 'updated_at'
         ]
 
     def get_student_count(self, obj):
