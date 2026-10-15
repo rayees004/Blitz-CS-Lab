@@ -1,8 +1,16 @@
-# Environment variables and secrets
+# Environment variables, credentials, and secrets
 .env
 .env.*
 *.env
 !.env.example
+!.env.production.example
+.env.deploy*
+!.env.deploy.example
+deploy_secrets.*
+*.pem
+*.key
+id_rsa*
+id_ed25519*
 
 # Virtual environments
 env/
@@ -22,8 +30,10 @@ node_modules/
 # Build artifacts
 dist/
 build/
-*/dist/
 *.zip
+# Exception: frontend/dist is tracked for production deployment
+!frontend/dist/
+!frontend/dist/**
 
 # Python bytecode & cache
 __pycache__/

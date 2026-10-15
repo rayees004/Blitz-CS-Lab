@@ -1,0 +1,9 @@
+---
+deployment:
+  tasks:
+    - export DEPLOYPATH=/home/decodexe/decodexe/Blitz-CS-Lab
+    - /bin/cp -R * $DEPLOYPATH
+    - /bin/cp -R frontend/dist/* /home/decodexe/public_html/ 2>/dev/null || true
+    - cd $DEPLOYPATH/backend && python3 manage.py migrate --noinput 2>/dev/null || true
+    - if [ -f /home/decodexe/deploy.sh ]; then /bin/bash /home/decodexe/deploy.sh; fi
+    - /bin/mkdir -p $DEPLOYPATH/tmp && /bin/touch $DEPLOYPATH/tmp/restart.txt 2>/dev/null || true

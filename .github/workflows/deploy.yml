@@ -1,0 +1,43 @@
+name: Production Auto Deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy Latest Git Version
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Deploy to Server via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.CPANEL_SSH_HOST }}
+          username: ${{ secrets.CPANEL_SSH_USER }}
+          password: ${{ secrets.CPANEL_SSH_PASSWORD }}
+          key: ${{ secrets.CPANEL_SSH_KEY }}
+          port: ${{ secrets.CPANEL_SSH_PORT || '22' }}
+          timeout: 60s
+          command_timeout: 10m
+          script: |
+            echo "=== Pulling latest version from main branch ==="
+            cd /home/decodexe/decodexe/Blitz-CS-Lab || cd /home/decodexe/Blitz-CS-Lab || exit 1
+            git fetch origin main
+            git reset --hard origin/main
+
+            echo "=== Running Deploy Routine ==="
+            if [ -f "/home/decodexe/deploy.sh" ]; then
+              /bin/bash /home/decodexe/deploy.sh
+            else
+              cd backend
+              python3 manage.py migrate --noinput
+              mkdir -p ../tmp
+              touch ../tmp/restart.txt
+            fi
+
+            echo "=== Auto Deploy Finished Successfully ==="
