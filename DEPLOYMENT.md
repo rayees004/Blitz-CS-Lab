@@ -54,3 +54,28 @@ To run deployment manually from your terminal without hardcoding credentials:
    python deploy_to_cpanel.py
    ```
    If credentials are not found in `.env.deploy`, the script will securely prompt for your password in the console without echoing it.
+
+---
+
+## Method 4: Direct GitHub Webhook (Push-to-Deploy)
+
+A dedicated, secure webhook endpoint is available on the live backend server.
+
+### Setup in GitHub:
+1. Go to your GitHub repository: `https://github.com/rayees004/Blitz-CS-Lab`
+2. Navigate to **Settings** > **Webhooks** > **Add webhook**.
+3. Set the fields:
+   - **Payload URL**: `https://backend.decodexe.com/api/webhook/github-deploy/`
+   - **Content type**: `application/json`
+   - **Secret**: *(Optional: If you set `GITHUB_WEBHOOK_SECRET` in `backend/.env`, paste the same secret here)*
+   - **SSL verification**: `Enable SSL verification`
+   - **Which events would you like to trigger this webhook?**: `Just the push event`
+   - **Active**: Checked (Enabled)
+4. Click **Add webhook**.
+
+Every time you push new commits to the `main` branch, GitHub sends a webhook to this endpoint, which immediately executes the server deployment routine:
+- Pulls latest commit from GitHub `main`.
+- Copies the latest compiled `frontend/dist` to `public_html`.
+- Applies any pending database migrations to PostgreSQL without affecting existing data.
+- Collects static files and restarts the server application.
+
