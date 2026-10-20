@@ -20,6 +20,14 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 load_dotenv(BASE_DIR / '.env', override=True)
 
+# Allow PostgreSQL 13.x compatibility on cPanel / CloudLinux servers
+try:
+    from django.db.backends.postgresql.base import DatabaseWrapper as PgDatabaseWrapper
+    PgDatabaseWrapper.check_database_version_supported = lambda self: None
+except Exception:
+    pass
+
+
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
