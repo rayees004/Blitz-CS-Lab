@@ -674,6 +674,9 @@ class LabListCreateView(APIView):
         serializer = LabSerializer(data=data)
         if serializer.is_valid():
             lab = serializer.save()
+            if request.user and request.user.is_authenticated:
+                lab.created_by = request.user
+                lab.save(update_fields=['created_by'])
 
             record_audit_log(
                 action_type='LAB_CREATE',
@@ -1079,6 +1082,17 @@ def can_student_attend_lab(student, lab):
             return False, "Access restricted. You are in Class-Based access mode but have not been assigned to a class.", lab.subject
         if not student.assigned_class.labs.filter(id=lab.id).exists():
             return False, f"Access restricted. This lab is not assigned to your class '{student.assigned_class.name}'.", lab.subject
+
+        # In class-based lab attendance, students can ONLY attend labs for their assigned subjects
+        if not lab.subject:
+            return False, "Access restricted. This lab has no assigned subject. In class-based mode, only assigned subject labs can be attended.", None
+
+        is_enrolled_in_subj = SubjectEnrollment.objects.filter(student=student, subject=lab.subject, is_active=True).exists()
+        if not is_enrolled_in_subj:
+            subj_name = lab.subject.name
+            subj_code = f" ({lab.subject.code})" if lab.subject.code else ""
+            return False, f"Access restricted. You are not assigned to subject '{subj_name}{subj_code}'. In class-based access, you can only attend labs for your assigned subjects.", lab.subject
+
         return True, None, lab.subject
 
     # Unrestricted Lab Access Mode (maintain existing behavior)
@@ -1106,12 +1120,25 @@ class StudentLabListView(APIView):
         student = get_current_student(request)
         is_admin_or_staff = bool(student and (student.is_staff or student.is_superuser or getattr(student, 'user_type', None) in ('admin', 'instructor')))
 
+        student_name = "Student"
+        if student:
+            full = f"{student.first_name} {student.last_name}".strip()
+            student_name = full or student.username
+
         assigned_batch = None
         if student and not is_admin_or_staff:
             access_mode = getattr(student, 'lab_access_mode', 'unrestricted')
             if access_mode == 'class_based':
                 if student.assigned_class:
-                    labs = student.assigned_class.labs.select_related('course', 'subject', 'subject__course').prefetch_related('questions__hints').filter(is_active=True).order_by('-created_at')
+                    enrolled_subject_ids = SubjectEnrollment.objects.filter(
+                        student=student, is_active=True
+                    ).values_list('subject_id', flat=True)
+                    if enrolled_subject_ids.exists():
+                        labs = student.assigned_class.labs.select_related('course', 'subject', 'subject__course').prefetch_related('questions__hints').filter(
+                            is_active=True, subject_id__in=enrolled_subject_ids
+                        ).order_by('-created_at')
+                    else:
+                        labs = student.assigned_class.labs.select_related('course', 'subject', 'subject__course').prefetch_related('questions__hints').filter(is_active=True).order_by('-created_at')
                 else:
                     labs = Lab.objects.none()
             else:
@@ -1240,6 +1267,9 @@ class StudentLabListView(APIView):
                 'is_completed': sub_status == 'COMPLETED',
                 'solved_questions_count': solved_questions,
                 'progress_pct': progress_pct,
+                'student_name': student_name,
+                'created_by_name': (lab.created_by.get_full_name() or lab.created_by.username) if lab.created_by else (lab.org or "Platform Admin"),
+                'created_by_role': getattr(lab.created_by, 'user_type', 'admin') if lab.created_by else 'admin',
                 'started_at': ls.first_attended_at if ls else (sub.started_at if sub else None),
                 'last_activity_at': ls.last_attended_at if ls else (sub.last_activity_at if sub else None),
                 'submitted_at': ls.completed_at if ls else (sub.submitted_at if sub else None),
@@ -1399,8 +1429,11 @@ class StudentLabAttendView(APIView):
         current_score = min(lab.points, max(0, current_score))
 
         effective_course = get_lab_effective_course(lab)
+        student_display_name = (student.get_full_name() or student.username) if student else "Student"
 
         return Response({
+            'student_name': student_display_name,
+            'student_id': student.id if student else None,
             'lab': {
                 'id': lab.id,
                 'name': lab.name,
@@ -1420,6 +1453,9 @@ class StudentLabAttendView(APIView):
                 'subject_name': lab.subject.name if lab.subject else None,
                 'course_id': effective_course.id if effective_course else None,
                 'course_name': effective_course.name if effective_course else None,
+                'student_name': student_display_name,
+                'created_by_name': (lab.created_by.get_full_name() or lab.created_by.username) if lab.created_by else (lab.org or "Platform Admin"),
+                'created_by_role': getattr(lab.created_by, 'user_type', 'admin') if lab.created_by else 'admin',
             },
             'questions': questions_payload,
             'lab_score': {
@@ -1624,6 +1660,16 @@ class StudentLabSubmitMarkView(APIView):
             answers = submission.answers if isinstance(submission.answers, dict) else {}
             solved_count = sum(1 for a in answers.values() if isinstance(a, dict) and a.get('is_correct'))
             total_questions = lab.questions.count()
+
+            # Requirement 4: Lab only locks on after all questions complete
+            if total_questions > 0 and solved_count < total_questions:
+                return Response({
+                    'detail': f'Lab cannot be finalized or locked until all questions are completed. ({solved_count} of {total_questions} questions solved).',
+                    'solved_count': solved_count,
+                    'total_questions': total_questions,
+                    'is_completed': False,
+                }, status=status.HTTP_400_BAD_REQUEST)
+
             raw_total = sum(
                 item.get('points_awarded', 0)
                 for item in answers.values()
@@ -2979,6 +3025,208 @@ class StudentClassStudentsView(APIView):
         if isinstance(first_msg, list):
             first_msg = first_msg[0]
         return Response({'detail': str(first_msg), 'errors': errors}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class AdminSubjectLabAnalysisView(APIView):
+    """
+    GET /api/admin/subject-lab-analysis/
+    Subject-based analysis view for Platform Admins and Instructors.
+    Provides deep analysis of each instructor's added practical labs and questions,
+    structured and aggregated by subject as well as by instructor.
+    """
+    permission_classes = [IsAdminOrStaff]
+
+    def get(self, request):
+        search = request.query_params.get('search', '').strip().lower()
+        instructor_id = request.query_params.get('instructor_id')
+        subject_id = request.query_params.get('subject_id')
+
+        # 1. Fetch subjects
+        subjects_qs = Subject.objects.prefetch_related(
+            'labs__questions__hints',
+            'labs__created_by'
+        ).select_related('course').filter(is_active=True).order_by('name')
+
+        # 2. Fetch instructors & admins who can create labs
+        instructors_qs = User.objects.filter(user_type__in=['instructor', 'admin']).order_by('date_joined')
+
+        # 3. Labs with questions & hints
+        labs_qs = Lab.objects.prefetch_related(
+            'questions__hints'
+        ).select_related('subject', 'course', 'created_by').filter(is_active=True).order_by('-created_at')
+
+        if instructor_id:
+            labs_qs = labs_qs.filter(created_by_id=instructor_id)
+        if subject_id:
+            labs_qs = labs_qs.filter(subject_id=subject_id)
+
+        # Subject-based Analysis Breakdown
+        subject_analysis = []
+        for subj in subjects_qs:
+            if subject_id and str(subj.id) != str(subject_id):
+                continue
+
+            subj_labs = [l for l in labs_qs if l.subject_id == subj.id]
+            if search:
+                subj_labs = [
+                    l for l in subj_labs
+                    if search in l.name.lower()
+                    or search in (l.description or '').lower()
+                    or search in subj.name.lower()
+                    or (l.created_by and search in (l.created_by.get_full_name() or l.created_by.username).lower())
+                ]
+
+            total_questions = sum(l.questions.count() for l in subj_labs)
+            total_points = sum(l.points for l in subj_labs)
+
+            # Aggregate by instructor within this subject
+            instructor_groups = {}
+            for lab in subj_labs:
+                creator = lab.created_by
+                c_id = creator.id if creator else 0
+                c_name = (creator.get_full_name() or creator.username) if creator else (lab.org or "Platform Admin")
+                c_role = getattr(creator, 'user_type', 'admin') if creator else 'admin'
+                c_email = creator.email if creator else ''
+
+                if c_id not in instructor_groups:
+                    instructor_groups[c_id] = {
+                        'instructor_id': c_id,
+                        'instructor_name': c_name,
+                        'instructor_email': c_email,
+                        'instructor_role': c_role,
+                        'labs_count': 0,
+                        'questions_count': 0,
+                        'points': 0,
+                        'labs': []
+                    }
+
+                q_items = [
+                    {
+                        'id': q.id,
+                        'title': q.title,
+                        'description': q.description,
+                        'points': q.points,
+                        'has_flag': bool(q.flag),
+                        'hints_count': q.hints.count()
+                    }
+                    for q in lab.questions.all()
+                ]
+
+                instructor_groups[c_id]['labs_count'] += 1
+                instructor_groups[c_id]['questions_count'] += len(q_items)
+                instructor_groups[c_id]['points'] += lab.points
+                instructor_groups[c_id]['labs'].append({
+                    'id': lab.id,
+                    'name': lab.name,
+                    'category': lab.category,
+                    'difficulty': lab.difficulty,
+                    'points': lab.points,
+                    'created_at': lab.created_at,
+                    'questions_count': len(q_items),
+                    'questions': q_items
+                })
+
+            subject_analysis.append({
+                'id': subj.id,
+                'name': subj.name,
+                'code': subj.code,
+                'course_name': subj.course.name if subj.course else 'Standalone',
+                'description': subj.description,
+                'total_labs': len(subj_labs),
+                'total_questions': total_questions,
+                'total_points': total_points,
+                'instructors': list(instructor_groups.values()),
+            })
+
+        # Instructor-based Analysis Breakdown
+        instructor_analysis = []
+        for inst in instructors_qs:
+            if instructor_id and str(inst.id) != str(instructor_id):
+                continue
+
+            inst_labs = [l for l in labs_qs if l.created_by_id == inst.id]
+            if search:
+                inst_labs = [
+                    l for l in inst_labs
+                    if search in l.name.lower()
+                    or search in (l.description or '').lower()
+                    or (l.subject and search in l.subject.name.lower())
+                ]
+
+            total_inst_questions = sum(l.questions.count() for l in inst_labs)
+            total_inst_points = sum(l.points for l in inst_labs)
+
+            # Group instructor's labs by subject
+            by_subj = {}
+            for lab in inst_labs:
+                s_id = lab.subject_id or 0
+                s_name = lab.subject.name if lab.subject else 'Standalone / General Security'
+                s_code = lab.subject.code if lab.subject else ''
+                c_name = (lab.subject.course.name if lab.subject and lab.subject.course else (lab.course.name if lab.course else ''))
+
+                if s_id not in by_subj:
+                    by_subj[s_id] = {
+                        'subject_id': s_id,
+                        'subject_name': s_name,
+                        'subject_code': s_code,
+                        'course_name': c_name,
+                        'labs_count': 0,
+                        'questions_count': 0,
+                        'points': 0,
+                        'labs': []
+                    }
+
+                q_items = [
+                    {
+                        'id': q.id,
+                        'title': q.title,
+                        'points': q.points,
+                        'has_flag': bool(q.flag),
+                        'hints_count': q.hints.count()
+                    }
+                    for q in lab.questions.all()
+                ]
+
+                by_subj[s_id]['labs_count'] += 1
+                by_subj[s_id]['questions_count'] += len(q_items)
+                by_subj[s_id]['points'] += lab.points
+                by_subj[s_id]['labs'].append({
+                    'id': lab.id,
+                    'name': lab.name,
+                    'category': lab.category,
+                    'difficulty': lab.difficulty,
+                    'points': lab.points,
+                    'questions_count': len(q_items),
+                    'questions': q_items,
+                    'created_at': lab.created_at
+                })
+
+            instructor_analysis.append({
+                'id': inst.id,
+                'name': inst.get_full_name() or inst.username,
+                'username': inst.username,
+                'email': inst.email,
+                'role': inst.user_type,
+                'date_joined': inst.date_joined,
+                'total_labs': len(inst_labs),
+                'total_questions': total_inst_questions,
+                'total_points': total_inst_points,
+                'subjects_count': len(by_subj),
+                'subjects': list(by_subj.values()),
+            })
+
+        # Summary KPIs
+        return Response({
+            'summary': {
+                'total_instructors': instructors_qs.filter(user_type='instructor').count(),
+                'total_admins': instructors_qs.filter(user_type='admin').count(),
+                'total_subjects': subjects_qs.count(),
+                'total_labs': Lab.objects.filter(is_active=True).count(),
+                'total_questions': LabQuestion.objects.filter(lab__is_active=True).count(),
+            },
+            'subject_analysis': subject_analysis,
+            'instructor_analysis': instructor_analysis,
+        })
 
 
 

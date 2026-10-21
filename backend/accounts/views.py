@@ -153,7 +153,15 @@ class StudentListCreateView(APIView):
 
     def post(self, request):
         target_role = request.data.get('user_type', 'student')
-        if target_role == 'admin' and getattr(request.user, 'user_type', None) != 'admin' and not request.user.is_superuser:
+        is_platform_admin = bool(getattr(request.user, 'user_type', None) == 'admin' or getattr(request.user, 'is_superuser', False))
+        is_instructor = bool(getattr(request.user, 'user_type', None) == 'instructor')
+
+        if is_instructor and target_role != 'student':
+            return Response({
+                'detail': 'Instructors are only authorized to create Student accounts.'
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        if target_role == 'admin' and not is_platform_admin:
             return Response({
                 'detail': 'Only Platform Administrators can create Admin accounts.'
             }, status=status.HTTP_403_FORBIDDEN)
@@ -215,6 +223,12 @@ class StudentDetailView(APIView):
 
     def patch(self, request, pk):
         student = self.get_student(pk)
+        is_instructor = bool(getattr(request.user, 'user_type', None) == 'instructor')
+        if is_instructor and 'user_type' in request.data and request.data['user_type'] != student.user_type:
+            return Response({
+                'detail': 'Instructors are not authorized to modify user roles.'
+            }, status=status.HTTP_403_FORBIDDEN)
+
         was_blocked = student.is_lab_access_blocked
         serializer = UpdateStudentSerializer(student, data=request.data, partial=True)
         if serializer.is_valid():

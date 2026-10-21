@@ -175,52 +175,77 @@ function AddStudentDrawer({ onClose, onCreated, isPlatformAdmin = false }) {
           <FieldInput label="Organization / Batch" placeholder="Blitz Cyber Lab" value={form.organization} onChange={set("organization")} error={errors.organization} />
 
           {/* Account Role Selector */}
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ fontFamily: mono, fontSize: 10, color: C.low, letterSpacing: "0.05em", marginBottom: 6 }}>
-              ACCOUNT ROLE
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: isPlatformAdmin ? "repeat(3, 1fr)" : "repeat(2, 1fr)", gap: 10 }}>
-              {[
-                { type: "student", label: "Student", desc: "Student panel access only" },
-                { type: "instructor", label: "Instructor", desc: "Admin dashboard access" },
-                ...(isPlatformAdmin
-                  ? [{ type: "admin", label: "Admin", desc: "Django admin + Dashboard" }]
-                  : []),
-              ].map((role) => (
-                <div
-                  key={role.type}
-                  onClick={() => setForm(f => ({ ...f, user_type: role.type }))}
-                  style={{
-                    padding: "9px 12px",
-                    borderRadius: 7,
-                    cursor: "pointer",
-                    border: `1px solid ${form.user_type === role.type ? (role.type === "admin" ? C.cyan : role.type === "instructor" ? "#c084fc" : C.amber) : C.border}`,
-                    background: form.user_type === role.type
-                      ? (role.type === "admin" ? "rgba(63, 216, 200, 0.12)" : role.type === "instructor" ? "rgba(192, 132, 252, 0.12)" : "rgba(240, 180, 41, 0.1)")
-                      : C.panel2,
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 2,
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <span style={{ fontFamily: sans, fontSize: 13, fontWeight: 600, color: form.user_type === role.type ? C.hi : C.mid }}>
-                      {role.label}
+          {isPlatformAdmin ? (
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontFamily: mono, fontSize: 10, color: C.low, letterSpacing: "0.05em", marginBottom: 6 }}>
+                ACCOUNT ROLE
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
+                {[
+                  { type: "student", label: "Student", desc: "Student panel access only" },
+                  { type: "instructor", label: "Instructor", desc: "Admin dashboard access" },
+                  { type: "admin", label: "Admin", desc: "Django admin + Dashboard" },
+                ].map((role) => (
+                  <div
+                    key={role.type}
+                    onClick={() => setForm(f => ({ ...f, user_type: role.type }))}
+                    style={{
+                      padding: "9px 12px",
+                      borderRadius: 7,
+                      cursor: "pointer",
+                      border: `1px solid ${form.user_type === role.type ? (role.type === "admin" ? C.cyan : role.type === "instructor" ? "#c084fc" : C.amber) : C.border}`,
+                      background: form.user_type === role.type
+                        ? (role.type === "admin" ? "rgba(63, 216, 200, 0.12)" : role.type === "instructor" ? "rgba(192, 132, 252, 0.12)" : "rgba(240, 180, 41, 0.1)")
+                        : C.panel2,
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 2,
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <span style={{ fontFamily: sans, fontSize: 13, fontWeight: 600, color: form.user_type === role.type ? C.hi : C.mid }}>
+                        {role.label}
+                      </span>
+                      <input
+                        type="radio"
+                        checked={form.user_type === role.type}
+                        onChange={() => {}}
+                        style={{ accentColor: role.type === "admin" ? C.cyan : role.type === "instructor" ? "#c084fc" : C.amber, cursor: "pointer" }}
+                      />
+                    </div>
+                    <span style={{ fontFamily: sans, fontSize: 10.5, color: C.low }}>
+                      {role.desc}
                     </span>
-                    <input
-                      type="radio"
-                      checked={form.user_type === role.type}
-                      onChange={() => {}}
-                      style={{ accentColor: role.type === "admin" ? C.cyan : role.type === "instructor" ? "#c084fc" : C.amber, cursor: "pointer" }}
-                    />
                   </div>
-                  <span style={{ fontFamily: sans, fontSize: 10.5, color: C.low }}>
-                    {role.desc}
-                  </span>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
+          ) : (
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontFamily: mono, fontSize: 10, color: C.low, letterSpacing: "0.05em", marginBottom: 6 }}>
+                ACCOUNT ROLE
+              </div>
+              <div style={{
+                padding: "10px 14px",
+                borderRadius: 7,
+                border: `1px solid rgba(240, 180, 41, 0.35)`,
+                background: "rgba(240, 180, 41, 0.08)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}>
+                <div>
+                  <div style={{ fontFamily: sans, fontSize: 13, fontWeight: 600, color: C.amber }}>
+                    Student Account
+                  </div>
+                  <div style={{ fontFamily: sans, fontSize: 11, color: C.mid }}>
+                    Instructors can only create Student accounts.
+                  </div>
+                </div>
+                <Badge tone="amber">STUDENT ONLY</Badge>
+              </div>
+            </div>
+          )}
 
           {/* Class Assignment & Access Mode */}
           <div style={{ padding: "14px", background: C.panel2, borderRadius: 8, border: `1px solid ${C.border}`, marginBottom: 16 }}>

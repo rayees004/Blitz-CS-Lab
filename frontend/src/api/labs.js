@@ -122,3 +122,14 @@ export async function fetchLabSubmissions() {
 export async function fetchStudentLabScores() {
   return apiFetch('/student/lab-scores/');
 }
+
+/** Fetch subject-based and instructor-based lab and question analysis */
+export async function fetchSubjectLabAnalysis(params = {}) {
+  const query = new URLSearchParams();
+  if (params.search) query.append('search', params.search);
+  if (params.instructor_id) query.append('instructor_id', params.instructor_id);
+  if (params.subject_id) query.append('subject_id', params.subject_id);
+
+  const qs = query.toString() ? `?${query.toString()}` : '';
+  return apiFetch(`/admin/subject-lab-analysis/${qs}`);
+}

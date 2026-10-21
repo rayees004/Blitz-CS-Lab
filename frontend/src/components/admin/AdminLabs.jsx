@@ -4,7 +4,8 @@ import {
   Trash2, Edit3, CheckCircle, AlertCircle, RefreshCw, Layers,
   Award, Globe, ExternalLink, Flag, BookMarked, Eye, EyeOff,
   ChevronDown, ChevronUp, Database, Sparkles, X, Terminal,
-  Video, Play, Film, FolderArchive, Download, Copy, Check, Code, FileCode
+  Video, Play, Film, FolderArchive, Download, Copy, Check, Code, FileCode,
+  User, BarChart3
 } from "lucide-react";
 import Panel from "../common/Panel";
 import Btn from "../common/Btn";
@@ -108,6 +109,18 @@ function LabViewDrawer({ lab, courses, onClose, onEdit, onDelete }) {
               <h2 style={{ fontFamily: sans, fontSize: 18, fontWeight: 700, color: C.hi, margin: "0 0 6px" }}>
                 {lab.name}
               </h2>
+
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                <User size={12} color={C.amber} />
+                <span style={{ fontFamily: sans, fontSize: 12, color: C.mid }}>
+                  Created by: <strong style={{ color: C.hi }}>{lab.created_by_name || lab.org || "Platform Admin"}</strong>
+                  {lab.created_by_role && (
+                    <span style={{ marginLeft: 6, fontFamily: mono, fontSize: 10, color: lab.created_by_role === "instructor" ? "#c084fc" : C.cyan }}>
+                      ({lab.created_by_role === "instructor" ? "Instructor" : "Platform Admin"})
+                    </span>
+                  )}
+                </span>
+              </div>
             </div>
 
             <button
@@ -651,7 +664,7 @@ function LabViewDrawer({ lab, courses, onClose, onEdit, onDelete }) {
 }
 
 /* ── Main AdminLabs Component ─────────────────────────────────────────── */
-export default function AdminLabs({ onOpenAddModal = null }) {
+export default function AdminLabs({ onOpenAddModal = null, onOpenAnalysis = null }) {
   const [labs, setLabs] = useState([]);
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -807,6 +820,28 @@ export default function AdminLabs({ onOpenAddModal = null }) {
             <Btn variant="subtle" icon={Sparkles} onClick={handleSeedLabs} small disabled={seeding}>
               {seeding ? "Seeding..." : "Seed Starter Labs"}
             </Btn>
+          )}
+          {onOpenAnalysis && (
+            <button
+              type="button"
+              onClick={onOpenAnalysis}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                background: "rgba(240, 180, 41, 0.12)",
+                border: "1px solid rgba(240, 180, 41, 0.35)",
+                color: C.amber,
+                borderRadius: 7,
+                padding: "8px 14px",
+                fontFamily: sans,
+                fontSize: 12.5,
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
+              <BarChart3 size={14} /> Subject Analysis
+            </button>
           )}
           <Btn
             icon={Plus}
@@ -1091,6 +1126,26 @@ export default function AdminLabs({ onOpenAddModal = null }) {
                         }}
                       >
                         Backend DB
+                      </span>
+
+                      <span
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 4,
+                          fontFamily: sans,
+                          fontSize: 11,
+                          color: "#c084fc",
+                          background: "rgba(192, 132, 252, 0.12)",
+                          padding: "2px 8px",
+                          borderRadius: 4,
+                          border: `1px solid rgba(192, 132, 252, 0.3)`,
+                          fontWeight: 600,
+                        }}
+                        title={`Lab Creator: ${l.created_by_name || l.org || "Platform Admin"}`}
+                      >
+                        <User size={11} />
+                        By: {l.created_by_name || l.org || "Platform Admin"}
                       </span>
                     </div>
 

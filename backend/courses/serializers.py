@@ -212,6 +212,9 @@ class LabSerializer(serializers.ModelSerializer):
     course_id = serializers.PrimaryKeyRelatedField(
         queryset=Course.objects.all(), source='course', required=False, allow_null=True
     )
+    created_by_name = serializers.SerializerMethodField()
+    created_by_role = serializers.SerializerMethodField()
+    created_by_id = serializers.IntegerField(source='created_by.id', read_only=True, default=None)
 
     class Meta:
         model = Lab
@@ -221,10 +224,24 @@ class LabSerializer(serializers.ModelSerializer):
             'source_link', 'source_file', 'source_file_size', 'setup_guide', 'setup_commands',
             'course', 'course_name', 'course_id',
             'subject', 'subject_name', 'subject_id', 'is_active',
+            'created_by', 'created_by_name', 'created_by_role', 'created_by_id',
             'question_count', 'questions', 'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at', 'question_count', 'course_name', 'subject_name', 'source_file_size']
+        read_only_fields = [
+            'id', 'created_at', 'updated_at', 'question_count', 'course_name', 'subject_name',
+            'source_file_size', 'created_by', 'created_by_name', 'created_by_role', 'created_by_id'
+        ]
 
+    def get_created_by_name(self, obj):
+        if obj.created_by:
+            full = f"{obj.created_by.first_name} {obj.created_by.last_name}".strip()
+            return full or obj.created_by.username
+        return obj.org or "Platform Admin"
+
+    def get_created_by_role(self, obj):
+        if obj.created_by:
+            return getattr(obj.created_by, 'user_type', 'admin')
+        return "admin"
 
     def validate_name(self, value):
         val = value.strip()

@@ -6,9 +6,17 @@ import Badge, { DiffBadge } from "../common/Badge";
 import ProgressBar from "../common/ProgressBar";
 import { C, sans, mono } from "../../constants/theme";
 import CertificateModal from "./CertificateModal";
+import { getStoredUser } from "../../api/auth";
 
 export default function LabCard({ lab, onOpen }) {
   const [showCert, setShowCert] = useState(false);
+  const currentUser = getStoredUser();
+  const studentName =
+    lab.student_name ||
+    currentUser?.full_name ||
+    currentUser?.name ||
+    currentUser?.username ||
+    "Student";
 
   // A lab is only completed when all questions are solved or marked completed
   const isCompleted = Boolean(
@@ -31,7 +39,7 @@ export default function LabCard({ lab, onOpen }) {
 
   const certData = isCompleted ? {
     certId: `BLITZ-CERT-${String(lab.id).padStart(3, "0")}-${Math.floor(1000 + Math.random() * 9000)}`,
-    studentName: lab.student_name || "Student",
+    studentName: studentName,
     labName: lab.name,
     labDesc: lab.desc || lab.description || "",
     category: lab.cat || lab.category || "Security",

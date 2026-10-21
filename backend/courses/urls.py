@@ -37,11 +37,13 @@ from .views import (
     StudentClassAssignLabsView,
     StudentClassAssignStudentsView,
     StudentClassStudentsView,
+    AdminSubjectLabAnalysisView,
 )
 
 urlpatterns = [
     # Admin live dashboard stats & lab retake permission
     path('admin/dashboard-stats/', AdminDashboardStatsView.as_view(), name='api_admin_dashboard_stats'),
+    path('admin/subject-lab-analysis/', AdminSubjectLabAnalysisView.as_view(), name='api_admin_subject_lab_analysis'),
     path('admin/labs/retake-permission/', AdminStudentLabRetakePermissionView.as_view(), name='api_admin_lab_retake_permission'),
     path('admin/labs/retake-requests/', AdminLabRetakeRequestListView.as_view(), name='api_admin_lab_retake_requests'),
     path('admin/labs/retake-requests/<int:pk>/action/', AdminLabRetakeRequestActionView.as_view(), name='api_admin_lab_retake_request_action'),

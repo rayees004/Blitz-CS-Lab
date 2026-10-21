@@ -17,6 +17,7 @@ import {
   unlockStudentLabHint,
   finalizeStudentLab
 } from "../../api/labs";
+import { getStoredUser } from "../../api/auth";
 
 export default function StudentLabAttendModal({ lab, onClose, onUpdated }) {
   const [loading, setLoading] = useState(true);
@@ -131,14 +132,18 @@ export default function StudentLabAttendModal({ lab, onClose, onUpdated }) {
     }
   };
 
-  // Finalize lab and submit marks
+  // Finalize lab and submit marks - only permitted after ALL questions are completed
   const handleFinalize = async () => {
-    const isPartial = solvedQuestionsCount < questions.length;
-    const confirmMsg = isPartial
-      ? `You have answered and solved ${solvedQuestionsCount} of ${questions.length} questions.\n\nSubmitting now will record your final score based ONLY on your attended questions (${currentScore} / ${maxScore} pts) and lock the lab.\n\nProceed with final submission?`
-      : `You have completed all questions! Finalize and record your marks (${currentScore} / ${maxScore} pts)?`;
+    if (questions.length > 0 && solvedQuestionsCount < questions.length) {
+      alert(
+        `Lab cannot be locked or finalized until all questions are completed.\n\nCurrently completed: ${solvedQuestionsCount} of ${questions.length} questions.`
+      );
+      return;
+    }
 
-    const ok = window.confirm(confirmMsg);
+    const ok = window.confirm(
+      `You have completed all ${questions.length} questions!\n\nFinalize and record your marks (${currentScore} / ${maxScore} pts)? This will lock the lab.`
+    );
     if (!ok) return;
 
     setFinalizing(true);
@@ -897,13 +902,18 @@ export default function StudentLabAttendModal({ lab, onClose, onUpdated }) {
             </Btn>
             {!isCompleted && (
               <Btn
-                icon={Trophy}
-                disabled={finalizing || loading}
+                icon={questions.length > 0 && solvedQuestionsCount < questions.length ? Lock : Trophy}
+                disabled={finalizing || loading || (questions.length > 0 && solvedQuestionsCount < questions.length)}
                 onClick={handleFinalize}
-                tone="primary"
+                tone={questions.length > 0 && solvedQuestionsCount < questions.length ? "ghost" : "primary"}
+                title={questions.length > 0 && solvedQuestionsCount < questions.length ? "Complete all questions before locking this lab" : "Finalize and lock lab"}
                 sm
               >
-                {finalizing ? "Submitting Marks..." : "Finalize & Submit Lab"}
+                {finalizing
+                  ? "Submitting Marks..."
+                  : (questions.length > 0 && solvedQuestionsCount < questions.length)
+                  ? `Complete All Questions (${solvedQuestionsCount}/${questions.length})`
+                  : "Finalize & Submit Lab"}
               </Btn>
             )}
           </div>
@@ -914,11 +924,11 @@ export default function StudentLabAttendModal({ lab, onClose, onUpdated }) {
         <CertificateModal
           certificate={{
             certId: `BLITZ-CERT-${String(lab?.id || 1).padStart(3, "0")}-${Math.floor(1000 + Math.random() * 9000)}`,
-            studentName: workspace?.student_name || "Student",
-            labName: l.name || lab?.name || "Security Lab",
-            labDesc: l.description || lab?.description || "",
-            category: l.category || lab?.category || "Cyber Security",
-            subjectName: l.subject_name || lab?.subject_name || "",
+            studentName: workspace?.student_name || lab?.student_name || getStoredUser()?.full_name || getStoredUser()?.name || "Student",
+            labName: lab?.name || "Security Lab",
+            labDesc: lab?.description || "",
+            category: lab?.category || "Cyber Security",
+            subjectName: lab?.subject_name || "",
             score: currentScore,
             maxScore: maxScore,
             solvedQuestions: solvedQuestionsCount,

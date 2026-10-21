@@ -21,8 +21,20 @@ export default function CertificateModal({ certificate, onClose }) {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
 
+  const storedUser = (() => {
+    try {
+      const u = localStorage.getItem("blitz_user");
+      return u ? JSON.parse(u) : null;
+    } catch {
+      return null;
+    }
+  })();
+  const fallbackName = storedUser?.full_name || storedUser?.name || storedUser?.username || "Student";
+  const studentName = (certificate.studentName && certificate.studentName !== "Student")
+    ? certificate.studentName
+    : fallbackName;
+
   const {
-    studentName = "Student",
     labName = "Cybersecurity Practical Lab",
     labDesc = "",
     category = "Cyber Security",

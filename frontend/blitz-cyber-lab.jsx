@@ -32,6 +32,8 @@ import AdminMaterials from "./src/components/admin/AdminMaterials";
 import AdminActivity from "./src/components/admin/AdminActivity";
 import AdminAuditLogs from "./src/components/admin/AdminAuditLogs";
 import AdminRetakeRequests from "./src/components/admin/AdminRetakeRequests";
+import AdminAttendLabView from "./src/components/admin/AdminAttendLabView";
+import AdminSubjectLabAnalysis from "./src/components/admin/AdminSubjectLabAnalysis";
 import StudentProgressView from "./src/components/student/StudentProgressView";
 
 // Export modular subcomponents for external consumption
@@ -160,7 +162,9 @@ export default function BlitzCyberLab() {
       "a-students": <AdminStudents currentUser={currentUser} />,
       "a-classes": <AdminClasses />,
       "a-subjects": <AdminSubjects />,
-      "a-labs": <AdminLabs onOpenAddModal={() => setAdminPage("a-dashboard")} />,
+      "a-labs": <AdminLabs onOpenAddModal={() => setAdminPage("a-dashboard")} onOpenAnalysis={() => setAdminPage("a-subject-analysis")} />,
+      "a-attend-lab": <AdminAttendLabView currentUser={currentUser} onNavigate={setAdminPage} />,
+      "a-subject-analysis": <AdminSubjectLabAnalysis currentUser={currentUser} />,
       "a-materials": <AdminMaterials />,
       "a-activity": <AdminActivity onSelectStudent={() => setAdminPage("a-students")} />,
       "a-audit": <AdminAuditLogs />,
