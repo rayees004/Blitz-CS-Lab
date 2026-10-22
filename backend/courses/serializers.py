@@ -192,6 +192,12 @@ class QuestionHintSerializer(serializers.ModelSerializer):
         fields = ['id', 'hint_text', 'cost', 'order']
 
 
+def is_staff_viewer(context):
+    """True when the serializer's request user is an admin or instructor."""
+    user = getattr(context.get('request'), 'user', None)
+    return bool(user and user.is_authenticated and user.can_access_admin_dashboard)
+
+
 class LabQuestionSerializer(serializers.ModelSerializer):
     id = serializers.IntegerField(required=False)
     hints = QuestionHintSerializer(many=True, required=False, default=list)
@@ -203,9 +209,7 @@ class LabQuestionSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         data = super().to_representation(instance)
         # Flags are answers: only admins/instructors may see them (pass context={'request': request})
-        request = self.context.get('request')
-        user = getattr(request, 'user', None)
-        if not (user and user.is_authenticated and user.can_access_admin_dashboard):
+        if not is_staff_viewer(self.context):
             data.pop('flag', None)
         return data
 
@@ -222,8 +226,12 @@ class LabSerializer(serializers.ModelSerializer):
         queryset=Course.objects.all(), source='course', required=False, allow_null=True
     )
     created_by_name = serializers.SerializerMethodField()
+    created_by_username = serializers.CharField(source='created_by.username', read_only=True, default=None)
     created_by_role = serializers.SerializerMethodField()
     created_by_id = serializers.IntegerField(source='created_by.id', read_only=True, default=None)
+
+    # Lab creator details are visible only to instructors and platform admins
+    CREATOR_FIELDS = ('created_by', 'created_by_name', 'created_by_username', 'created_by_role', 'created_by_id')
 
     class Meta:
         model = Lab
@@ -233,24 +241,32 @@ class LabSerializer(serializers.ModelSerializer):
             'source_link', 'source_file', 'source_file_size', 'setup_guide', 'setup_commands',
             'course', 'course_name', 'course_id',
             'subject', 'subject_name', 'subject_id', 'is_active',
-            'created_by', 'created_by_name', 'created_by_role', 'created_by_id',
+            'created_by', 'created_by_name', 'created_by_username', 'created_by_role', 'created_by_id',
             'question_count', 'questions', 'created_at', 'updated_at'
         ]
         read_only_fields = [
             'id', 'created_at', 'updated_at', 'question_count', 'course_name', 'subject_name',
-            'source_file_size', 'created_by', 'created_by_name', 'created_by_role', 'created_by_id'
+            'source_file_size', 'created_by', 'created_by_name', 'created_by_username',
+            'created_by_role', 'created_by_id'
         ]
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        if not is_staff_viewer(self.context):
+            for field in self.CREATOR_FIELDS:
+                data.pop(field, None)
+        return data
 
     def get_created_by_name(self, obj):
         if obj.created_by:
             full = f"{obj.created_by.first_name} {obj.created_by.last_name}".strip()
             return full or obj.created_by.username
-        return obj.org or "Platform Admin"
+        return None
 
     def get_created_by_role(self, obj):
         if obj.created_by:
             return getattr(obj.created_by, 'user_type', 'admin')
-        return "admin"
+        return None
 
     def validate_name(self, value):
         val = value.strip()

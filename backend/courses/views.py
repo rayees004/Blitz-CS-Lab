@@ -803,7 +803,7 @@ class SubjectLabsView(APIView):
             data['course_id'] = subject.course_id
         serializer = LabSerializer(data=data)
         if serializer.is_valid():
-            lab = serializer.save()
+            lab = serializer.save(created_by=request.user)
             return Response({
                 'message': f'Lab "{lab.name}" added to course "{subject.name}".',
                 'lab': LabSerializer(lab, context={'request': request}).data,
@@ -946,6 +946,18 @@ def get_current_student(request):
     if request.user and request.user.is_authenticated:
         return request.user
     return None
+
+
+def lab_creator_fields(lab, viewer):
+    """Lab creator details for instructors/platform admins only; empty for students."""
+    if not (viewer and viewer.is_authenticated and viewer.can_access_admin_dashboard):
+        return {}
+    creator = lab.created_by
+    return {
+        'created_by_name': (creator.get_full_name() or creator.username) if creator else None,
+        'created_by_username': creator.username if creator else None,
+        'created_by_role': creator.user_type if creator else None,
+    }
 
 
 def get_lab_effective_course(lab):
@@ -1263,8 +1275,7 @@ class StudentLabListView(APIView):
                 'solved_questions_count': solved_questions,
                 'progress_pct': progress_pct,
                 'student_name': student_name,
-                'created_by_name': (lab.created_by.get_full_name() or lab.created_by.username) if lab.created_by else (lab.org or "Platform Admin"),
-                'created_by_role': getattr(lab.created_by, 'user_type', 'admin') if lab.created_by else 'admin',
+                **lab_creator_fields(lab, student),
                 'started_at': ls.first_attended_at if ls else (sub.started_at if sub else None),
                 'last_activity_at': ls.last_attended_at if ls else (sub.last_activity_at if sub else None),
                 'submitted_at': ls.completed_at if ls else (sub.submitted_at if sub else None),
@@ -1449,8 +1460,7 @@ class StudentLabAttendView(APIView):
                 'course_id': effective_course.id if effective_course else None,
                 'course_name': effective_course.name if effective_course else None,
                 'student_name': student_display_name,
-                'created_by_name': (lab.created_by.get_full_name() or lab.created_by.username) if lab.created_by else (lab.org or "Platform Admin"),
-                'created_by_role': getattr(lab.created_by, 'user_type', 'admin') if lab.created_by else 'admin',
+                **lab_creator_fields(lab, student),
             },
             'questions': questions_payload,
             'lab_score': {

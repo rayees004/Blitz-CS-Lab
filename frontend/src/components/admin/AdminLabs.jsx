@@ -113,7 +113,7 @@ function LabViewDrawer({ lab, courses, onClose, onEdit, onDelete }) {
               <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
                 <User size={12} color={C.amber} />
                 <span style={{ fontFamily: sans, fontSize: 12, color: C.mid }}>
-                  Created by: <strong style={{ color: C.hi }}>{lab.created_by_name || lab.org || "Platform Admin"}</strong>
+                  Created by: <strong style={{ color: C.hi }}>{lab.created_by_username ? `@${lab.created_by_username}` : "Not recorded"}</strong>
                   {lab.created_by_role && (
                     <span style={{ marginLeft: 6, fontFamily: mono, fontSize: 10, color: lab.created_by_role === "instructor" ? "#c084fc" : C.cyan }}>
                       ({lab.created_by_role === "instructor" ? "Instructor" : "Platform Admin"})
@@ -1142,10 +1142,10 @@ export default function AdminLabs({ onOpenAddModal = null, onOpenAnalysis = null
                           border: `1px solid rgba(192, 132, 252, 0.3)`,
                           fontWeight: 600,
                         }}
-                        title={`Lab Creator: ${l.created_by_name || l.org || "Platform Admin"}`}
+                        title={l.created_by_username ? `Lab Creator: ${l.created_by_name} (@${l.created_by_username})` : "Lab creator not recorded"}
                       >
                         <User size={11} />
-                        By: {l.created_by_name || l.org || "Platform Admin"}
+                        By: {l.created_by_username ? `@${l.created_by_username}` : "Not recorded"}
                       </span>
                     </div>
 

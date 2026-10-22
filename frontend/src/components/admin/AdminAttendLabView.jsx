@@ -234,7 +234,7 @@ export default function AdminAttendLabView({ currentUser, onNavigate }) {
           {filteredLabs.map((lab) => {
             const hasVideo = Boolean(lab.video_file || lab.video_url);
             const qCount = lab.question_count || lab.questions?.length || 0;
-            const creatorName = lab.created_by_name || lab.org || "Platform Admin";
+            const creatorName = lab.created_by_username ? `@${lab.created_by_username}` : "Not recorded";
 
             return (
               <Panel
