@@ -200,6 +200,15 @@ class LabQuestionSerializer(serializers.ModelSerializer):
         model = LabQuestion
         fields = ['id', 'title', 'description', 'flag', 'points', 'order', 'hints']
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        # Flags are answers: only admins/instructors may see them (pass context={'request': request})
+        request = self.context.get('request')
+        user = getattr(request, 'user', None)
+        if not (user and user.is_authenticated and user.can_access_admin_dashboard):
+            data.pop('flag', None)
+        return data
+
 
 class LabSerializer(serializers.ModelSerializer):
     questions = LabQuestionSerializer(many=True, required=False, default=list)

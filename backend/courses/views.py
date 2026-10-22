@@ -1,7 +1,7 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 import json
 from django.shortcuts import get_object_or_404
@@ -660,7 +660,7 @@ class LabListCreateView(APIView):
         if course_id:
             labs = labs.filter(course_id=course_id)
 
-        serializer = LabSerializer(labs, many=True)
+        serializer = LabSerializer(labs, many=True, context={'request': request})
         return Response({'count': labs.count(), 'results': serializer.data})
 
 
@@ -692,7 +692,7 @@ class LabListCreateView(APIView):
 
             return Response({
                 'message': f'Lab "{lab.name}" created successfully.',
-                'lab': LabSerializer(lab).data,
+                'lab': LabSerializer(lab, context={'request': request}).data,
             }, status=status.HTTP_201_CREATED)
 
         errors = serializer.errors
@@ -721,7 +721,7 @@ class LabDetailView(APIView):
 
     def get(self, request, pk):
         lab = self.get_object(pk)
-        serializer = LabSerializer(lab)
+        serializer = LabSerializer(lab, context={'request': request})
         return Response(serializer.data)
 
     def patch(self, request, pk):
@@ -750,7 +750,7 @@ class LabDetailView(APIView):
 
             return Response({
                 'message': f'Lab "{updated_lab.name}" updated successfully.',
-                'lab': LabSerializer(updated_lab).data,
+                'lab': LabSerializer(updated_lab, context={'request': request}).data,
             })
         return Response({'detail': 'Update failed.', 'errors': serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -792,7 +792,7 @@ class SubjectLabsView(APIView):
             'subject_id': subject.id,
             'subject_name': subject.name,
             'count': labs.count(),
-            'results': LabSerializer(labs, many=True).data,
+            'results': LabSerializer(labs, many=True, context={'request': request}).data,
         })
 
     def post(self, request, pk):
@@ -806,7 +806,7 @@ class SubjectLabsView(APIView):
             lab = serializer.save()
             return Response({
                 'message': f'Lab "{lab.name}" added to course "{subject.name}".',
-                'lab': LabSerializer(lab).data,
+                'lab': LabSerializer(lab, context={'request': request}).data,
             }, status=status.HTTP_201_CREATED)
         errors = serializer.errors
         first_key = next(iter(errors))
@@ -942,15 +942,10 @@ class SeedLabsView(APIView):
 
 
 def get_current_student(request):
-    """Resolve student user from request or fallback to primary student for seamless dev flow."""
+    """Resolve the student strictly from the authenticated user (never from request parameters)."""
     if request.user and request.user.is_authenticated:
         return request.user
-    student_id = request.query_params.get('student_id') or request.data.get('student_id') if hasattr(request, 'data') else None
-    if student_id:
-        u = User.objects.filter(id=student_id).first()
-        if u:
-            return u
-    return User.objects.filter(user_type='student').first() or User.objects.first()
+    return None
 
 
 def get_lab_effective_course(lab):
@@ -1114,7 +1109,7 @@ class StudentLabListView(APIView):
     Returns active labs enriched with subject-based or class-based access locking,
     the current student's lab score (ForeignKey based), attend count, and submission status.
     """
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
         student = get_current_student(request)
@@ -1331,7 +1326,7 @@ class StudentLabAttendView(APIView):
     Tracks attendance count via LabScore foreign key. Attending one or multiple times
     NEVER increases the score.
     """
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def get_lab(self, pk):
         return get_object_or_404(Lab.objects.prefetch_related('questions__hints'), pk=pk)
@@ -1486,7 +1481,7 @@ class StudentLabSubmitMarkView(APIView):
       - 'unlock_hint': unlock hint with mark penalty deduction
       - 'finalize_submission': lock in final lab marks
     """
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request, pk):
         student = get_current_student(request)
@@ -1826,7 +1821,7 @@ class StudentLabRetakeRequestView(APIView):
     GET  /api/student/labs/<id>/retake-request/
     Retrieves the status of the retake request for this lab.
     """
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request, pk):
         student = get_current_student(request)
@@ -2052,7 +2047,7 @@ class StudentLabScoreListView(APIView):
     Returns the lab-based score list for the student using ForeignKey to Lab.
     Each lab has its own score. Attending multiple times does not increase score.
     """
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
         student = get_current_student(request)
@@ -2553,7 +2548,7 @@ class StudyMaterialListCreateView(APIView):
 
     def get_permissions(self):
         if self.request.method == 'GET':
-            return [AllowAny()]
+            return [IsAuthenticated()]
         return [IsAdminOrStaff()]
 
     def get(self, request):
@@ -2621,7 +2616,7 @@ class StudyMaterialDetailView(APIView):
 
     def get_permissions(self):
         if self.request.method == 'GET':
-            return [AllowAny()]
+            return [IsAuthenticated()]
         return [IsAdminOrStaff()]
 
     def get_material(self, pk):
@@ -2711,7 +2706,7 @@ class StudentMaterialsView(APIView):
     Enforces that the student is actively enrolled in the subject.
     Admins/staff see all active materials.
     """
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
         student = get_current_student(request)

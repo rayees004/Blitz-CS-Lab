@@ -11,33 +11,21 @@ jobs:
     name: Deploy Latest Git Version
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Deploy to Server via SSH
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.CPANEL_SSH_HOST }}
-          username: ${{ secrets.CPANEL_SSH_USER }}
-          password: ${{ secrets.CPANEL_SSH_PASSWORD }}
-          key: ${{ secrets.CPANEL_SSH_KEY }}
-          port: ${{ secrets.CPANEL_SSH_PORT || '22' }}
-          timeout: 60s
-          command_timeout: 10m
-          script: |
-            echo "=== Pulling latest version from main branch ==="
-            cd /home/decodexe/decodexe/Blitz-CS-Lab || cd /home/decodexe/Blitz-CS-Lab || exit 1
-            git fetch origin main
-            git reset --hard origin/main
-
-            echo "=== Running Deploy Routine ==="
-            if [ -f "/home/decodexe/deploy.sh" ]; then
-              /bin/bash /home/decodexe/deploy.sh
-            else
-              cd backend
-              python3 manage.py migrate --noinput
-              mkdir -p ../tmp
-              touch ../tmp/restart.txt
-            fi
-
-            echo "=== Auto Deploy Finished Successfully ==="
+      # SSH (port 22) is firewalled on the cPanel host, so deployment is triggered through
+      # the HTTPS webhook (backend/blitz_backend/views.py), which runs /home/decodexe/deploy.sh.
+      - name: Trigger deploy webhook
+        env:
+          WEBHOOK_URL: https://backend.decodexe.com/api/webhook/github-deploy/
+          WEBHOOK_SECRET: ${{ secrets.DEPLOY_WEBHOOK_SECRET }}
+        run: |
+          BODY=$(printf '{"ref":"refs/heads/main","after":"%s","head_commit":{"id":"%s","message":"GitHub Actions deploy"}}' "$GITHUB_SHA" "$GITHUB_SHA")
+          SIG_HEADER=()
+          if [ -n "$WEBHOOK_SECRET" ]; then
+            SIG="sha256=$(printf '%s' "$BODY" | openssl dgst -sha256 -hmac "$WEBHOOK_SECRET" | sed 's/^.* //')"
+            SIG_HEADER=(-H "X-Hub-Signature-256: $SIG")
+          fi
+          curl --fail-with-body -sS -X POST "$WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -H "X-GitHub-Event: push" \
+            "${SIG_HEADER[@]}" \
+            -d "$BODY"
