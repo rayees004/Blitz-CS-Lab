@@ -167,8 +167,8 @@ export default function StudentDashboard({ go, onNavigate }) {
         </div>
       )}
 
-      {/* Stat Cards */}
-      <div style={{ display: "flex", gap: 14, marginTop: 22, flexWrap: "wrap" }}>
+      {/* Stat Cards: 2 rows x 3 cards */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 14, marginTop: 22 }}>
         <StatCard
           label="Assigned Labs"
           value={`${stats?.labs_assigned ?? assignedLabsCount}`}
