@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { Search, Filter, RefreshCw, Database, GraduationCap } from "lucide-react";
+import { Search, Filter, RefreshCw, Database, GraduationCap, CheckCircle2 } from "lucide-react";
 import LabCard from "./LabCard";
+import RetakeRequestModal from "./RetakeRequestModal";
 import Btn from "../common/Btn";
 import { C, sans, mono } from "../../constants/theme";
 import { LABS as MOCK_LABS } from "../../data/mockData";
@@ -13,6 +14,15 @@ export default function LabExplorer({ go }) {
   const [search, setSearch] = useState("");
   const [batchInfo, setBatchInfo] = useState(null);
   const [classInfo, setClassInfo] = useState(null);
+  const [retakeLab, setRetakeLab] = useState(null);
+  const [retakeSuccessMsg, setRetakeSuccessMsg] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
+
+  const handleRetakeSubmitted = (message) => {
+    setRetakeSuccessMsg(message);
+    setReloadKey((k) => k + 1);
+    setTimeout(() => setRetakeSuccessMsg(""), 6000);
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -49,7 +59,7 @@ export default function LabExplorer({ go }) {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [reloadKey]);
 
   const cats = ["All", ...new Set(labs.map((l) => l.category || l.cat).filter(Boolean))];
 
@@ -227,10 +237,44 @@ export default function LabExplorer({ go }) {
                   is_completed: isCompleted,
                 }}
                 onOpen={() => go("lab-detail", lab)}
+                onRequestRetake={setRetakeLab}
               />
             );
           })}
         </div>
+      )}
+
+      {retakeSuccessMsg && (
+        <div
+          style={{
+            position: "fixed",
+            bottom: 24,
+            right: 24,
+            zIndex: 1300,
+            padding: "12px 18px",
+            borderRadius: 8,
+            background: "rgba(0, 230, 118, 0.12)",
+            border: "1px solid rgba(0, 230, 118, 0.35)",
+            color: "#a7f3d0",
+            fontFamily: sans,
+            fontSize: 13,
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            boxShadow: "0 8px 30px rgba(0,0,0,0.5)",
+          }}
+        >
+          <CheckCircle2 size={16} color={C.green} />
+          <span>{retakeSuccessMsg}</span>
+        </div>
+      )}
+
+      {retakeLab && (
+        <RetakeRequestModal
+          lab={retakeLab}
+          onClose={() => setRetakeLab(null)}
+          onSubmitted={handleRetakeSubmitted}
+        />
       )}
     </div>
   );

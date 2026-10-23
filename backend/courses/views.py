@@ -1832,6 +1832,16 @@ class StudentLabRetakeRequestView(APIView):
             return Response({'detail': 'Authentication required.'}, status=status.HTTP_401_UNAUTHORIZED)
         lab = get_object_or_404(Lab, pk=pk)
 
+        # Retakes can only be requested for labs the student has completed
+        is_completed = (
+            LabScore.objects.filter(student=student, lab=lab, is_completed=True).exists()
+            or LabSubmission.objects.filter(student=student, lab=lab, status='COMPLETED').exists()
+        )
+        if not is_completed:
+            return Response({
+                'detail': 'You can only request a retake for a lab you have completed.',
+            }, status=status.HTTP_400_BAD_REQUEST)
+
         # Check if there is already a PENDING request
         existing = LabRetakeRequest.objects.filter(student=student, lab=lab, status='PENDING').first()
         if existing:

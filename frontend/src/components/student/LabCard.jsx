@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Play, Lock, Video, CheckCircle2, Clock, FileBadge } from "lucide-react";
+import { Play, Lock, Video, CheckCircle2, Clock, FileBadge, RotateCcw } from "lucide-react";
 import Panel from "../common/Panel";
 import Btn from "../common/Btn";
 import Badge, { DiffBadge } from "../common/Badge";
@@ -8,7 +8,7 @@ import { C, sans, mono } from "../../constants/theme";
 import CertificateModal from "./CertificateModal";
 import { getStoredUser } from "../../api/auth";
 
-export default function LabCard({ lab, onOpen }) {
+export default function LabCard({ lab, onOpen, onRequestRetake }) {
   const [showCert, setShowCert] = useState(false);
   const currentUser = getStoredUser();
   const studentName =
@@ -200,6 +200,38 @@ export default function LabCard({ lab, onOpen }) {
             >
               <FileBadge size={14} /> View Certificate
             </button>
+
+            {/* Retake request: only for completed labs */}
+            {hasPendingRetake ? (
+              <span
+                style={{
+                  flex: 1,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 6,
+                  padding: "8px 14px",
+                  borderRadius: 6,
+                  border: "1px solid rgba(245, 166, 35, 0.35)",
+                  background: "rgba(245, 166, 35, 0.08)",
+                  color: C.amber,
+                  fontFamily: sans,
+                  fontSize: 12.5,
+                  fontWeight: 600,
+                }}
+              >
+                <Clock size={14} /> Retake Pending
+              </span>
+            ) : onRequestRetake ? (
+              <Btn
+                icon={RotateCcw}
+                variant="outline"
+                onClick={() => onRequestRetake(lab)}
+                style={{ flex: 1, padding: "8px 14px", fontSize: 12.5 }}
+              >
+                Request Retake
+              </Btn>
+            ) : null}
           </div>
         ) : (
           <Btn

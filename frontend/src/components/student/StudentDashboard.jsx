@@ -14,8 +14,8 @@ import Badge, { DiffBadge } from "../common/Badge";
 import { C, sans, mono } from "../../constants/theme";
 import { CATEGORIES } from "../../data/mockData";
 import { fetchStudentLabs } from "../../api/labs";
-import { requestStudentLabRetake } from "../../api/students";
 import StudentLabAttendModal from "./StudentLabAttendModal";
+import RetakeRequestModal from "./RetakeRequestModal";
 
 export default function StudentDashboard({ go, onNavigate }) {
   const [labs, setLabs] = useState([]);
@@ -25,8 +25,6 @@ export default function StudentDashboard({ go, onNavigate }) {
 
   // Retake request state
   const [retakeModalLab, setRetakeModalLab] = useState(null);
-  const [retakeReason, setRetakeReason] = useState("");
-  const [submittingRetake, setSubmittingRetake] = useState(false);
   const [retakeSuccessMsg, setRetakeSuccessMsg] = useState("");
 
   // Lab modal state for attending and submitting marks
@@ -55,22 +53,11 @@ export default function StudentDashboard({ go, onNavigate }) {
   ).length;
   const questionsCompletedCount = labs.reduce((sum, l) => sum + (l.solved_questions_count || 0), 0);
 
-  // Send retake request to instructor/admin
-  const handleSendRetakeRequest = async () => {
-    if (!retakeModalLab) return;
-    setSubmittingRetake(true);
-    try {
-      const res = await requestStudentLabRetake(retakeModalLab.id, retakeReason);
-      setRetakeSuccessMsg(res.message || "Retake request submitted! The administrator will review and unlock the lab.");
-      setRetakeModalLab(null);
-      setRetakeReason("");
-      await loadData();
-      setTimeout(() => setRetakeSuccessMsg(""), 6000);
-    } catch (err) {
-      alert(err.message || "Failed to submit retake request.");
-    } finally {
-      setSubmittingRetake(false);
-    }
+  // Retake request sent to instructor/admin
+  const handleRetakeSubmitted = async (message) => {
+    setRetakeSuccessMsg(message);
+    await loadData();
+    setTimeout(() => setRetakeSuccessMsg(""), 6000);
   };
 
   // Dashboard shows only in-progress labs (most recently active first), capped at 10
@@ -614,116 +601,11 @@ export default function StudentDashboard({ go, onNavigate }) {
 
       {/* Retake Request Modal */}
       {retakeModalLab && (
-        <>
-          <div
-            onClick={() => setRetakeModalLab(null)}
-            style={{
-              position: "fixed",
-              inset: 0,
-              background: "rgba(0,0,0,0.72)",
-              backdropFilter: "blur(4px)",
-              zIndex: 1200,
-            }}
-          />
-          <div
-            style={{
-              position: "fixed",
-              top: "50%",
-              left: "50%",
-              transform: "translate(-50%, -50%)",
-              width: 480,
-              maxWidth: "92vw",
-              background: C.panel,
-              border: `1px solid ${C.border}`,
-              borderRadius: 12,
-              padding: 24,
-              zIndex: 1201,
-              boxShadow: "0 24px 70px rgba(0,0,0,0.7)",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
-              <div
-                style={{
-                  width: 42,
-                  height: 42,
-                  borderRadius: 10,
-                  background: "rgba(245, 166, 35, 0.12)",
-                  border: "1px solid rgba(245, 166, 35, 0.3)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  flexShrink: 0,
-                }}
-              >
-                <RotateCcw size={20} color={C.amber} />
-              </div>
-              <div>
-                <div style={{ fontFamily: sans, fontSize: 16, fontWeight: 700, color: C.hi }}>
-                  Request Lab Retake
-                </div>
-                <div style={{ fontFamily: mono, fontSize: 11, color: C.amber }}>
-                  {retakeModalLab.name}
-                </div>
-              </div>
-            </div>
-
-            <p style={{ fontFamily: sans, fontSize: 13, color: C.mid, lineHeight: 1.55, margin: "0 0 16px" }}>
-              This lab is completed and marks are locked. Send a retake request to your instructor/admin to unlock this lab and allow you to attempt it again.
-            </p>
-
-            <div style={{ marginBottom: 18 }}>
-              <label style={{ display: "block", fontFamily: sans, fontSize: 12, color: C.hi, marginBottom: 6, fontWeight: 600 }}>
-                Reason for Retake (Optional):
-              </label>
-              <textarea
-                value={retakeReason}
-                onChange={(e) => setRetakeReason(e.target.value)}
-                placeholder="e.g. Want to attempt challenge again without hints to practice..."
-                rows={3}
-                style={{
-                  width: "100%",
-                  boxSizing: "border-box",
-                  background: C.panel2,
-                  border: `1px solid ${C.border}`,
-                  borderRadius: 8,
-                  padding: "10px 12px",
-                  color: C.hi,
-                  fontFamily: sans,
-                  fontSize: 13,
-                  resize: "vertical",
-                  outline: "none",
-                }}
-              />
-            </div>
-
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-              <button
-                type="button"
-                onClick={() => setRetakeModalLab(null)}
-                style={{
-                  background: "transparent",
-                  border: `1px solid ${C.border}`,
-                  color: C.mid,
-                  borderRadius: 6,
-                  padding: "8px 16px",
-                  fontFamily: sans,
-                  fontSize: 13,
-                  cursor: "pointer",
-                }}
-              >
-                Cancel
-              </button>
-              <Btn
-                icon={submittingRetake ? Loader2 : RotateCcw}
-                onClick={handleSendRetakeRequest}
-                disabled={submittingRetake}
-                tone="warning"
-              >
-                {submittingRetake ? "Submitting..." : "Send Retake Request"}
-              </Btn>
-            </div>
-          </div>
-        </>
+        <RetakeRequestModal
+          lab={retakeModalLab}
+          onClose={() => setRetakeModalLab(null)}
+          onSubmitted={handleRetakeSubmitted}
+        />
       )}
 
       {/* Interactive Lab Attendee & Mark Submitting Modal */}

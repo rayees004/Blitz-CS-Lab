@@ -104,6 +104,23 @@ class LabSecurityTests(TestCase):
         self.assertEqual(stats['labs_assigned'], 1)
         self.assertEqual(stats['total_questions_completed'], 1)
 
+    def test_retake_request_only_for_completed_labs(self):
+        self.client.force_authenticate(self.student)
+        url = f'/api/student/labs/{self.lab.id}/retake-request/'
+
+        response = self.client.post(url, {'reason': 'again'}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+        self.client.post(f'/api/student/labs/{self.lab.id}/submit/', {
+            'question_id': self.question.id, 'flag': 'BLITZ{secret}'
+        }, format='json')
+        response = self.client.post(url, {'reason': 'again'}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+
+        # A second request while one is pending is rejected
+        response = self.client.post(url, {'reason': 'again'}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
     def test_submit_ignores_student_id_parameter(self):
         self.client.force_authenticate(self.student)
         response = self.client.post(f'/api/student/labs/{self.lab.id}/submit/', {
