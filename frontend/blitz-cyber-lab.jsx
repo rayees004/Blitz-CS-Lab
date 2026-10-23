@@ -208,7 +208,7 @@ export default function BlitzCyberLab() {
   // ─── Student Stage ───
   // (Available to Students, and Admins who toggle to preview student experience)
   const pages = {
-    dashboard: <StudentDashboard go={goLab} />,
+    dashboard: <StudentDashboard go={goLab} onNavigate={setStudentPage} />,
     learning: <Learning go={goLab} onSelect={setStudentPage} />,
     labs: <LabExplorer go={goLab} />,
     "lab-detail": <LabDetail lab={activeLab} back={() => setStudentPage("labs")} />,

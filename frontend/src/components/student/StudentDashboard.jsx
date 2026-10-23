@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import {
   CheckCircle2, FlaskConical, Zap, Trophy,
-  Play, Award, RefreshCw, Search, Filter, HelpCircle,
+  Play, Award, RefreshCw, Filter, HelpCircle,
   Lightbulb, ExternalLink, Activity, ArrowRight,
   ShieldAlert, Sparkles, Check, Clock, Eye, Layers, Lock,
   RotateCcw, Loader2, FileBadge
@@ -18,13 +18,11 @@ import { fetchStudentLabs } from "../../api/labs";
 import { requestStudentLabRetake } from "../../api/students";
 import StudentLabAttendModal from "./StudentLabAttendModal";
 
-export default function StudentDashboard({ go }) {
+export default function StudentDashboard({ go, onNavigate }) {
   const [labs, setLabs] = useState([]);
   const [labScores, setLabScores] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState("ALL"); // ALL | MY_COURSES | IN_PROGRESS | COMPLETED | LOCKED
   const [lockedLabNotice, setLockedLabNotice] = useState(null);
   const [viewingCert, setViewingCert] = useState(null);
 
@@ -79,27 +77,15 @@ export default function StudentDashboard({ go }) {
     }
   };
 
-  // Filtering labs for the Attend section
-  const filteredLabs = labs.filter((lab) => {
-    const matchSearch =
-      searchQuery === "" ||
-      lab.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      lab.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (lab.subject_name && lab.subject_name.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (lab.subject_code && lab.subject_code.toLowerCase().includes(searchQuery.toLowerCase()));
-
-    if (!matchSearch) return false;
-
-    const isCompleted = lab.submission_status === "COMPLETED" || lab.is_completed;
-    const isInProgress = !isCompleted && (lab.submission_status === "IN_PROGRESS" || (lab.attend_count && lab.attend_count > 0));
-
-    if (statusFilter === "MY_SUBJECTS") return !lab.is_locked;
-    if (statusFilter === "LOCKED") return Boolean(lab.is_locked);
-    if (statusFilter === "IN_PROGRESS") return isInProgress;
-    if (statusFilter === "COMPLETED") return isCompleted;
-    if (statusFilter === "NOT_STARTED") return !isInProgress && !isCompleted && !lab.is_locked;
-    return true;
-  });
+  // Dashboard shows only in-progress labs (most recently active first), capped at 10
+  const MAX_DASHBOARD_LABS = 10;
+  const allInProgressLabs = labs
+    .filter((lab) => {
+      const isCompleted = lab.submission_status === "COMPLETED" || lab.is_completed;
+      return !isCompleted && (lab.submission_status === "IN_PROGRESS" || (lab.attend_count && lab.attend_count > 0));
+    })
+    .sort((a, b) => new Date(b.last_activity_at || 0) - new Date(a.last_activity_at || 0));
+  const dashboardLabs = allInProgressLabs.slice(0, MAX_DASHBOARD_LABS);
 
   return (
     <div style={{ padding: 28, overflowY: "auto", height: "100%", boxSizing: "border-box" }}>
@@ -413,80 +399,25 @@ export default function StudentDashboard({ go }) {
         )}
       </div>
 
-      {/* Assigned Labs Grid */}
+      {/* In Progress Labs Grid (max 10) */}
       <div style={{ marginTop: 36 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, flexWrap: "wrap", gap: 12 }}>
           <div>
             <span style={{ fontFamily: sans, fontSize: 16, fontWeight: 700, color: C.hi }}>
-              Assigned Labs
+              In Progress Labs
             </span>
             <div style={{ fontFamily: sans, fontSize: 12.5, color: C.mid, marginTop: 2 }}>
-              Labs assigned to you. Completed labs have their marks locked.
+              {allInProgressLabs.length > MAX_DASHBOARD_LABS
+                ? `Showing your ${MAX_DASHBOARD_LABS} most recent of ${allInProgressLabs.length} labs in progress.`
+                : "Labs you have started but not finished yet."}
             </div>
           </div>
 
-          {/* Search & Filter Controls */}
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-            {/* Search Input */}
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                background: C.panel,
-                border: `1px solid ${C.borderLight}`,
-                borderRadius: 6,
-                padding: "6px 10px",
-                width: 220,
-              }}
-            >
-              <Search size={14} color={C.low} />
-              <input
-                type="text"
-                placeholder="Search labs or subjects..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                style={{
-                  background: "transparent",
-                  border: "none",
-                  fontFamily: sans,
-                  fontSize: 12,
-                  color: C.hi,
-                  outline: "none",
-                  width: "100%",
-                }}
-              />
-            </div>
-
-            {/* Status Filter Chips */}
-            <div style={{ display: "flex", background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 6, padding: 2, flexWrap: "wrap" }}>
-              {[
-                { id: "ALL", label: "All Labs" },
-                { id: "MY_SUBJECTS", label: "My Subjects" },
-                { id: "IN_PROGRESS", label: "In Progress" },
-                { id: "COMPLETED", label: "Completed" },
-                { id: "LOCKED", label: "Locked" },
-              ].map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setStatusFilter(tab.id)}
-                  style={{
-                    background: statusFilter === tab.id ? C.void : "transparent",
-                    border: statusFilter === tab.id ? `1px solid ${C.border}` : "none",
-                    borderRadius: 5,
-                    padding: "4px 10px",
-                    fontFamily: sans,
-                    fontSize: 11.5,
-                    color: statusFilter === tab.id ? C.hi : C.low,
-                    cursor: "pointer",
-                    fontWeight: statusFilter === tab.id ? 600 : 400,
-                  }}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-          </div>
+          {onNavigate && (
+            <Btn icon={FlaskConical} variant="outline" sm onClick={() => onNavigate("labs")}>
+              View all labs
+            </Btn>
+          )}
         </div>
 
         {/* Labs Grid */}
@@ -495,14 +426,15 @@ export default function StudentDashboard({ go }) {
             <RefreshCw size={24} className="spin" style={{ marginBottom: 10, color: C.cyan }} />
             <div>Loading live labs from database...</div>
           </Panel>
-        ) : filteredLabs.length === 0 ? (
+        ) : dashboardLabs.length === 0 ? (
           <Panel style={{ padding: 36, textAlign: "center", color: C.low, fontFamily: sans }}>
             <FlaskConical size={32} style={{ marginBottom: 8, opacity: 0.5 }} />
-            <div style={{ fontSize: 14, color: C.mid }}>No labs found matching your filters.</div>
+            <div style={{ fontSize: 14, color: C.mid }}>No labs in progress.</div>
+            <div style={{ fontSize: 12, color: C.low, marginTop: 4 }}>Start a lab from the Labs page and it will appear here.</div>
           </Panel>
         ) : (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))", gap: 16 }}>
-            {filteredLabs.map((lab) => {
+            {dashboardLabs.map((lab) => {
               const isCompleted = Boolean(lab.submission_status === "COMPLETED" || lab.is_completed);
               const isInProgress = Boolean(!isCompleted && (lab.submission_status === "IN_PROGRESS" || (lab.attend_count && lab.attend_count > 0)));
               const isLocked = Boolean(lab.is_locked || isCompleted);
@@ -734,7 +666,7 @@ export default function StudentDashboard({ go }) {
                           sm
                           icon={RotateCcw}
                           onClick={() => setRetakeModalLab(lab)}
-                          tone="default"
+                          variant="outline"
                           style={{
                             border: `1px solid rgba(245, 166, 35, 0.4)`,
                             color: C.amber,
