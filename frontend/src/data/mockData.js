@@ -42,6 +42,7 @@ export const NAV_STUDENT = [
   { label: "Dashboard", icon: LayoutGrid, key: "dashboard" },
   { label: "Learning", icon: GraduationCap, key: "learning" },
   { label: "Labs", icon: FlaskConical, key: "labs" },
+  { label: "Attendance Log", icon: ClipboardList, key: "attendance" },
   { label: "Study Materials", icon: BookOpen, key: "materials" },
   { label: "Progress", icon: TrendingUp, key: "progress" },
   { label: "Leaderboard", icon: Trophy, key: "leaderboard" },

@@ -35,6 +35,7 @@ import AdminRetakeRequests from "./src/components/admin/AdminRetakeRequests";
 import AdminAttendLabView from "./src/components/admin/AdminAttendLabView";
 import AdminSubjectLabAnalysis from "./src/components/admin/AdminSubjectLabAnalysis";
 import StudentProgressView from "./src/components/student/StudentProgressView";
+import StudentAttendanceLog from "./src/components/student/StudentAttendanceLog";
 
 // Export modular subcomponents for external consumption
 export { default as Sidebar } from "./src/components/layout/Sidebar";
@@ -212,6 +213,7 @@ export default function BlitzCyberLab() {
     learning: <Learning go={goLab} onSelect={setStudentPage} />,
     labs: <LabExplorer go={goLab} />,
     "lab-detail": <LabDetail lab={activeLab} back={() => setStudentPage("labs")} />,
+    attendance: <StudentAttendanceLog />,
     materials: <Materials />,
     progress: <StudentProgressView go={goLab} />,
     leaderboard: <Placeholder title="Leaderboard" blurb="Rankings within your class and across Blitz Cyber Lab." icon={Trophy} />,
