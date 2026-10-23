@@ -2,7 +2,7 @@ from django.test import TestCase
 from rest_framework.test import APIClient
 from rest_framework import status
 from accounts.models import User
-from courses.models import Lab, LabQuestion, LabSubmission
+from courses.models import Lab, LabQuestion, LabSubmission, Subject, SubjectEnrollment, StudentClass
 
 
 class LabSecurityTests(TestCase):
@@ -20,7 +20,9 @@ class LabSecurityTests(TestCase):
         self.other_student = User.objects.create_user(
             username='anjali', email='anjali@blitzcyberlab.io', password='Student@12345', user_type='student'
         )
-        self.lab = Lab.objects.create(name='SQLi Basics', points=100)
+        self.subject = Subject.objects.create(name='CEH', code='CEH')
+        SubjectEnrollment.objects.create(student=self.student, subject=self.subject)
+        self.lab = Lab.objects.create(name='SQLi Basics', points=100, subject=self.subject)
         self.question = LabQuestion.objects.create(lab=self.lab, title='Find the flag', flag='BLITZ{secret}', points=50)
 
     def _first_question(self, response):
@@ -110,3 +112,70 @@ class LabSecurityTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
         self.assertTrue(LabSubmission.objects.filter(student=self.student, lab=self.lab).exists())
         self.assertFalse(LabSubmission.objects.filter(student=self.other_student).exists())
+
+
+class SubjectBasedLabAccessTests(TestCase):
+    """Students may only attend labs of their assigned subjects, in both access modes."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.student = User.objects.create_user(
+            username='rohith', email='rohith@blitzcyberlab.io', password='Student@12345', user_type='student'
+        )
+        self.ceh = Subject.objects.create(name='CEH', code='CEH')
+        self.soc = Subject.objects.create(name='SOC', code='SOC')
+        self.ceh_lab = Lab.objects.create(name='CEH Lab', subject=self.ceh)
+        self.soc_lab = Lab.objects.create(name='SOC Lab', subject=self.soc)
+        self.no_subject_lab = Lab.objects.create(name='Standalone Lab')
+        self.client.force_authenticate(self.student)
+
+    def _listed_lab_ids(self):
+        return {lab['id'] for lab in self.client.get('/api/student/labs/').data['labs']}
+
+    def _attend_status(self, lab):
+        return self.client.post(f'/api/student/labs/{lab.id}/attend/').status_code
+
+    def test_unrestricted_student_without_subjects_cannot_attend_any_lab(self):
+        self.assertEqual(self._listed_lab_ids(), set())
+        for lab in (self.ceh_lab, self.soc_lab, self.no_subject_lab):
+            self.assertEqual(self._attend_status(lab), status.HTTP_403_FORBIDDEN)
+
+    def test_unrestricted_student_only_attends_assigned_subject_labs(self):
+        SubjectEnrollment.objects.create(student=self.student, subject=self.ceh)
+        self.assertEqual(self._listed_lab_ids(), {self.ceh_lab.id})
+        self.assertEqual(self._attend_status(self.soc_lab), status.HTTP_403_FORBIDDEN)
+        self.assertEqual(self._attend_status(self.no_subject_lab), status.HTTP_403_FORBIDDEN)
+        self.assertEqual(self._attend_status(self.ceh_lab), status.HTTP_200_OK)
+
+    def test_inactive_subject_enrollment_gives_no_access(self):
+        SubjectEnrollment.objects.create(student=self.student, subject=self.ceh, is_active=False)
+        self.assertEqual(self._listed_lab_ids(), set())
+        self.assertEqual(self._attend_status(self.ceh_lab), status.HTTP_403_FORBIDDEN)
+
+    def test_class_based_student_needs_both_class_and_subject(self):
+        student_class = StudentClass.objects.create(name='Batch A')
+        student_class.labs.set([self.ceh_lab, self.soc_lab, self.no_subject_lab])
+        self.student.assigned_class = student_class
+        self.student.lab_access_mode = 'class_based'
+        self.student.save()
+
+        # In the class, but no subjects assigned: nothing
+        self.assertEqual(self._listed_lab_ids(), set())
+        self.assertEqual(self._attend_status(self.ceh_lab), status.HTTP_403_FORBIDDEN)
+
+        # Assigned CEH: only the class lab of that subject
+        SubjectEnrollment.objects.create(student=self.student, subject=self.ceh)
+        self.assertEqual(self._listed_lab_ids(), {self.ceh_lab.id})
+        self.assertEqual(self._attend_status(self.soc_lab), status.HTTP_403_FORBIDDEN)
+        self.assertEqual(self._attend_status(self.no_subject_lab), status.HTTP_403_FORBIDDEN)
+        self.assertEqual(self._attend_status(self.ceh_lab), status.HTTP_200_OK)
+
+    def test_class_based_subject_lab_outside_class_is_blocked(self):
+        student_class = StudentClass.objects.create(name='Batch B')
+        self.student.assigned_class = student_class
+        self.student.lab_access_mode = 'class_based'
+        self.student.save()
+        SubjectEnrollment.objects.create(student=self.student, subject=self.ceh)
+
+        self.assertEqual(self._listed_lab_ids(), set())
+        self.assertEqual(self._attend_status(self.ceh_lab), status.HTTP_403_FORBIDDEN)

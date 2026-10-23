@@ -1078,11 +1078,7 @@ def can_student_attend_lab(student, lab):
         msg = "Lab completed (All questions submitted). Retake request is pending administrator approval." if pending_retake else "Lab completed (All questions submitted). You can request a retake to attend again."
         return False, msg, lab.subject
 
-    if not lab.subject:
-        # If class-based, subject is not strictly mandatory as long as it's assigned to class
-        pass
-
-    # Class-Based Lab Access Check
+    # Class-Based mode: the lab must also be assigned to the student's class
     access_mode = getattr(student, 'lab_access_mode', 'unrestricted')
     if access_mode == 'class_based':
         if not student.assigned_class:
@@ -1090,27 +1086,14 @@ def can_student_attend_lab(student, lab):
         if not student.assigned_class.labs.filter(id=lab.id).exists():
             return False, f"Access restricted. This lab is not assigned to your class '{student.assigned_class.name}'.", lab.subject
 
-        # In class-based lab attendance, students can ONLY attend labs for their assigned subjects
-        if not lab.subject:
-            return False, "Access restricted. This lab has no assigned subject. In class-based mode, only assigned subject labs can be attended.", None
+    # Both modes: students can ONLY attend labs of subjects they are assigned to
+    if not lab.subject:
+        return False, "Access restricted. This lab is not linked to a subject. You can only attend labs of your assigned subjects.", None
 
-        is_enrolled_in_subj = SubjectEnrollment.objects.filter(student=student, subject=lab.subject, is_active=True).exists()
-        if not is_enrolled_in_subj:
-            subj_name = lab.subject.name
-            subj_code = f" ({lab.subject.code})" if lab.subject.code else ""
-            return False, f"Access restricted. You are not assigned to subject '{subj_name}{subj_code}'. In class-based access, you can only attend labs for your assigned subjects.", lab.subject
-
-        return True, None, lab.subject
-
-    # Unrestricted Lab Access Mode (maintain existing behavior)
-    if lab.subject:
-        enrolled_subjects = SubjectEnrollment.objects.filter(student=student, is_active=True)
-        if enrolled_subjects.exists():
-            is_enrolled = enrolled_subjects.filter(subject=lab.subject).exists()
-            if not is_enrolled:
-                subj_name = lab.subject.name
-                subj_code = f" ({lab.subject.code})" if lab.subject.code else ""
-                return False, f"Access restricted. You must be assigned to subject '{subj_name}{subj_code}' to attend this lab.", lab.subject
+    if not SubjectEnrollment.objects.filter(student=student, subject=lab.subject, is_active=True).exists():
+        subj_name = lab.subject.name
+        subj_code = f" ({lab.subject.code})" if lab.subject.code else ""
+        return False, f"Access restricted. You are not assigned to subject '{subj_name}{subj_code}'. You can only attend labs of your assigned subjects.", lab.subject
 
     return True, None, lab.subject
 
@@ -1134,31 +1117,18 @@ class StudentLabListView(APIView):
 
         assigned_batch = None
         if student and not is_admin_or_staff:
+            # Students only see labs of their assigned subjects (class-based: also limited to their class)
             access_mode = getattr(student, 'lab_access_mode', 'unrestricted')
             if access_mode == 'class_based':
-                if student.assigned_class:
-                    enrolled_subject_ids = SubjectEnrollment.objects.filter(
-                        student=student, is_active=True
-                    ).values_list('subject_id', flat=True)
-                    if enrolled_subject_ids.exists():
-                        labs = student.assigned_class.labs.select_related('course', 'subject', 'subject__course').prefetch_related('questions__hints').filter(
-                            is_active=True, subject_id__in=enrolled_subject_ids
-                        ).order_by('-created_at')
-                    else:
-                        labs = student.assigned_class.labs.select_related('course', 'subject', 'subject__course').prefetch_related('questions__hints').filter(is_active=True).order_by('-created_at')
-                else:
-                    labs = Lab.objects.none()
+                base_labs = student.assigned_class.labs.all() if student.assigned_class else Lab.objects.none()
             else:
-                # Unrestricted Access (existing system)
-                enrolled_subject_ids = SubjectEnrollment.objects.filter(
-                    student=student, is_active=True
-                ).values_list('subject_id', flat=True)
-                if enrolled_subject_ids.exists():
-                    labs = Lab.objects.select_related('course', 'subject', 'subject__course').prefetch_related('questions__hints').filter(
-                        is_active=True, subject_id__in=enrolled_subject_ids
-                    ).order_by('-created_at')
-                else:
-                    labs = Lab.objects.select_related('course', 'subject', 'subject__course').prefetch_related('questions__hints').filter(is_active=True).order_by('-created_at')
+                base_labs = Lab.objects.all()
+            enrolled_subject_ids = SubjectEnrollment.objects.filter(
+                student=student, is_active=True
+            ).values_list('subject_id', flat=True)
+            labs = base_labs.select_related('course', 'subject', 'subject__course').prefetch_related('questions__hints').filter(
+                is_active=True, subject_id__in=enrolled_subject_ids
+            ).order_by('-created_at')
         else:
             labs = Lab.objects.select_related('course', 'subject', 'subject__course').prefetch_related('questions__hints').filter(is_active=True).order_by('-created_at')
 
