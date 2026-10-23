@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from "react";
 import {
-  CheckCircle2, FlaskConical, TrendingUp, Zap, Trophy,
+  CheckCircle2, FlaskConical, Zap, Trophy,
   Play, Award, RefreshCw, Search, Filter, HelpCircle,
-  Lightbulb, ExternalLink, Activity, ArrowRight, ShieldCheck,
+  Lightbulb, ExternalLink, Activity, ArrowRight,
   ShieldAlert, Sparkles, Check, Clock, Eye, Layers, Lock,
   RotateCcw, Loader2, FileBadge
 } from "lucide-react";
@@ -55,9 +55,11 @@ export default function StudentDashboard({ go }) {
     loadData();
   }, [loadData]);
 
-  // Find most relevant lab to attend (must be attendable and NOT completed!)
-  const heroLab = labs.find((l) => !l.is_locked && !l.is_completed && l.submission_status !== "COMPLETED");
-  const inProgressLab = labs.find((l) => !l.is_locked && !l.is_completed && (l.submission_status === "IN_PROGRESS" || (l.attend_count && l.attend_count > 0)));
+  // Fallbacks when the backend does not send these counts yet
+  const assignedLabsCount = labs.filter(
+    (l) => !l.is_locked || l.is_completed || (l.submission_status && l.submission_status !== "NOT_STARTED")
+  ).length;
+  const questionsCompletedCount = labs.reduce((sum, l) => sum + (l.solved_questions_count || 0), 0);
 
   // Send retake request to instructor/admin
   const handleSendRetakeRequest = async () => {
@@ -183,89 +185,59 @@ export default function StudentDashboard({ go }) {
         </div>
       )}
 
-      {/* Real-time Stat Cards */}
+      {/* Stat Cards */}
       <div style={{ display: "flex", gap: 14, marginTop: 22, flexWrap: "wrap" }}>
         <StatCard
-          label="Labs Completed"
-          value={stats ? `${stats.labs_completed}` : "0"}
-          icon={CheckCircle2}
-          sub={`of ${stats?.labs_available || labs.length} unique labs`}
+          label="Assigned Labs"
+          value={`${stats?.labs_assigned ?? assignedLabsCount}`}
+          icon={FlaskConical}
+          sub="labs you can attend"
         />
         <StatCard
-          label="Labs In Progress"
-          value={stats ? `${stats.labs_in_progress}` : "0"}
+          label="Completed Labs"
+          value={`${stats?.labs_completed ?? 0}`}
+          icon={CheckCircle2}
+          sub="finished & recorded"
+          tone="green"
+        />
+        <StatCard
+          label="In Progress Labs"
+          value={`${stats?.labs_in_progress ?? 0}`}
           icon={Activity}
-          sub="active sessions"
+          sub="started, not finished"
           tone="amber"
         />
         <StatCard
-          label="Total Marks Earned"
-          value={stats ? `${stats.total_points_earned} pts` : "0 pts"}
+          label="Total Points Earned"
+          value={`${stats?.total_points_earned ?? 0} pts`}
           icon={Zap}
-          sub="lab-based unique sum"
+          sub="across all labs"
           tone="cyan"
         />
         <StatCard
-          label="Total Attendances Logged"
-          value={stats ? `${stats.total_attendances || 0}` : "0"}
+          label="Questions Completed"
+          value={`${stats?.total_questions_completed ?? questionsCompletedCount}`}
+          icon={HelpCircle}
+          sub="correct flags submitted"
+          tone="green"
+        />
+        <StatCard
+          label="Attendance Logged"
+          value={`${stats?.total_attendances ?? 0}`}
           icon={Layers}
-          sub="repeat visits do not inflate score"
-        />
-        <StatCard
-          label="Overall Progress"
-          value={stats ? `${stats.overall_progress_pct}%` : "0%"}
-          icon={TrendingUp}
-          sub="curriculum score"
-          tone="cyan"
+          sub="total lab visits"
         />
       </div>
 
-      {/* Single-Accrual Policy Security Badge */}
-      <div
-        style={{
-          marginTop: 20,
-          padding: "12px 16px",
-          borderRadius: 8,
-          background: "rgba(0, 229, 255, 0.05)",
-          border: "1px solid rgba(0, 229, 255, 0.22)",
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-          fontFamily: sans,
-          fontSize: 12.5,
-          color: C.mid,
-        }}
-      >
-        <ShieldCheck size={18} color={C.cyan} style={{ flexShrink: 0 }} />
-        <div>
-          <strong style={{ color: C.hi }}>Strict Lab-Based Evaluation:</strong> Marks are accrued uniquely per lab using foreign key relationships. Attending a lab one time or multiple times will <strong style={{ color: C.cyan }}>never</strong> duplicate or increase your score. Repeating labs provides practice without inflating academic marks.
-        </div>
-      </div>
-
-      {/* Section 1: Lab-Based Score List (Foreign Key Relation) */}
+      {/* Lab Attendance Log */}
       <div style={{ marginTop: 28 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, flexWrap: "wrap", gap: 10 }}>
           <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontFamily: sans, fontSize: 16, fontWeight: 700, color: C.hi }}>
-                Lab-Based Score List & Performance Record
-              </span>
-              <span
-                style={{
-                  fontFamily: mono,
-                  fontSize: 10,
-                  color: C.amber,
-                  background: "rgba(245, 166, 35, 0.1)",
-                  padding: "2px 7px",
-                  borderRadius: 4,
-                  border: "1px solid rgba(245, 166, 35, 0.25)",
-                }}
-              >
-                Foreign Key Linked
-              </span>
-            </div>
+            <span style={{ fontFamily: sans, fontSize: 16, fontWeight: 700, color: C.hi }}>
+              Lab Attendance Log
+            </span>
             <div style={{ fontFamily: sans, fontSize: 12.5, color: C.mid, marginTop: 2 }}>
-              Immutable record of scores earned per lab. Repeat attendances increment attempt frequency without multiplying marks.
+              Every lab you have attended, with times attended, questions solved and points earned.
             </div>
           </div>
 
@@ -441,124 +413,15 @@ export default function StudentDashboard({ go }) {
         )}
       </div>
 
-      {/* Section 2: Continue Learning Hero Panel */}
-      {heroLab && (
-        <div style={{ marginTop: 32 }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-            <span style={{ fontFamily: sans, fontSize: 14.5, fontWeight: 700, color: C.hi }}>
-              {inProgressLab ? "Continue Active Practical Challenge" : "Featured Security Evaluation"}
-            </span>
-            {heroLab.subject_name && (
-              <span
-                style={{
-                  fontFamily: mono,
-                  fontSize: 11,
-                  color: C.cyan,
-                  background: "rgba(0, 229, 255, 0.08)",
-                  padding: "2px 8px",
-                  borderRadius: 4,
-                  border: "1px solid rgba(0, 229, 255, 0.2)",
-                }}
-              >
-                Course: {heroLab.subject_name}
-              </span>
-            )}
-          </div>
-
-          <Panel style={{ padding: 20, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 20, flexWrap: "wrap" }}>
-            <div style={{ display: "flex", gap: 16, alignItems: "center", minWidth: 260 }}>
-              <div
-                style={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: 10,
-                  background: heroLab.submission_status === "COMPLETED" ? "rgba(0, 230, 118, 0.12)" : "rgba(245,166,35,0.12)",
-                  border: `1px solid ${heroLab.submission_status === "COMPLETED" ? "rgba(0, 230, 118, 0.35)" : "rgba(245,166,35,0.35)"}`,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  flexShrink: 0,
-                }}
-              >
-                <FlaskConical size={22} color={heroLab.submission_status === "COMPLETED" ? C.green : C.amber} />
-              </div>
-              <div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                  <span style={{ fontFamily: sans, fontSize: 16, fontWeight: 700, color: C.hi }}>
-                    {heroLab.name}
-                  </span>
-                  <DiffBadge level={heroLab.difficulty} />
-                  {heroLab.submission_status === "COMPLETED" && (
-                    <Badge tone="green">COMPLETED</Badge>
-                  )}
-                  {heroLab.submission_status === "IN_PROGRESS" && (
-                    <Badge tone="amber">IN PROGRESS</Badge>
-                  )}
-                  {heroLab.attend_count > 0 && (
-                    <span style={{ fontFamily: mono, fontSize: 10.5, color: C.mid, background: C.void, padding: "2px 6px", borderRadius: 4 }}>
-                      Attended {heroLab.attend_count}x
-                    </span>
-                  )}
-                </div>
-                <div style={{ fontFamily: mono, fontSize: 11.5, color: C.low, marginTop: 4 }}>
-                  {heroLab.category} · {heroLab.question_count || 0} Questions · Max Marks: {heroLab.points} pts
-                </div>
-              </div>
-            </div>
-
-            <div style={{ display: "flex", alignItems: "center", gap: 24, flexWrap: "wrap" }}>
-              <div style={{ width: 180 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
-                  <span style={{ fontFamily: mono, fontSize: 11, color: C.mid }}>
-                    {heroLab.progress_pct}% Complete
-                  </span>
-                  <span style={{ fontFamily: mono, fontSize: 11, color: C.amber, fontWeight: 700 }}>
-                    {heroLab.score} / {heroLab.max_score} pts
-                  </span>
-                </div>
-                <ProgressBar value={heroLab.progress_pct} tone={heroLab.submission_status === "COMPLETED" ? "green" : "cyan"} />
-              </div>
-
-              <div style={{ display: "flex", gap: 8 }}>
-                <Btn
-                  icon={Play}
-                  onClick={() => setAttendingLab(heroLab)}
-                >
-                  {heroLab.submission_status === "IN_PROGRESS" ? "Continue Lab & Submit Marks" : "Attend Lab"}
-                </Btn>
-              </div>
-            </div>
-          </Panel>
-        </div>
-      )}
-
-      {/* Section 3: Available Labs to Attend Grid */}
+      {/* Assigned Labs Grid */}
       <div style={{ marginTop: 36 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, flexWrap: "wrap", gap: 12 }}>
           <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontFamily: sans, fontSize: 16, fontWeight: 700, color: C.hi }}>
-                Assigned Hands-On Labs
-              </span>
-              {stats?.batch_index && (
-                <span
-                  style={{
-                    fontFamily: mono,
-                    fontSize: 10,
-                    color: C.cyan,
-                    background: "rgba(0, 229, 255, 0.08)",
-                    padding: "2px 7px",
-                    borderRadius: 4,
-                    border: "1px solid rgba(0, 229, 255, 0.25)",
-                    fontWeight: 600,
-                  }}
-                >
-                  Batch #{stats.batch_index} (5 Labs Active)
-                </span>
-              )}
-            </div>
+            <span style={{ fontFamily: sans, fontSize: 16, fontWeight: 700, color: C.hi }}>
+              Assigned Labs
+            </span>
             <div style={{ fontFamily: sans, fontSize: 12.5, color: C.mid, marginTop: 2 }}>
-              Only this 5-lab batch is visible. Once all 5 labs in this batch are completed, the next batch of 5 labs is loaded. Completed labs have marks locked.
+              Labs assigned to you. Completed labs have their marks locked.
             </div>
           </div>
 

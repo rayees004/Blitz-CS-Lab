@@ -1183,12 +1183,11 @@ class StudentLabListView(APIView):
         labs_completed_count = 0
         labs_in_progress_count = 0
         total_attendances = 0
-        enrolled_labs_count = 0
+        assigned_labs_count = 0
+        total_questions_completed = 0
 
         for lab in labs:
             can_attend, lock_reason, lab_subject = can_student_attend_lab(student, lab)
-            if can_attend:
-                enrolled_labs_count += 1
 
             ls = lab_scores_by_lab.get(lab.id)
             sub = submissions.get(lab.id)
@@ -1213,10 +1212,15 @@ class StudentLabListView(APIView):
                 sub_status = 'IN_PROGRESS'
                 labs_in_progress_count += 1
 
+            # Assigned = attendable now, or already started/completed (completed labs get locked)
+            if can_attend or sub_status != 'NOT_STARTED':
+                assigned_labs_count += 1
+
             q_count = lab.questions.count()
             solved_questions = ls.solved_questions_count if ls else 0
             if not solved_questions and sub and isinstance(sub.answers, dict):
                 solved_questions = sum(1 for a in sub.answers.values() if isinstance(a, dict) and a.get('is_correct'))
+            total_questions_completed += solved_questions
 
             progress_pct = 0
             if q_count > 0:
@@ -1303,6 +1307,8 @@ class StudentLabListView(APIView):
             'labs_completed': labs_completed_count,
             'labs_in_progress': labs_in_progress_count,
             'labs_available': labs.count(),
+            'labs_assigned': assigned_labs_count,
+            'total_questions_completed': total_questions_completed,
             'total_points_earned': total_points_earned,
             'max_total_points': total_possible_points,
             'overall_progress_pct': overall_pct,

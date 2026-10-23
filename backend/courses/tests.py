@@ -93,6 +93,15 @@ class LabSecurityTests(TestCase):
         self.assertEqual(Lab.objects.get(name='XSS Lab').created_by, self.instructor)
         self.assertEqual(response.data['lab']['created_by_username'], 'instructor')
 
+    def test_student_dashboard_stats_include_assigned_and_questions(self):
+        self.client.force_authenticate(self.student)
+        self.client.post(f'/api/student/labs/{self.lab.id}/submit/', {
+            'question_id': self.question.id, 'flag': 'BLITZ{secret}'
+        }, format='json')
+        stats = self.client.get('/api/student/labs/').data['stats']
+        self.assertEqual(stats['labs_assigned'], 1)
+        self.assertEqual(stats['total_questions_completed'], 1)
+
     def test_submit_ignores_student_id_parameter(self):
         self.client.force_authenticate(self.student)
         response = self.client.post(f'/api/student/labs/{self.lab.id}/submit/', {
