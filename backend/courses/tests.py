@@ -2,7 +2,7 @@ from django.test import TestCase
 from rest_framework.test import APIClient
 from rest_framework import status
 from accounts.models import User
-from courses.models import Lab, LabQuestion, LabSubmission, Subject, SubjectEnrollment, StudentClass
+from courses.models import Lab, LabQuestion, LabSubmission, LabScore, Subject, SubjectEnrollment, StudentClass
 
 
 class LabSecurityTests(TestCase):
@@ -196,3 +196,61 @@ class SubjectBasedLabAccessTests(TestCase):
 
         self.assertEqual(self._listed_lab_ids(), set())
         self.assertEqual(self._attend_status(self.ceh_lab), status.HTTP_403_FORBIDDEN)
+
+
+class LeaderboardTests(TestCase):
+    """Class-based students rank within their class; unrestricted students see the global board."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.class_a = StudentClass.objects.create(name='Batch A', code='A')
+        self.class_b = StudentClass.objects.create(name='Batch B', code='B')
+        self.lab1 = Lab.objects.create(name='Lab 1', points=100)
+        self.lab2 = Lab.objects.create(name='Lab 2', points=50)
+
+        def student(username, klass=None):
+            return User.objects.create_user(
+                username=username, email=f'{username}@blitz.io', password='Student@12345', user_type='student',
+                assigned_class=klass, lab_access_mode='class_based' if klass else 'unrestricted',
+            )
+
+        self.a1 = student('a1', self.class_a)
+        self.a2 = student('a2', self.class_a)
+        self.b1 = student('b1', self.class_b)
+        self.free = student('free')
+
+        LabScore.objects.create(student=self.a1, lab=self.lab1, score=100, is_completed=True, solved_questions_count=3)
+        LabScore.objects.create(student=self.a2, lab=self.lab1, score=40, solved_questions_count=1)
+        LabScore.objects.create(student=self.b1, lab=self.lab1, score=100, is_completed=True, solved_questions_count=3)
+        LabScore.objects.create(student=self.b1, lab=self.lab2, score=50, is_completed=True, solved_questions_count=2)
+        # Score above the lab maximum is capped at lab.points
+        LabScore.objects.create(student=self.free, lab=self.lab2, score=999, solved_questions_count=1)
+
+    def _board(self, user):
+        self.client.force_authenticate(user)
+        return self.client.get('/api/student/leaderboard/').data
+
+    def test_class_based_student_sees_only_own_class(self):
+        data = self._board(self.a2)
+        self.assertEqual(data['scope'], 'class')
+        self.assertEqual(data['class_name'], 'Batch A')
+        self.assertEqual([r['username'] for r in data['results']], ['a1', 'a2'])
+        self.assertEqual(data['my_rank'], 2)
+        self.assertTrue(data['results'][1]['is_me'])
+
+    def test_unrestricted_student_sees_global_board(self):
+        data = self._board(self.free)
+        self.assertEqual(data['scope'], 'global')
+        usernames = [r['username'] for r in data['results']]
+        self.assertEqual(usernames, ['b1', 'a1', 'free', 'a2'])
+        points = {r['username']: r['points'] for r in data['results']}
+        self.assertEqual(points, {'b1': 150, 'a1': 100, 'free': 50, 'a2': 40})
+        self.assertEqual(data['my_rank'], 3)
+
+    def test_equal_stats_share_rank(self):
+        LabScore.objects.filter(student=self.a2).update(score=100, is_completed=True, solved_questions_count=3)
+        ranks = {r['username']: r['rank'] for r in self._board(self.a1)['results']}
+        self.assertEqual(ranks, {'a1': 1, 'a2': 1})
+
+    def test_leaderboard_requires_login(self):
+        self.assertEqual(self.client.get('/api/student/leaderboard/').status_code, status.HTTP_401_UNAUTHORIZED)

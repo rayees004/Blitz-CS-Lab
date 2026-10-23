@@ -71,6 +71,11 @@ export async function fetchStudentLabs() {
   return apiFetch('/student/labs/');
 }
 
+/** Leaderboard: class-based students get their class ranking, others the global ranking */
+export async function fetchStudentLeaderboard() {
+  return apiFetch('/student/leaderboard/');
+}
+
 /** Fetch student attend state for a specific lab */
 export async function fetchStudentLabAttendState(labId) {
   return apiFetch(`/student/labs/${labId}/attend/`);

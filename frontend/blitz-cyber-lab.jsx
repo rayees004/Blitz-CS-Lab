@@ -36,6 +36,7 @@ import AdminAttendLabView from "./src/components/admin/AdminAttendLabView";
 import AdminSubjectLabAnalysis from "./src/components/admin/AdminSubjectLabAnalysis";
 import StudentProgressView from "./src/components/student/StudentProgressView";
 import StudentAttendanceLog from "./src/components/student/StudentAttendanceLog";
+import StudentLeaderboard from "./src/components/student/StudentLeaderboard";
 
 // Export modular subcomponents for external consumption
 export { default as Sidebar } from "./src/components/layout/Sidebar";
@@ -216,7 +217,7 @@ export default function BlitzCyberLab() {
     attendance: <StudentAttendanceLog />,
     materials: <Materials />,
     progress: <StudentProgressView go={goLab} />,
-    leaderboard: <Placeholder title="Leaderboard" blurb="Rankings within your class and across Blitz Cyber Lab." icon={Trophy} />,
+    leaderboard: <StudentLeaderboard />,
     certificates: <StudentCertificates currentUser={currentUser} go={goLab} />,
   };
 

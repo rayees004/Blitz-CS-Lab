@@ -2037,6 +2037,70 @@ class AdminLabRetakeRequestActionView(APIView):
             })
 
 
+class StudentLeaderboardView(APIView):
+    """
+    GET /api/student/leaderboard/
+    Class-based students are ranked within their assigned class only.
+    Unrestricted students (and admins/instructors) see the global leaderboard of all students.
+    Ranked by points, then labs completed, then questions solved.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        viewer = request.user
+        class_obj = None
+        if viewer.is_student and viewer.lab_access_mode == 'class_based':
+            scope = 'class'
+            class_obj = viewer.assigned_class
+            students = User.objects.filter(user_type='student', is_active=True, assigned_class=class_obj) if class_obj else User.objects.filter(pk=viewer.pk)
+        else:
+            scope = 'global'
+            students = User.objects.filter(user_type='student', is_active=True)
+
+        rows = {
+            s.id: {
+                'student_id': s.id,
+                'name': s.get_full_name() or s.username,
+                'username': s.username,
+                'points': 0,
+                'labs_completed': 0,
+                'questions_solved': 0,
+                'is_me': s.id == viewer.id,
+            }
+            for s in students
+        }
+
+        scores = LabScore.objects.filter(student_id__in=rows.keys(), lab__is_active=True).select_related('lab')
+        for ls in scores:
+            row = rows[ls.student_id]
+            row['points'] += min(ls.lab.points, max(0, ls.score))
+            row['questions_solved'] += ls.solved_questions_count
+            if ls.is_completed:
+                row['labs_completed'] += 1
+
+        ranked = sorted(
+            rows.values(),
+            key=lambda r: (-r['points'], -r['labs_completed'], -r['questions_solved'], r['name'].lower()),
+        )
+        # Standard competition ranking: equal stats share a rank (1, 2, 2, 4)
+        prev_key, rank = None, 0
+        for position, row in enumerate(ranked, start=1):
+            key = (row['points'], row['labs_completed'], row['questions_solved'])
+            if key != prev_key:
+                rank, prev_key = position, key
+            row['rank'] = rank
+
+        my_row = next((r for r in ranked if r['is_me']), None)
+        return Response({
+            'scope': scope,
+            'class_name': class_obj.name if class_obj else None,
+            'class_code': class_obj.code if class_obj else None,
+            'total_students': len(ranked),
+            'my_rank': my_row['rank'] if my_row else None,
+            'results': ranked,
+        })
+
+
 class StudentLabScoreListView(APIView):
     """
     GET /api/student/lab-scores/
