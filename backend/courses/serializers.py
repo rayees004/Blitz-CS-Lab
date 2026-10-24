@@ -3,7 +3,7 @@ from rest_framework import serializers
 from .models import (
     Course, Enrollment, Module, Subject, SubjectEnrollment,
     Lab, LabQuestion, QuestionHint, LabSubmission, LabScore,
-    StudyMaterial, StudentClass
+    StudyMaterial, StudentClass, LabCategory
 )
 
 
@@ -214,6 +214,29 @@ class LabQuestionSerializer(serializers.ModelSerializer):
         return data
 
 
+class LabCategorySerializer(serializers.ModelSerializer):
+    lab_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = LabCategory
+        fields = ['id', 'name', 'lab_count', 'created_at']
+        read_only_fields = ['id', 'lab_count', 'created_at']
+
+    def get_lab_count(self, obj):
+        return Lab.objects.filter(category=obj.name, is_active=True).count()
+
+    def validate_name(self, value):
+        name = ' '.join(value.split())
+        if not name:
+            raise serializers.ValidationError('Category name is required.')
+        duplicate = LabCategory.objects.filter(name__iexact=name)
+        if self.instance:
+            duplicate = duplicate.exclude(pk=self.instance.pk)
+        if duplicate.exists():
+            raise serializers.ValidationError(f'Category "{name}" already exists.')
+        return name
+
+
 class LabSerializer(serializers.ModelSerializer):
     questions = LabQuestionSerializer(many=True, required=False, default=list)
     question_count = serializers.IntegerField(read_only=True)
@@ -229,6 +252,9 @@ class LabSerializer(serializers.ModelSerializer):
     created_by_username = serializers.CharField(source='created_by.username', read_only=True, default=None)
     created_by_role = serializers.SerializerMethodField()
     created_by_id = serializers.IntegerField(source='created_by.id', read_only=True, default=None)
+    # Edit-only flags: clear an already uploaded file
+    remove_video_file = serializers.BooleanField(write_only=True, required=False, default=False)
+    remove_source_file = serializers.BooleanField(write_only=True, required=False, default=False)
 
     # Lab creator details are visible only to instructors and platform admins
     CREATOR_FIELDS = ('created_by', 'created_by_name', 'created_by_username', 'created_by_role', 'created_by_id')
@@ -242,7 +268,8 @@ class LabSerializer(serializers.ModelSerializer):
             'course', 'course_name', 'course_id',
             'subject', 'subject_name', 'subject_id', 'is_active',
             'created_by', 'created_by_name', 'created_by_username', 'created_by_role', 'created_by_id',
-            'question_count', 'questions', 'created_at', 'updated_at'
+            'question_count', 'questions', 'created_at', 'updated_at',
+            'remove_video_file', 'remove_source_file',
         ]
         read_only_fields = [
             'id', 'created_at', 'updated_at', 'question_count', 'course_name', 'subject_name',
@@ -275,6 +302,8 @@ class LabSerializer(serializers.ModelSerializer):
         return val
 
     def create(self, validated_data):
+        validated_data.pop('remove_video_file', None)
+        validated_data.pop('remove_source_file', None)
         questions_data = validated_data.pop('questions', [])
         source_file = validated_data.get('source_file')
         if source_file and hasattr(source_file, 'size'):
@@ -294,9 +323,21 @@ class LabSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         questions_data = validated_data.pop('questions', None)
+        remove_video = validated_data.pop('remove_video_file', False)
+        remove_source = validated_data.pop('remove_source_file', False)
         source_file = validated_data.get('source_file')
         if source_file and hasattr(source_file, 'size'):
             validated_data['source_file_size'] = source_file.size
+
+        # Remove previously uploaded files (only when no replacement file is sent)
+        if remove_video and not validated_data.get('video_file') and instance.video_file:
+            instance.video_file.delete(save=False)
+            validated_data['video_file'] = None
+        if remove_source and not validated_data.get('source_file') and instance.source_file:
+            instance.source_file.delete(save=False)
+            validated_data['source_file'] = None
+            validated_data['source_file_size'] = 0
+
         with transaction.atomic():
             for attr, val in validated_data.items():
                 setattr(instance, attr, val)

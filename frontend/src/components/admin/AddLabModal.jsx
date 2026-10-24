@@ -9,8 +9,10 @@ import Btn from "../common/Btn";
 import Badge from "../common/Badge";
 import { C, sans, mono } from "../../constants/theme";
 import { fetchSubjects } from "../../api/subjects";
+import { fetchLabCategories, createLabCategory } from "../../api/labs";
 
-const CATEGORIES = [
+// Fallback when the category list cannot be loaded
+const DEFAULT_CATEGORIES = [
   "Web Security",
   "API Security",
   "Authentication",
@@ -24,9 +26,13 @@ const CATEGORIES = [
 
 const DIFFICULTIES = ["Beginner", "Intermediate", "Advanced"];
 
-export default function AddLabModal({ isOpen, onClose, onLabCreated, initialLab = null, initialCourse = null }) {
+// Mount the form only while open, so its hooks and state start fresh each time
+export default function AddLabModal({ isOpen, ...props }) {
   if (!isOpen) return null;
+  return <AddLabModalContent {...props} />;
+}
 
+function AddLabModalContent({ onClose, onLabCreated, initialLab = null, initialCourse = null }) {
   const isEdit = Boolean(initialLab?.id && typeof initialLab.id === "number");
   const [courses, setCourses] = useState([]);
 
@@ -112,8 +118,47 @@ export default function AddLabModal({ isOpen, onClose, onLabCreated, initialLab 
   const [videoFilePreview, setVideoFilePreview] = useState(initialLab?.video_file || null);
   const [videoMode, setVideoMode] = useState(() => (initialLab?.video_url ? "url" : (initialLab?.video_file ? "upload" : "upload")));
 
+  // Set when an already uploaded file is removed during edit (sent to the server on save)
+  const [removeVideo, setRemoveVideo] = useState(false);
+
   const [sourceFile, setSourceFile] = useState(null);
   const [sourceFilePreview, setSourceFilePreview] = useState(initialLab?.source_file || null);
+  const [removeSource, setRemoveSource] = useState(false);
+
+  // Managed lab categories (+ inline "new category")
+  const [categoryOptions, setCategoryOptions] = useState(DEFAULT_CATEGORIES);
+  const [showNewCategory, setShowNewCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [categoryError, setCategoryError] = useState("");
+  const [addingCategory, setAddingCategory] = useState(false);
+
+  useEffect(() => {
+    fetchLabCategories()
+      .then((res) => {
+        const names = (res.results || []).map((c) => c.name);
+        if (names.length) setCategoryOptions(names);
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleAddCategory = async () => {
+    const name = newCategoryName.trim();
+    if (!name) return;
+    setAddingCategory(true);
+    setCategoryError("");
+    try {
+      const res = await createLabCategory(name);
+      const created = res.category?.name || name;
+      setCategoryOptions((prev) => [...prev, created].sort((a, b) => a.localeCompare(b)));
+      setForm((prev) => ({ ...prev, category: created }));
+      setNewCategoryName("");
+      setShowNewCategory(false);
+    } catch (err) {
+      setCategoryError(err.message || "Failed to add category.");
+    } finally {
+      setAddingCategory(false);
+    }
+  };
   const [sourceMode, setSourceMode] = useState(() => (initialLab?.target_url ? "site" : (initialLab?.source_link ? "link" : (initialLab?.source_file ? "upload" : "upload"))));
 
   const [errors, setErrors] = useState({});
@@ -260,6 +305,8 @@ export default function AddLabModal({ isOpen, onClose, onLabCreated, initialLab 
           payload.append("source_file", sourceFile);
         }
         payload.append("questions", JSON.stringify(cleanQuestions));
+        if (removeVideo) payload.append("remove_video_file", "true");
+        if (removeSource) payload.append("remove_source_file", "true");
       } else {
         payload = {
           name: form.name.trim(),
@@ -275,6 +322,8 @@ export default function AddLabModal({ isOpen, onClose, onLabCreated, initialLab 
           setup_commands: form.setup_commands.trim(),
           subject_id: form.subject_id ? Number(form.subject_id) : null,
           questions: cleanQuestions,
+          ...(removeVideo ? { remove_video_file: true } : {}),
+          ...(removeSource ? { remove_source_file: true } : {}),
         };
       }
 
@@ -494,10 +543,48 @@ export default function AddLabModal({ isOpen, onClose, onLabCreated, initialLab 
                     outline: "none",
                   }}
                 >
-                  {CATEGORIES.map((c) => (
+                  {[...new Set([...categoryOptions, form.category].filter(Boolean))].map((c) => (
                     <option key={c} value={c}>{c}</option>
                   ))}
                 </select>
+                {showNewCategory ? (
+                  <div style={{ marginTop: 6 }}>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <input
+                        autoFocus
+                        placeholder="New category name"
+                        value={newCategoryName}
+                        onChange={(e) => setNewCategoryName(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleAddCategory(); } }}
+                        style={{ flex: 1, minWidth: 0, boxSizing: "border-box", background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 6, padding: "6px 8px", fontFamily: sans, fontSize: 12, color: C.hi, outline: "none" }}
+                      />
+                      <button
+                        type="button"
+                        onClick={handleAddCategory}
+                        disabled={addingCategory || !newCategoryName.trim()}
+                        style={{ background: C.amber, color: "#1A1200", border: "none", borderRadius: 6, padding: "0 10px", fontFamily: sans, fontSize: 11.5, fontWeight: 700, cursor: "pointer", opacity: addingCategory || !newCategoryName.trim() ? 0.6 : 1 }}
+                      >
+                        {addingCategory ? "..." : "Add"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setShowNewCategory(false); setNewCategoryName(""); setCategoryError(""); }}
+                        style={{ background: "transparent", color: C.mid, border: `1px solid ${C.border}`, borderRadius: 6, padding: "0 8px", cursor: "pointer" }}
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                    {categoryError && <div style={{ color: C.danger, fontSize: 11, marginTop: 3, fontFamily: sans }}>{categoryError}</div>}
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowNewCategory(true)}
+                    style={{ marginTop: 6, background: "none", border: "none", padding: 0, color: C.cyan, fontFamily: sans, fontSize: 11.5, fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }}
+                  >
+                    <Plus size={12} /> New category
+                  </button>
+                )}
               </div>
 
               <div>
@@ -637,6 +724,7 @@ export default function AddLabModal({ isOpen, onClose, onLabCreated, initialLab 
                         if (file) {
                           setVideoFile(file);
                           setVideoFilePreview(URL.createObjectURL(file));
+                          setRemoveVideo(false);
                         }
                       }}
                       style={{
@@ -672,6 +760,8 @@ export default function AddLabModal({ isOpen, onClose, onLabCreated, initialLab 
                         onClick={() => {
                           setVideoFile(null);
                           setVideoFilePreview(null);
+                          // Also delete the video already saved on the lab
+                          if (initialLab?.video_file) setRemoveVideo(true);
                         }}
                         style={{
                           background: "transparent",
@@ -823,6 +913,7 @@ export default function AddLabModal({ isOpen, onClose, onLabCreated, initialLab 
                         if (file) {
                           setSourceFile(file);
                           setSourceFilePreview(file.name);
+                          setRemoveSource(false);
                         }
                       }}
                       style={{
@@ -858,6 +949,8 @@ export default function AddLabModal({ isOpen, onClose, onLabCreated, initialLab 
                         onClick={() => {
                           setSourceFile(null);
                           setSourceFilePreview(null);
+                          // Also delete the archive already saved on the lab
+                          if (initialLab?.source_file) setRemoveSource(true);
                         }}
                         style={{
                           background: "transparent",

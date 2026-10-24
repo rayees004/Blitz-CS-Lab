@@ -483,3 +483,19 @@ class StudentClass(models.Model):
     def lab_count(self):
         return self.labs.filter(is_active=True).count()
 
+
+
+class LabCategory(models.Model):
+    """
+    Managed list of lab categories (e.g. "Web Security").
+    Labs store the category name in Lab.category; renaming a category updates those labs.
+    """
+    name = models.CharField(max_length=100, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['name']
+        verbose_name_plural = 'Lab categories'
+
+    def __str__(self):
+        return self.name

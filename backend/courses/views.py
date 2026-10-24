@@ -17,7 +17,7 @@ from accounts.audit import record_audit_log
 from .models import (
     Course, Enrollment, Module, Subject, SubjectEnrollment,
     Lab, LabQuestion, QuestionHint, LabSubmission, LabScore,
-    StudyMaterial, StudentAssignedBatch, LabRetakeRequest, StudentClass
+    StudyMaterial, StudentAssignedBatch, LabRetakeRequest, StudentClass, LabCategory
 )
 from .serializers import (
     CourseSerializer,
@@ -31,6 +31,7 @@ from .serializers import (
     EnrollmentUpdateSerializer,
     SubjectEnrollmentSerializer,
     LabSerializer,
+    LabCategorySerializer,
     LabSubmissionSerializer,
     LabScoreSerializer,
     StudyMaterialSerializer,
@@ -729,6 +730,68 @@ class LabListCreateView(APIView):
         if isinstance(first_msg, list):
             first_msg = first_msg[0]
         return Response({'detail': str(first_msg), 'errors': errors}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class LabCategoryListCreateView(APIView):
+    """
+    GET  /api/lab-categories/ - list lab categories (any logged-in user)
+    POST /api/lab-categories/ - add a category (admins & instructors)
+    """
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return [IsAuthenticated()]
+        return [IsAdminOrStaff()]
+
+    def get(self, request):
+        categories = LabCategory.objects.all()
+        return Response({'count': categories.count(), 'results': LabCategorySerializer(categories, many=True).data})
+
+    def post(self, request):
+        serializer = LabCategorySerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response({'detail': serializer.errors['name'][0], 'errors': serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+        category = serializer.save()
+        record_audit_log(
+            action_type='OTHER',
+            description=f"Created lab category '{category.name}'.",
+            request=request,
+            actor=request.user,
+            target_entity='LabCategory',
+            target_id=category.id,
+            target_name=category.name,
+            severity='INFO',
+        )
+        return Response({'message': f'Category "{category.name}" added.', 'category': LabCategorySerializer(category).data}, status=status.HTTP_201_CREATED)
+
+
+class LabCategoryDetailView(APIView):
+    """
+    PATCH /api/lab-categories/<id>/ - rename a category (admins & instructors).
+    Labs using the old name are moved to the new name.
+    """
+    permission_classes = [IsAdminOrStaff]
+
+    def patch(self, request, pk):
+        category = get_object_or_404(LabCategory, pk=pk)
+        old_name = category.name
+        serializer = LabCategorySerializer(category, data=request.data, partial=True)
+        if not serializer.is_valid():
+            return Response({'detail': serializer.errors['name'][0], 'errors': serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+        with transaction.atomic():
+            category = serializer.save()
+            moved = Lab.objects.filter(category=old_name).update(category=category.name)
+        record_audit_log(
+            action_type='OTHER',
+            description=f"Renamed lab category '{old_name}' to '{category.name}' ({moved} lab(s) updated).",
+            request=request,
+            actor=request.user,
+            target_entity='LabCategory',
+            target_id=category.id,
+            target_name=category.name,
+            severity='NOTICE',
+            details={'old_name': old_name, 'new_name': category.name, 'labs_updated': moved},
+        )
+        return Response({'message': f'Category renamed to "{category.name}".', 'category': LabCategorySerializer(category).data})
 
 
 class LabDetailView(APIView):

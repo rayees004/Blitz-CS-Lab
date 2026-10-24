@@ -5,7 +5,7 @@ import {
   Award, Globe, ExternalLink, Flag, BookMarked, Eye, EyeOff,
   ChevronDown, ChevronUp, Database, Sparkles, X, Terminal,
   Video, Play, Film, FolderArchive, Download, Copy, Check, Code, FileCode,
-  User, BarChart3
+  User, BarChart3, Tags
 } from "lucide-react";
 import Panel from "../common/Panel";
 import Btn from "../common/Btn";
@@ -16,6 +16,7 @@ import { fetchLabs, createLab, updateLab, deleteLab, seedLabs } from "../../api/
 import { fetchSubjects } from "../../api/subjects";
 import Pagination from "../common/Pagination";
 import AddLabModal from "./AddLabModal";
+import LabCategoriesModal from "./LabCategoriesModal";
 
 /* ── Lab Detailed View Drawer ─────────────────────────────────────────── */
 function LabViewDrawer({ lab, courses, onClose, onEdit, onDelete }) {
@@ -680,6 +681,7 @@ export default function AdminLabs({ onOpenAddModal = null, onOpenAnalysis = null
   const [expandedLabIds, setExpandedLabIds] = useState(new Set());
   const [actionNotice, setActionNotice] = useState(null);
   const [seeding, setSeeding] = useState(false);
+  const [categoriesOpen, setCategoriesOpen] = useState(false);
 
   const [page, setPage] = useState(1);
   const [pageMeta, setPageMeta] = useState(null);
@@ -845,6 +847,9 @@ export default function AdminLabs({ onOpenAddModal = null, onOpenAnalysis = null
               <BarChart3 size={14} /> Subject Analysis
             </button>
           )}
+          <Btn variant="subtle" icon={Tags} onClick={() => setCategoriesOpen(true)} small>
+            Categories
+          </Btn>
           <Btn
             icon={Plus}
             onClick={() => {
@@ -1365,6 +1370,11 @@ export default function AdminLabs({ onOpenAddModal = null, onOpenAnalysis = null
       </div>
 
       <Pagination meta={pageMeta} onPageChange={setPage} loading={loading} />
+
+      {/* Manage Lab Categories */}
+      {categoriesOpen && (
+        <LabCategoriesModal onClose={() => setCategoriesOpen(false)} onChanged={loadLabs} />
+      )}
 
       {/* Add / Edit Lab Modal */}
       <AddLabModal

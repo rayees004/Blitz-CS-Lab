@@ -334,3 +334,83 @@ class PaginationTests(TestCase):
         self.assertEqual([l['id'] for l in data['labs']], [started.id])
         self.assertEqual(data['pagination']['count'], 1)
         self.assertEqual(data['stats']['labs_assigned'], 3)
+
+
+import shutil
+import tempfile
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import override_settings
+from courses.models import LabCategory
+
+TEST_MEDIA_ROOT = tempfile.mkdtemp()
+
+
+class LabCategoryTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.instructor = User.objects.create_user(
+            username='instructor', email='instructor@blitz.io', password='x', user_type='instructor'
+        )
+        self.student = User.objects.create_user(
+            username='student', email='student@blitz.io', password='x', user_type='student'
+        )
+
+    def test_instructor_can_add_category_and_duplicates_are_rejected(self):
+        self.client.force_authenticate(self.instructor)
+        response = self.client.post('/api/lab-categories/', {'name': '  Mobile   Security '}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertEqual(response.data['category']['name'], 'Mobile Security')
+
+        duplicate = self.client.post('/api/lab-categories/', {'name': 'mobile security'}, format='json')
+        self.assertEqual(duplicate.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_rename_updates_labs_using_the_category(self):
+        category = LabCategory.objects.create(name='Forensics')
+        lab = Lab.objects.create(name='Disk Image', category='Forensics')
+        other = Lab.objects.create(name='Other', category='OSINT')
+
+        self.client.force_authenticate(self.instructor)
+        response = self.client.patch(f'/api/lab-categories/{category.id}/', {'name': 'Digital Forensics'}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        lab.refresh_from_db(); other.refresh_from_db()
+        self.assertEqual(lab.category, 'Digital Forensics')
+        self.assertEqual(other.category, 'OSINT')
+
+    def test_students_can_list_but_not_change_categories(self):
+        LabCategory.objects.create(name='Forensics')
+        self.client.force_authenticate(self.student)
+        self.assertEqual(self.client.get('/api/lab-categories/').status_code, status.HTTP_200_OK)
+        self.assertEqual(self.client.post('/api/lab-categories/', {'name': 'X'}, format='json').status_code, status.HTTP_403_FORBIDDEN)
+
+
+@override_settings(MEDIA_ROOT=TEST_MEDIA_ROOT)
+class LabFileRemovalTests(TestCase):
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(TEST_MEDIA_ROOT, ignore_errors=True)
+        super().tearDownClass()
+
+    def setUp(self):
+        self.client = APIClient()
+        self.instructor = User.objects.create_user(
+            username='instructor', email='instructor@blitz.io', password='x', user_type='instructor'
+        )
+        self.client.force_authenticate(self.instructor)
+        self.lab = Lab.objects.create(name='Video Lab')
+        self.lab.video_file = SimpleUploadedFile('walkthrough.mp4', b'fake-video', content_type='video/mp4')
+        self.lab.save()
+
+    def test_remove_uploaded_video(self):
+        path = self.lab.video_file.path
+        response = self.client.patch(f'/api/labs/{self.lab.id}/', {'remove_video_file': True}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.lab.refresh_from_db()
+        self.assertFalse(self.lab.video_file)
+        import os
+        self.assertFalse(os.path.exists(path))
+
+    def test_edit_without_flag_keeps_video(self):
+        response = self.client.patch(f'/api/labs/{self.lab.id}/', {'name': 'Renamed'}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.lab.refresh_from_db()
+        self.assertTrue(self.lab.video_file)

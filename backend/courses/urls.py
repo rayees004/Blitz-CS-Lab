@@ -15,6 +15,8 @@ from .views import (
     EnrollmentDetailView,
     LabListCreateView,
     LabDetailView,
+    LabCategoryListCreateView,
+    LabCategoryDetailView,
     SubjectLabsView,
     SeedLabsView,
     StudentLabListView,
@@ -64,6 +66,8 @@ urlpatterns = [
     path('labs/', LabListCreateView.as_view(), name='api_labs'),
     path('labs/seed/', SeedLabsView.as_view(), name='api_labs_seed'),
     path('labs/<int:pk>/', LabDetailView.as_view(), name='api_lab_detail'),
+    path('lab-categories/', LabCategoryListCreateView.as_view(), name='api_lab_categories'),
+    path('lab-categories/<int:pk>/', LabCategoryDetailView.as_view(), name='api_lab_category_detail'),
     path('subjects/<int:pk>/labs/', SubjectLabsView.as_view(), name='api_subject_labs'),
 
     # Study Materials (Subject-based with optional Lab)

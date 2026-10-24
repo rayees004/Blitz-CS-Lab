@@ -79,6 +79,20 @@ export async function fetchStudentLabs(params = {}) {
   return apiFetch(`/student/labs/${qs}`);
 }
 
+/** Lab categories (managed list) */
+export async function fetchLabCategories() {
+  return apiFetch('/lab-categories/');
+}
+
+export async function createLabCategory(name) {
+  return apiFetch('/lab-categories/', { method: 'POST', body: JSON.stringify({ name }) });
+}
+
+/** Rename a category; labs using the old name are moved to the new one */
+export async function updateLabCategory(id, name) {
+  return apiFetch(`/lab-categories/${id}/`, { method: 'PATCH', body: JSON.stringify({ name }) });
+}
+
 /** Leaderboard: class-based students get their class ranking, others the global ranking */
 export async function fetchStudentLeaderboard(page = null) {
   return apiFetch(`/student/leaderboard/${page ? `?page=${page}` : ''}`);
