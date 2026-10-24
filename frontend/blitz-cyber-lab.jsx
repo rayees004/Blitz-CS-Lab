@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 
 import { C, sans } from "./src/constants/theme";
-import { NAV_STUDENT, NAV_ADMIN } from "./src/data/mockData";
+import { NAV_STUDENT, NAV_ADMIN, NAV_INSTRUCTOR } from "./src/data/mockData";
 import Sidebar from "./src/components/layout/Sidebar";
 import Topbar from "./src/components/layout/Topbar";
 import Login from "./src/components/auth/Login";
@@ -164,7 +164,8 @@ export default function BlitzCyberLab() {
       "a-students": <AdminStudents currentUser={currentUser} />,
       "a-classes": <AdminClasses />,
       "a-subjects": <AdminSubjects />,
-      "a-labs": <AdminLabs onOpenAddModal={() => setAdminPage("a-dashboard")} />,
+      "a-labs": <AdminLabs key="all-labs" onOpenAddModal={() => setAdminPage("a-dashboard")} />,
+      "a-my-labs": <AdminLabs key="my-labs" mode="mine" />,
       "a-attend-lab": <AdminAttendLabView currentUser={currentUser} onNavigate={setAdminPage} />,
       "a-subject-analysis": <AdminSubjectLabAnalysis currentUser={currentUser} />,
       "a-materials": <AdminMaterials />,
@@ -182,7 +183,7 @@ export default function BlitzCyberLab() {
     return (
       <div style={{ fontFamily: sans, display: "flex", height: "100vh", background: C.void, color: C.hi, overflow: "hidden" }}>
         <Sidebar
-          items={NAV_ADMIN}
+          items={isInstructor ? NAV_INSTRUCTOR : NAV_ADMIN}
           active={adminPage}
           onSelect={setAdminPage}
           onSwitch={handleLogout}

@@ -1,7 +1,7 @@
 import {
   LayoutGrid, GraduationCap, FlaskConical, BookOpen, Trophy, TrendingUp, Award,
   FileBadge, User, Users, Layers, ClipboardList, Wallet, Activity, BarChart3,
-  ScrollText, RotateCcw, Target, BookMarked, PlayCircle
+  ScrollText, RotateCcw, Target, BookMarked, PlayCircle, FolderOpen
 } from "lucide-react";
 
 export const LABS = [
@@ -62,3 +62,8 @@ export const NAV_ADMIN = [
   { label: "Audit Logs", icon: ScrollText, key: "a-audit" },
   { label: "Retake Requests", icon: RotateCcw, key: "a-retakes" },
 ];
+
+// Instructors also get "My Labs": labs they created or were given edit access to
+export const NAV_INSTRUCTOR = NAV_ADMIN.flatMap((item) =>
+  item.key === "a-labs" ? [item, { label: "My Labs", icon: FolderOpen, key: "a-my-labs" }] : [item]
+);

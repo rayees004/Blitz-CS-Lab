@@ -1054,6 +1054,8 @@ function CourseLabsDrawer({ course, onClose, onLabsCountChanged }) {
                       </div>
 
                       <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                        {/* Instructors edit only their own / shared labs; archive is creator or admin only */}
+                        {l.can_edit && (
                         <button
                           onClick={() => {
                             setEditingLab(l);
@@ -1069,6 +1071,8 @@ function CourseLabsDrawer({ course, onClose, onLabsCountChanged }) {
                         >
                           <Edit2 size={12} />
                         </button>
+                        )}
+                        {l.can_manage_editors && (
                         <button
                           onClick={() => handleDeleteLab(l.id, l.name)}
                           disabled={deletingId === l.id}
@@ -1082,6 +1086,7 @@ function CourseLabsDrawer({ course, onClose, onLabsCountChanged }) {
                         >
                           <Trash2 size={12} />
                         </button>
+                        )}
                       </div>
                     </div>
                   </div>

@@ -196,6 +196,12 @@ class Lab(models.Model):
         related_name='created_labs',
         help_text='Instructor or Platform Admin who created this practical lab'
     )
+    editors = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        blank=True,
+        related_name='editable_labs',
+        help_text='Other instructors the creator (or a platform admin) allowed to edit this lab'
+    )
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -209,6 +215,26 @@ class Lab(models.Model):
     @property
     def question_count(self):
         return self.questions.count()
+
+    @staticmethod
+    def _is_platform_admin(user):
+        return bool(user and user.is_authenticated and user.is_active
+                    and (user.is_superuser or getattr(user, 'user_type', None) == 'admin'))
+
+    def can_manage_editors(self, user):
+        """Platform admins and the lab's creator decide who else may edit it."""
+        if self._is_platform_admin(user):
+            return True
+        return bool(user and user.is_authenticated and self.created_by_id == user.id)
+
+    def can_edit(self, user):
+        """Platform admins edit every lab; instructors only labs they created or were given edit access to."""
+        if self.can_manage_editors(user):
+            return True
+        if not (user and user.is_authenticated and getattr(user, 'user_type', None) == 'instructor'):
+            return False
+        # Uses the prefetch cache when the queryset prefetched editors
+        return any(editor.id == user.id for editor in self.editors.all())
 
 
 class LabQuestion(models.Model):

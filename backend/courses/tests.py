@@ -396,7 +396,7 @@ class LabFileRemovalTests(TestCase):
             username='instructor', email='instructor@blitz.io', password='x', user_type='instructor'
         )
         self.client.force_authenticate(self.instructor)
-        self.lab = Lab.objects.create(name='Video Lab')
+        self.lab = Lab.objects.create(name='Video Lab', created_by=self.instructor)
         self.lab.video_file = SimpleUploadedFile('walkthrough.mp4', b'fake-video', content_type='video/mp4')
         self.lab.save()
 
@@ -414,3 +414,75 @@ class LabFileRemovalTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
         self.lab.refresh_from_db()
         self.assertTrue(self.lab.video_file)
+
+
+class LabEditAccessTests(TestCase):
+    """Instructors edit only their own labs or labs shared with them; platform admins edit all."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = User.objects.create_user(username='admin', email='admin@blitz.io', password='x', user_type='admin')
+        self.owner = User.objects.create_user(username='owner', email='owner@blitz.io', password='x', user_type='instructor')
+        self.other = User.objects.create_user(username='other', email='other@blitz.io', password='x', user_type='instructor')
+        self.third = User.objects.create_user(username='third', email='third@blitz.io', password='x', user_type='instructor')
+        self.student = User.objects.create_user(username='stud', email='stud@blitz.io', password='x', user_type='student')
+        self.lab = Lab.objects.create(name='Owner Lab', created_by=self.owner)
+        self.other_lab = Lab.objects.create(name='Other Lab', created_by=self.other)
+
+    def _rename(self, user, lab, name='Renamed'):
+        self.client.force_authenticate(user)
+        return self.client.patch(f'/api/labs/{lab.id}/', {'name': name}, format='json')
+
+    def _set_editors(self, user, ids):
+        self.client.force_authenticate(user)
+        return self.client.put(f'/api/labs/{self.lab.id}/editors/', {'editor_ids': ids}, format='json')
+
+    def test_creator_and_admin_can_edit_others_cannot(self):
+        self.assertEqual(self._rename(self.owner, self.lab).status_code, status.HTTP_200_OK)
+        self.assertEqual(self._rename(self.admin, self.lab).status_code, status.HTTP_200_OK)
+        self.assertEqual(self._rename(self.other, self.lab).status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(self._rename(self.student, self.lab).status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_creator_shares_edit_access_with_multiple_instructors(self):
+        response = self._set_editors(self.owner, [self.other.id, self.third.id])
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual({e['id'] for e in response.data['editors']}, {self.other.id, self.third.id})
+        self.assertEqual(self._rename(self.other, self.lab).status_code, status.HTTP_200_OK)
+        self.assertEqual(self._rename(self.third, self.lab).status_code, status.HTTP_200_OK)
+
+        # A shared editor can edit but can neither re-share nor archive the lab
+        self.assertEqual(self._set_editors(self.other, []).status_code, status.HTTP_403_FORBIDDEN)
+        self.client.force_authenticate(self.other)
+        self.assertEqual(self.client.delete(f'/api/labs/{self.lab.id}/').status_code, status.HTTP_403_FORBIDDEN)
+
+        # Removing access takes effect immediately
+        self.assertEqual(self._set_editors(self.owner, [self.third.id]).status_code, status.HTTP_200_OK)
+        self.assertEqual(self._rename(self.other, self.lab).status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_admin_can_manage_editors_and_only_instructors_allowed(self):
+        self.assertEqual(self._set_editors(self.admin, [self.other.id]).status_code, status.HTTP_200_OK)
+        self.assertEqual(self._set_editors(self.admin, [self.student.id]).status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(self._set_editors(self.other, [self.third.id]).status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_archive_limited_to_creator_and_admin(self):
+        self.client.force_authenticate(self.other)
+        self.assertEqual(self.client.delete(f'/api/labs/{self.lab.id}/').status_code, status.HTTP_403_FORBIDDEN)
+        self.client.force_authenticate(self.owner)
+        self.assertEqual(self.client.delete(f'/api/labs/{self.lab.id}/').status_code, status.HTTP_200_OK)
+
+    def test_my_labs_lists_created_and_shared(self):
+        self.lab.editors.add(self.other)
+        self.client.force_authenticate(self.other)
+        response = self.client.get('/api/labs/?mine=1&page=1')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        names = {l['name'] for l in response.data['results']}
+        self.assertEqual(names, {'Owner Lab', 'Other Lab'})
+        self.assertEqual(response.data['stats']['total_labs'], 2)
+        flags = {l['name']: (l['can_edit'], l['can_manage_editors']) for l in response.data['results']}
+        self.assertEqual(flags['Owner Lab'], (True, False))
+        self.assertEqual(flags['Other Lab'], (True, True))
+
+        self.client.force_authenticate(self.third)
+        self.assertEqual(self.client.get('/api/labs/?mine=1').data['results'], [])
+        all_labs = self.client.get('/api/labs/').data['results']
+        self.assertTrue(all(not l['can_edit'] for l in all_labs))

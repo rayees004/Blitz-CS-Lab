@@ -255,9 +255,16 @@ class LabSerializer(serializers.ModelSerializer):
     # Edit-only flags: clear an already uploaded file
     remove_video_file = serializers.BooleanField(write_only=True, required=False, default=False)
     remove_source_file = serializers.BooleanField(write_only=True, required=False, default=False)
+    # Edit access for the viewing user, and the instructors the creator shared editing with
+    editors = serializers.SerializerMethodField()
+    can_edit = serializers.SerializerMethodField()
+    can_manage_editors = serializers.SerializerMethodField()
 
-    # Lab creator details are visible only to instructors and platform admins
-    CREATOR_FIELDS = ('created_by', 'created_by_name', 'created_by_username', 'created_by_role', 'created_by_id')
+    # Lab creator / edit-access details are visible only to instructors and platform admins
+    CREATOR_FIELDS = (
+        'created_by', 'created_by_name', 'created_by_username', 'created_by_role', 'created_by_id',
+        'editors', 'can_edit', 'can_manage_editors',
+    )
 
     class Meta:
         model = Lab
@@ -270,6 +277,7 @@ class LabSerializer(serializers.ModelSerializer):
             'created_by', 'created_by_name', 'created_by_username', 'created_by_role', 'created_by_id',
             'question_count', 'questions', 'created_at', 'updated_at',
             'remove_video_file', 'remove_source_file',
+            'editors', 'can_edit', 'can_manage_editors',
         ]
         read_only_fields = [
             'id', 'created_at', 'updated_at', 'question_count', 'course_name', 'subject_name',
@@ -294,6 +302,23 @@ class LabSerializer(serializers.ModelSerializer):
         if obj.created_by:
             return getattr(obj.created_by, 'user_type', 'admin')
         return None
+
+    def _viewer(self):
+        return getattr(self.context.get('request'), 'user', None)
+
+    def get_editors(self, obj):
+        if not obj.pk:
+            return []
+        return [
+            {'id': u.id, 'username': u.username, 'name': u.get_full_name() or u.username}
+            for u in obj.editors.all()
+        ]
+
+    def get_can_edit(self, obj):
+        return obj.can_edit(self._viewer())
+
+    def get_can_manage_editors(self, obj):
+        return obj.can_manage_editors(self._viewer())
 
     def validate_name(self, value):
         val = value.strip()

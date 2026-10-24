@@ -5,7 +5,7 @@ import {
   Award, Globe, ExternalLink, Flag, BookMarked, Eye, EyeOff,
   ChevronDown, ChevronUp, Database, Sparkles, X, Terminal,
   Video, Play, Film, FolderArchive, Download, Copy, Check, Code, FileCode,
-  User, Tags
+  User, Tags, Users, Share2
 } from "lucide-react";
 import Panel from "../common/Panel";
 import Btn from "../common/Btn";
@@ -17,6 +17,7 @@ import { fetchSubjects } from "../../api/subjects";
 import Pagination from "../common/Pagination";
 import AddLabModal from "./AddLabModal";
 import LabCategoriesModal from "./LabCategoriesModal";
+import LabEditorsModal from "./LabEditorsModal";
 
 /* ── Lab Detailed View Drawer ─────────────────────────────────────────── */
 function LabViewDrawer({ lab, courses, onClose, onEdit, onDelete }) {
@@ -123,6 +124,14 @@ function LabViewDrawer({ lab, courses, onClose, onEdit, onDelete }) {
                   )}
                 </span>
               </div>
+              {lab.editors?.length > 0 && (
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                  <Users size={12} color={C.amber} />
+                  <span style={{ fontFamily: sans, fontSize: 12, color: C.mid }}>
+                    Can also edit: <strong style={{ color: C.hi }}>{lab.editors.map((e) => `@${e.username}`).join(", ")}</strong>
+                  </span>
+                </div>
+              )}
             </div>
 
             <button
@@ -621,6 +630,7 @@ function LabViewDrawer({ lab, courses, onClose, onEdit, onDelete }) {
             flexShrink: 0,
           }}
         >
+          {lab.can_manage_editors ? (
           <button
             type="button"
             onClick={() => {
@@ -643,21 +653,28 @@ function LabViewDrawer({ lab, courses, onClose, onEdit, onDelete }) {
           >
             <Trash2 size={13} /> Archive Lab
           </button>
+          ) : (
+            <span style={{ fontFamily: sans, fontSize: 12, color: C.low }}>
+              {lab.can_edit ? "Shared with you for editing" : "View only — created by another instructor"}
+            </span>
+          )}
 
           <div style={{ display: "flex", gap: 10 }}>
             <Btn variant="outline" small onClick={onClose}>
               Close
             </Btn>
-            <Btn
-              small
-              icon={Edit3}
-              onClick={() => {
-                onClose();
-                onEdit(lab);
-              }}
-            >
-              Edit Lab
-            </Btn>
+            {lab.can_edit && (
+              <Btn
+                small
+                icon={Edit3}
+                onClick={() => {
+                  onClose();
+                  onEdit(lab);
+                }}
+              >
+                Edit Lab
+              </Btn>
+            )}
           </div>
         </div>
       </div>
@@ -666,8 +683,11 @@ function LabViewDrawer({ lab, courses, onClose, onEdit, onDelete }) {
 }
 
 /* ── Main AdminLabs Component ─────────────────────────────────────────── */
-export default function AdminLabs({ onOpenAddModal = null }) {
+export default function AdminLabs({ onOpenAddModal = null, mode = "all" }) {
+  // mode "mine" = My Labs: only labs the user created or was given edit access to
+  const mine = mode === "mine";
   const [labs, setLabs] = useState([]);
+  const [editorsLab, setEditorsLab] = useState(null);
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -704,6 +724,7 @@ export default function AdminLabs({ onOpenAddModal = null }) {
         category: filterCat !== "ALL" ? filterCat : "",
         difficulty: filterDiff !== "ALL" ? filterDiff : "",
         subject_id: filterCourse !== "ALL" ? filterCourse : "",
+        mine,
         page,
       });
       setLabs(data.results || []);
@@ -717,7 +738,7 @@ export default function AdminLabs({ onOpenAddModal = null }) {
     } finally {
       setLoading(false);
     }
-  }, [debouncedSearch, filterCat, filterDiff, filterCourse, page]);
+  }, [debouncedSearch, filterCat, filterDiff, filterCourse, mine, page]);
 
   useEffect(() => {
     loadLabs();
@@ -792,7 +813,7 @@ export default function AdminLabs({ onOpenAddModal = null }) {
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <h1 style={{ fontFamily: sans, fontSize: 22, fontWeight: 700, color: C.hi, margin: 0 }}>
-              Lab Management
+              {mine ? "My Labs" : "Lab Management"}
             </h1>
             <span
               style={{
@@ -812,7 +833,9 @@ export default function AdminLabs({ onOpenAddModal = null }) {
             </span>
           </div>
           <p style={{ fontFamily: sans, fontSize: 13.5, color: C.mid, marginTop: 6 }}>
-            Database-backed lab environments, multi-step questions, flags, and progressive hints.
+            {mine
+              ? "Labs you created and labs other instructors gave you edit access to."
+              : "Database-backed lab environments, multi-step questions, flags, and progressive hints."}
           </p>
         </div>
 
@@ -820,7 +843,7 @@ export default function AdminLabs({ onOpenAddModal = null }) {
           <Btn variant="subtle" icon={RefreshCw} onClick={loadLabs} small disabled={loading}>
             Refresh
           </Btn>
-          {totalLabs === 0 && (
+          {totalLabs === 0 && !mine && (
             <Btn variant="subtle" icon={Sparkles} onClick={handleSeedLabs} small disabled={seeding}>
               {seeding ? "Seeding..." : "Seed Starter Labs"}
             </Btn>
@@ -864,7 +887,13 @@ export default function AdminLabs({ onOpenAddModal = null }) {
 
       {/* Stat Cards */}
       <div style={{ display: "flex", gap: 14, marginBottom: 24 }}>
-        <StatCard label="Database Labs" value={String(totalLabs)} icon={FlaskConical} tone="cyan" sub="Real-time SQLite backend" />
+        <StatCard
+          label={mine ? "My Labs" : "Database Labs"}
+          value={String(totalLabs)}
+          icon={FlaskConical}
+          tone="cyan"
+          sub={mine ? "Created by you or shared with you" : "Real-time SQLite backend"}
+        />
         <StatCard label="Total Questions" value={String(totalQuestions)} icon={HelpCircle} sub="Challenge steps" />
         <StatCard label="Configured Hints" value={String(totalHints)} icon={Lightbulb} sub="Progressive clues" />
         <StatCard label="Curriculum Courses" value={String(courses.length)} icon={Layers} />
@@ -979,15 +1008,17 @@ export default function AdminLabs({ onOpenAddModal = null }) {
           <Panel style={{ padding: 48, textAlign: "center" }}>
             <FlaskConical size={36} color={C.mid} style={{ marginBottom: 14 }} />
             <div style={{ fontFamily: sans, fontSize: 16, color: C.hi, fontWeight: 700 }}>
-              {totalLabs === 0 ? "No labs in backend database yet" : "No labs match your filters"}
+              {totalLabs === 0 ? (mine ? "You have no labs yet" : "No labs in backend database yet") : "No labs match your filters"}
             </div>
             <p style={{ fontFamily: sans, fontSize: 13, color: C.low, margin: "8px 0 20px", maxWidth: 460, marginInline: "auto" }}>
               {totalLabs === 0
-                ? "You can create custom cybersecurity labs with multiple questions and hints, or seed default sample environments directly into the database."
+                ? (mine
+                  ? "Labs you create appear here, along with labs other instructors share with you for editing."
+                  : "You can create custom cybersecurity labs with multiple questions and hints, or seed default sample environments directly into the database.")
                 : "Try resetting your search query or category filters."}
             </p>
             <div style={{ display: "flex", justifyContent: "center", gap: 12 }}>
-              {totalLabs === 0 && (
+              {totalLabs === 0 && !mine && (
                 <Btn variant="subtle" icon={Sparkles} onClick={handleSeedLabs} disabled={seeding}>
                   {seeding ? "Seeding..." : "Seed Starter Labs into DB"}
                 </Btn>
@@ -1132,6 +1163,23 @@ export default function AdminLabs({ onOpenAddModal = null }) {
                         <User size={11} />
                         By: {l.created_by_username ? `@${l.created_by_username}` : "Not recorded"}
                       </span>
+
+                      {l.can_edit && !l.can_manage_editors && (
+                        <span
+                          title="The creator gave you edit access to this lab"
+                          style={{ display: "inline-flex", alignItems: "center", gap: 4, fontFamily: sans, fontSize: 11, fontWeight: 600, color: C.amber, background: "rgba(245, 166, 35, 0.1)", padding: "2px 8px", borderRadius: 4, border: "1px solid rgba(245, 166, 35, 0.3)" }}
+                        >
+                          <Share2 size={11} /> Shared with you
+                        </span>
+                      )}
+                      {l.editors?.length > 0 && (
+                        <span
+                          title={`Can also edit: ${l.editors.map((e) => `@${e.username}`).join(", ")}`}
+                          style={{ display: "inline-flex", alignItems: "center", gap: 4, fontFamily: sans, fontSize: 11, color: C.mid, background: C.panel2, padding: "2px 8px", borderRadius: 4, border: `1px solid ${C.border}` }}
+                        >
+                          <Users size={11} /> +{l.editors.length} editor{l.editors.length !== 1 ? "s" : ""}
+                        </span>
+                      )}
                     </div>
 
                     <p style={{ fontFamily: sans, fontSize: 13, color: C.mid, margin: "6px 0 12px", lineHeight: 1.5 }}>
@@ -1296,6 +1344,29 @@ export default function AdminLabs({ onOpenAddModal = null }) {
                     >
                       <Eye size={13} /> View
                     </button>
+                    {l.can_manage_editors && (
+                      <button
+                        type="button"
+                        onClick={() => setEditorsLab(l)}
+                        title="Choose other instructors who can edit this lab"
+                        style={{
+                          background: C.panel2,
+                          border: `1px solid ${C.borderLight}`,
+                          color: C.amber,
+                          borderRadius: 6,
+                          padding: "7px 10px",
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 6,
+                          fontFamily: sans,
+                          fontSize: 12,
+                        }}
+                      >
+                        <Users size={13} /> Access
+                      </button>
+                    )}
+                    {l.can_edit && (
                     <button
                       type="button"
                       onClick={() => {
@@ -1319,6 +1390,8 @@ export default function AdminLabs({ onOpenAddModal = null }) {
                     >
                       <Edit3 size={13} /> Edit
                     </button>
+                    )}
+                    {l.can_manage_editors && (
                     <button
                       type="button"
                       onClick={() => handleDeleteLab(l)}
@@ -1339,6 +1412,7 @@ export default function AdminLabs({ onOpenAddModal = null }) {
                     >
                       <Trash2 size={13} />
                     </button>
+                    )}
                   </div>
                 </div>
               </Panel>
@@ -1352,6 +1426,25 @@ export default function AdminLabs({ onOpenAddModal = null }) {
       {/* Manage Lab Categories */}
       {categoriesOpen && (
         <LabCategoriesModal onClose={() => setCategoriesOpen(false)} onChanged={loadLabs} />
+      )}
+
+      {/* Choose which instructors may edit a lab */}
+      {editorsLab && (
+        <LabEditorsModal
+          lab={editorsLab}
+          onClose={() => setEditorsLab(null)}
+          onSaved={(editors) => {
+            setEditorsLab(null);
+            setActionNotice({
+              type: "success",
+              text: editors.length
+                ? `Edit access for "${editorsLab.name}" shared with ${editors.length} instructor${editors.length !== 1 ? "s" : ""}.`
+                : `Only the creator and platform admins can now edit "${editorsLab.name}".`,
+            });
+            setTimeout(() => setActionNotice(null), 4000);
+            loadLabs();
+          }}
+        />
       )}
 
       {/* Add / Edit Lab Modal */}

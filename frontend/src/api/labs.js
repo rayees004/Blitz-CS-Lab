@@ -10,10 +10,24 @@ export async function fetchLabs(params = {}) {
   if (params.q) query.append('q', params.q);
   if (params.subject_id) query.append('subject_id', params.subject_id);
   if (params.course_id) query.append('course_id', params.course_id);
+  if (params.mine) query.append('mine', '1'); // only labs the user created or can edit
   if (params.page) query.append('page', params.page);
 
   const qs = query.toString() ? `?${query.toString()}` : '';
   return apiFetch(`/labs/${qs}`);
+}
+
+/** Who may edit a lab: creator, shared editors, and instructors that can be added */
+export async function fetchLabEditors(labId) {
+  return apiFetch(`/labs/${labId}/editors/`);
+}
+
+/** Replace the instructors allowed to edit a lab (creator or platform admin only) */
+export async function updateLabEditors(labId, editorIds) {
+  return apiFetch(`/labs/${labId}/editors/`, {
+    method: 'PUT',
+    body: JSON.stringify({ editor_ids: editorIds }),
+  });
 }
 
 /** Fetch labs for a specific Course (Subject) */

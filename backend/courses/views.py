@@ -656,7 +656,12 @@ class LabListCreateView(APIView):
         return [IsAdminOrStaff()]
 
     def get(self, request):
-        labs = Lab.objects.prefetch_related('questions__hints').filter(is_active=True)
+        labs = Lab.objects.prefetch_related('questions__hints', 'editors').filter(is_active=True)
+        # ?mine=1 → "My Labs": labs the user created or was given edit access to
+        mine = request.query_params.get('mine') in ('1', 'true', 'yes')
+        if mine:
+            labs = labs.filter(Q(created_by=request.user) | Q(editors=request.user)).distinct()
+        scope = labs
         category = request.query_params.get('category')
         difficulty = request.query_params.get('difficulty')
         search = request.query_params.get('q')
@@ -682,14 +687,15 @@ class LabListCreateView(APIView):
         serializer = LabSerializer(page_items, many=True, context={'request': request})
         response = {**meta, 'results': serializer.data}
         if 'page' in request.query_params:
-            # Totals across all active labs, for stat cards and filter options on paginated screens
-            active_labs = Lab.objects.filter(is_active=True)
+            # Totals across all active labs (or the user's own labs with ?mine=1),
+            # for stat cards and filter options on paginated screens
+            scope_ids = scope.values('id')
             response['stats'] = {
-                'total_labs': active_labs.count(),
-                'total_questions': LabQuestion.objects.filter(lab__is_active=True).count(),
-                'total_hints': QuestionHint.objects.filter(question__lab__is_active=True).count(),
+                'total_labs': scope.count(),
+                'total_questions': LabQuestion.objects.filter(lab_id__in=scope_ids).count(),
+                'total_hints': QuestionHint.objects.filter(question__lab_id__in=scope_ids).count(),
             }
-            response['categories'] = sorted(set(active_labs.values_list('category', flat=True)) - {''})
+            response['categories'] = sorted(set(scope.values_list('category', flat=True)) - {''})
         return Response(response)
 
 
@@ -808,7 +814,7 @@ class LabDetailView(APIView):
         return [IsAdminOrStaff()]
 
     def get_object(self, pk):
-        return get_object_or_404(Lab.objects.prefetch_related('questions__hints'), pk=pk)
+        return get_object_or_404(Lab.objects.prefetch_related('questions__hints', 'editors'), pk=pk)
 
     def get(self, request, pk):
         lab = self.get_object(pk)
@@ -817,6 +823,10 @@ class LabDetailView(APIView):
 
     def patch(self, request, pk):
         lab = self.get_object(pk)
+        if not lab.can_edit(request.user):
+            return Response({
+                'detail': 'You can only edit labs you created or were given edit access to.'
+            }, status=status.HTTP_403_FORBIDDEN)
         data = request.data.copy() if hasattr(request.data, 'copy') else dict(request.data)
         if 'questions' in data and isinstance(data['questions'], str):
             try:
@@ -847,6 +857,11 @@ class LabDetailView(APIView):
 
     def delete(self, request, pk):
         lab = self.get_object(pk)
+        # Archiving is limited to the creator and platform admins (shared editors can't archive)
+        if not lab.can_manage_editors(request.user):
+            return Response({
+                'detail': 'Only the lab creator or a platform admin can archive this lab.'
+            }, status=status.HTTP_403_FORBIDDEN)
         name = lab.name
         lab.is_active = False
         lab.save()
@@ -865,6 +880,80 @@ class LabDetailView(APIView):
         return Response({'message': f'Lab "{name}" archived successfully.'})
 
 
+class LabEditorsView(APIView):
+    """
+    GET /api/labs/<id>/editors/ - who may edit this lab, plus the instructors that can be added
+    PUT /api/labs/<id>/editors/ - replace the shared editors. Body: { editor_ids: [..] }
+    Only the lab creator or a platform admin may change editors; editors must be active instructors.
+    """
+    permission_classes = [IsAdminOrStaff]
+
+    @staticmethod
+    def _user_row(u):
+        return {'id': u.id, 'username': u.username, 'name': u.get_full_name() or u.username}
+
+    def _payload(self, lab, request):
+        candidates = User.objects.filter(user_type='instructor', is_active=True)
+        if lab.created_by_id:
+            candidates = candidates.exclude(pk=lab.created_by_id)
+        return {
+            'lab_id': lab.id,
+            'lab_name': lab.name,
+            'created_by': self._user_row(lab.created_by) if lab.created_by else None,
+            'editors': [self._user_row(u) for u in lab.editors.order_by('first_name', 'username')],
+            'candidates': [self._user_row(u) for u in candidates.order_by('first_name', 'username')],
+            'can_manage_editors': lab.can_manage_editors(request.user),
+        }
+
+    def get(self, request, pk):
+        lab = get_object_or_404(Lab.objects.select_related('created_by'), pk=pk)
+        return Response(self._payload(lab, request))
+
+    def put(self, request, pk):
+        lab = get_object_or_404(Lab.objects.select_related('created_by'), pk=pk)
+        if not lab.can_manage_editors(request.user):
+            return Response({
+                'detail': 'Only the lab creator or a platform admin can change who edits this lab.'
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        raw_ids = request.data.get('editor_ids', [])
+        if not isinstance(raw_ids, list):
+            return Response({'detail': 'editor_ids must be a list.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            ids = {int(i) for i in raw_ids}
+        except (TypeError, ValueError):
+            return Response({'detail': 'editor_ids must contain user ids.'}, status=status.HTTP_400_BAD_REQUEST)
+        ids.discard(lab.created_by_id)
+
+        editors = list(User.objects.filter(pk__in=ids, user_type='instructor', is_active=True))
+        if len(editors) != len(ids):
+            return Response({'detail': 'Edit access can only be given to active instructors.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        before = set(lab.editors.values_list('id', flat=True))
+        lab.editors.set(editors)
+        added = sorted(ids - before)
+        removed = sorted(before - ids)
+        if added or removed:
+            names = {u.id: u.username for u in User.objects.filter(pk__in=list(ids | before))}
+            record_audit_log(
+                action_type='LAB_UPDATE',
+                description=(
+                    f"Changed edit access for lab '{lab.name}'"
+                    + (f"; added: {', '.join('@' + names[i] for i in added)}" if added else '')
+                    + (f"; removed: {', '.join('@' + names[i] for i in removed)}" if removed else '')
+                    + '.'
+                ),
+                request=request,
+                actor=request.user,
+                target_entity='Lab',
+                target_id=lab.id,
+                target_name=lab.name,
+                severity='NOTICE',
+                details={'editors_added': added, 'editors_removed': removed},
+            )
+        return Response({'message': 'Lab edit access updated.', **self._payload(lab, request)})
+
+
 
 class SubjectLabsView(APIView):
     """
@@ -878,7 +967,7 @@ class SubjectLabsView(APIView):
 
     def get(self, request, pk):
         subject = get_object_or_404(Subject, pk=pk)
-        labs = subject.labs.prefetch_related('questions__hints').filter(is_active=True)
+        labs = subject.labs.prefetch_related('questions__hints', 'editors').select_related('created_by').filter(is_active=True)
         return Response({
             'subject_id': subject.id,
             'subject_name': subject.name,
