@@ -14,6 +14,8 @@ from .serializers import (
 )
 from .audit import record_audit_log
 from django.db.models import Q, Count
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from blitz_backend.pagination import paginate
 
 
@@ -211,6 +213,47 @@ class StudentListCreateView(APIView):
             'detail': str(first_msg),
             'errors': errors,
         }, status=status.HTTP_400_BAD_REQUEST)
+
+
+class StudentSetPasswordView(APIView):
+    """
+    POST /api/students/<id>/set-password/  - Admin or instructor sets a new password for a student.
+    Body: { password, confirm_password }. Existing sessions of the student are signed out.
+    """
+    permission_classes = [IsAdminOrStaff]
+
+    def post(self, request, pk):
+        student = get_object_or_404(User, pk=pk, user_type='student')
+        password = request.data.get('password') or ''
+        confirm = request.data.get('confirm_password') or ''
+
+        if not password:
+            return Response({'detail': 'Password is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        if password != confirm:
+            return Response({'detail': 'Passwords do not match.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            validate_password(password, user=student)
+        except DjangoValidationError as e:
+            return Response({'detail': ' '.join(e.messages)}, status=status.HTTP_400_BAD_REQUEST)
+
+        student.set_password(password)
+        student.save(update_fields=['password'])
+        # Sign the student out everywhere so the old password's sessions stop working
+        Token.objects.filter(user=student).delete()
+
+        name = student.get_full_name() or student.username
+        record_audit_log(
+            action_type='USER_UPDATE',
+            description=f"Changed password for student '{name}' (@{student.username}).",
+            request=request,
+            actor=request.user,
+            target_entity='User',
+            target_id=student.id,
+            target_name=name,
+            severity='WARNING',
+            details={'password_changed': True},
+        )
+        return Response({'message': f'Password updated for {name}.'}, status=status.HTTP_200_OK)
 
 
 class StudentDetailView(APIView):

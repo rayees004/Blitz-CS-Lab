@@ -3,13 +3,13 @@ import {
   Plus, MoreHorizontal, Search, X,
   Eye, EyeOff, Loader2, AlertCircle, CheckCircle,
   UserPlus, Trash2, RefreshCw, BookOpen, Layers,
-  Ban, ShieldCheck, ShieldAlert, GraduationCap
+  Ban, ShieldCheck, ShieldAlert, GraduationCap, KeyRound
 } from "lucide-react";
 import Panel from "../common/Panel";
 import Btn from "../common/Btn";
 import Badge from "../common/Badge";
 import { C, sans, mono } from "../../constants/theme";
-import { fetchStudents, createStudent, deleteStudent, updateStudent } from "../../api/students";
+import { fetchStudents, createStudent, deleteStudent, updateStudent, setStudentPassword } from "../../api/students";
 import Pagination from "../common/Pagination";
 import { fetchSubjects } from "../../api/subjects";
 import { fetchClasses } from "../../api/classes";
@@ -62,14 +62,19 @@ function FieldPassword({ label, required, error, ...props }) {
 
 /* ─── Add Student Drawer ──────────────────────────────── */
 const EMPTY = {
-  first_name: "", last_name: "", username: "", email: "",
-  phone_number: "", organization: "Blitz Cyber Lab",
-  password: "", confirm_password: "",
+  full_name: "",
+  email: "",
+  password: "",
+  confirm_password: "",
   user_type: "student",
-  subject_ids: [],
-  assigned_class_id: null,
   lab_access_mode: "unrestricted",
+  assigned_class_id: null,
+  subject_ids: [],
 };
+
+const sectionLabel = (text) => (
+  <div style={{ fontFamily: mono, fontSize: 10, color: C.low, letterSpacing: "0.05em", marginBottom: 10 }}>{text}</div>
+);
 
 function AddStudentDrawer({ onClose, onCreated, isPlatformAdmin = false }) {
   const [form, setForm] = useState(EMPTY);
@@ -92,6 +97,7 @@ function AddStudentDrawer({ onClose, onCreated, isPlatformAdmin = false }) {
   }, []);
 
   const set = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.value }));
+  const isStudent = form.user_type === "student";
 
   const toggleSubject = (id) => {
     setForm(f => ({
@@ -104,13 +110,15 @@ function AddStudentDrawer({ onClose, onCreated, isPlatformAdmin = false }) {
 
   const validate = () => {
     const e = {};
-    if (!form.first_name.trim()) e.first_name = "First name is required.";
-    if (!form.username.trim()) e.username = "Username is required.";
+    if (!form.full_name.trim()) e.full_name = "Name is required.";
     if (!form.email.trim()) e.email = "Email is required.";
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) e.email = "Enter a valid email.";
     if (!form.password) e.password = "Password is required.";
     else if (form.password.length < 8) e.password = "Min. 8 characters.";
     if (form.password !== form.confirm_password) e.confirm_password = "Passwords do not match.";
+    if (isStudent && form.lab_access_mode === "class_based" && !form.assigned_class_id) {
+      e.assigned_class_id = "Select a class for Class-Based access.";
+    }
     return e;
   };
 
@@ -119,8 +127,24 @@ function AddStudentDrawer({ onClose, onCreated, isPlatformAdmin = false }) {
     const errs = validate();
     if (Object.keys(errs).length) { setErrors(errs); return; }
     setLoading(true); setGlobalError(""); setErrors({});
+
+    // Name is entered as one field: the first word becomes first_name, the rest last_name.
+    // The email is also used as the username.
+    const [firstName, ...rest] = form.full_name.trim().split(/\s+/);
+    const email = form.email.trim().toLowerCase();
     try {
-      const res = await createStudent(form);
+      const res = await createStudent({
+        first_name: firstName,
+        last_name: rest.join(" "),
+        email,
+        username: email,
+        password: form.password,
+        confirm_password: form.confirm_password,
+        user_type: form.user_type,
+        lab_access_mode: isStudent ? form.lab_access_mode : "unrestricted",
+        assigned_class_id: isStudent && form.lab_access_mode === "class_based" ? form.assigned_class_id : null,
+        subject_ids: isStudent ? form.subject_ids : [],
+      });
       onCreated(res.student);
     } catch (err) {
       setGlobalError(err.message || "Failed to create student.");
@@ -139,7 +163,7 @@ function AddStudentDrawer({ onClose, onCreated, isPlatformAdmin = false }) {
     <>
       <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", backdropFilter: "blur(4px)", zIndex: 1000 }} />
       <div style={{
-        position: "fixed", top: 0, right: 0, width: 480, height: "100vh",
+        position: "fixed", top: 0, right: 0, width: 480, maxWidth: "100vw", height: "100vh",
         background: C.panel, borderLeft: `1px solid ${C.border}`,
         zIndex: 1001, display: "flex", flexDirection: "column",
         boxShadow: "-12px 0 48px rgba(0,0,0,0.5)",
@@ -149,7 +173,9 @@ function AddStudentDrawer({ onClose, onCreated, isPlatformAdmin = false }) {
         <div style={{ padding: "20px 24px", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
           <div>
             <div style={{ fontFamily: mono, fontSize: 10, color: C.amber, letterSpacing: "0.08em", marginBottom: 3 }}>ADMIN ACTION</div>
-            <h2 style={{ fontFamily: sans, fontSize: 18, fontWeight: 700, color: C.hi, margin: 0 }}>Add New Student</h2>
+            <h2 style={{ fontFamily: sans, fontSize: 18, fontWeight: 700, color: C.hi, margin: 0 }}>
+              {isStudent ? "Add New Student" : `Add New ${form.user_type === "admin" ? "Admin" : "Instructor"}`}
+            </h2>
           </div>
           <button onClick={onClose} style={{ background: C.panel3, border: `1px solid ${C.border}`, borderRadius: 6, cursor: "pointer", color: C.mid, padding: 5, display: "flex" }}>
             <X size={16} />
@@ -165,202 +191,213 @@ function AddStudentDrawer({ onClose, onCreated, isPlatformAdmin = false }) {
             </div>
           )}
 
-          <div style={{ fontFamily: mono, fontSize: 10, color: C.low, letterSpacing: "0.05em", marginBottom: 14 }}>PERSONAL INFORMATION</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 14px" }}>
-            <FieldInput label="First Name" required placeholder="e.g. Rohith" value={form.first_name} onChange={set("first_name")} error={errors.first_name} />
-            <FieldInput label="Last Name" placeholder="e.g. Kumar" value={form.last_name} onChange={set("last_name")} error={errors.last_name} />
-          </div>
-          <FieldInput label="Email Address" required type="email" placeholder="student@example.com" value={form.email} onChange={set("email")} error={errors.email} />
-          <FieldInput label="Username" required placeholder="e.g. rohith_k" value={form.username} onChange={set("username")} error={errors.username} />
-          <FieldInput label="Phone Number" placeholder="+91 98765 43210" value={form.phone_number} onChange={set("phone_number")} error={errors.phone_number} />
-          <FieldInput label="Organization / Batch" placeholder="Blitz Cyber Lab" value={form.organization} onChange={set("organization")} error={errors.organization} />
-
-          {/* Account Role Selector */}
-          {isPlatformAdmin ? (
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ fontFamily: mono, fontSize: 10, color: C.low, letterSpacing: "0.05em", marginBottom: 6 }}>
-                ACCOUNT ROLE
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
+          {/* Account role: platform admins only (instructors can only create students) */}
+          {isPlatformAdmin && (
+            <div style={{ marginBottom: 18 }}>
+              {sectionLabel("ACCOUNT ROLE")}
+              <div style={{ display: "flex", gap: 4, background: C.panel2, padding: 3, borderRadius: 8, border: `1px solid ${C.border}` }}>
                 {[
-                  { type: "student", label: "Student", desc: "Student panel access only" },
-                  { type: "instructor", label: "Instructor", desc: "Admin dashboard access" },
-                  { type: "admin", label: "Admin", desc: "Django admin + Dashboard" },
-                ].map((role) => (
-                  <div
-                    key={role.type}
-                    onClick={() => setForm(f => ({ ...f, user_type: role.type }))}
-                    style={{
-                      padding: "9px 12px",
-                      borderRadius: 7,
-                      cursor: "pointer",
-                      border: `1px solid ${form.user_type === role.type ? (role.type === "admin" ? C.cyan : role.type === "instructor" ? "#c084fc" : C.amber) : C.border}`,
-                      background: form.user_type === role.type
-                        ? (role.type === "admin" ? "rgba(63, 216, 200, 0.12)" : role.type === "instructor" ? "rgba(192, 132, 252, 0.12)" : "rgba(240, 180, 41, 0.1)")
-                        : C.panel2,
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 2,
-                    }}
-                  >
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                      <span style={{ fontFamily: sans, fontSize: 13, fontWeight: 600, color: form.user_type === role.type ? C.hi : C.mid }}>
-                        {role.label}
-                      </span>
-                      <input
-                        type="radio"
-                        checked={form.user_type === role.type}
-                        onChange={() => {}}
-                        style={{ accentColor: role.type === "admin" ? C.cyan : role.type === "instructor" ? "#c084fc" : C.amber, cursor: "pointer" }}
-                      />
-                    </div>
-                    <span style={{ fontFamily: sans, fontSize: 10.5, color: C.low }}>
-                      {role.desc}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ fontFamily: mono, fontSize: 10, color: C.low, letterSpacing: "0.05em", marginBottom: 6 }}>
-                ACCOUNT ROLE
-              </div>
-              <div style={{
-                padding: "10px 14px",
-                borderRadius: 7,
-                border: `1px solid rgba(240, 180, 41, 0.35)`,
-                background: "rgba(240, 180, 41, 0.08)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-              }}>
-                <div>
-                  <div style={{ fontFamily: sans, fontSize: 13, fontWeight: 600, color: C.amber }}>
-                    Student Account
-                  </div>
-                  <div style={{ fontFamily: sans, fontSize: 11, color: C.mid }}>
-                    Instructors can only create Student accounts.
-                  </div>
-                </div>
-                <Badge tone="amber">STUDENT ONLY</Badge>
+                  { type: "student", label: "Student" },
+                  { type: "instructor", label: "Instructor" },
+                  { type: "admin", label: "Admin" },
+                ].map((role) => {
+                  const active = form.user_type === role.type;
+                  return (
+                    <button
+                      key={role.type}
+                      type="button"
+                      onClick={() => setForm(f => ({ ...f, user_type: role.type }))}
+                      style={{
+                        flex: 1, padding: "6px 0", borderRadius: 6, cursor: "pointer",
+                        background: active ? C.panel3 : "transparent",
+                        border: active ? `1px solid ${C.amber}` : "1px solid transparent",
+                        color: active ? C.amber : C.mid,
+                        fontFamily: sans, fontSize: 12.5, fontWeight: active ? 700 : 500,
+                      }}
+                    >
+                      {role.label}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           )}
 
-          {/* Class Assignment & Access Mode */}
-          <div style={{ padding: "14px", background: C.panel2, borderRadius: 8, border: `1px solid ${C.border}`, marginBottom: 16 }}>
-            <div style={{ fontFamily: mono, fontSize: 10, color: C.low, letterSpacing: "0.05em", marginBottom: 10 }}>
-              CLASS ASSIGNMENT & LAB ACCESS MODE
-            </div>
-            <div style={{ marginBottom: 12 }}>
-              <div style={{ fontFamily: sans, fontSize: 12, color: C.mid, marginBottom: 5 }}>Assign to Class (Optional)</div>
-              <select
-                style={inputStyle(false)}
-                value={form.assigned_class_id || ""}
-                onChange={e => {
-                  const val = e.target.value;
-                  setForm(f => ({
-                    ...f,
-                    assigned_class_id: val ? Number(val) : null,
-                    lab_access_mode: val ? "class_based" : f.lab_access_mode,
-                  }));
-                }}
-              >
-                <option value="">Independent / No Class (Unassigned)</option>
-                {availableClasses.map(c => (
-                  <option key={c.id} value={c.id}>{c.name} {c.code ? `(${c.code})` : ""}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <div style={{ fontFamily: sans, fontSize: 12, color: C.mid, marginBottom: 5 }}>Lab Access Mode</div>
-              <select
-                style={inputStyle(false)}
-                value={form.lab_access_mode || "unrestricted"}
-                onChange={e => setForm(f => ({ ...f, lab_access_mode: e.target.value }))}
-              >
-                <option value="class_based">Class-Based Access (Restricted to class labs)</option>
-                <option value="unrestricted">Unrestricted Access (Access all available labs)</option>
-              </select>
-              <div style={{ fontFamily: sans, fontSize: 11, color: C.low, marginTop: 4 }}>
-                {form.lab_access_mode === "class_based"
-                  ? "🔒 Student will only have access to the labs assigned to their class."
-                  : "🌐 Student can access and attend all available practical labs."}
-              </div>
-            </div>
+          {sectionLabel(isStudent ? "STUDENT DETAILS" : "ACCOUNT DETAILS")}
+          <FieldInput label={isStudent ? "Student Name" : "Full Name"} required placeholder="e.g. Rohith Kumar" value={form.full_name} onChange={set("full_name")} error={errors.full_name} />
+          <FieldInput label="Email (used as username)" required type="email" placeholder="student@example.com" value={form.email} onChange={set("email")} error={errors.email} />
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 14px" }}>
+            <FieldPassword label="Password" required placeholder="Min. 8 characters" value={form.password} onChange={set("password")} error={errors.password} />
+            <FieldPassword label="Confirm Password" required placeholder="Re-enter password" value={form.confirm_password} onChange={set("confirm_password")} error={errors.confirm_password} />
           </div>
 
-          {/* Initial Subjects Selection */}
-          <div style={{ fontFamily: mono, fontSize: 10, color: C.low, letterSpacing: "0.05em", marginBottom: 10, marginTop: 6, paddingTop: 16, borderTop: `1px solid ${C.border}` }}>
-            ASSIGN SUBJECTS (OPTIONAL)
-          </div>
-          <div style={{ marginBottom: 18 }}>
-            <div style={{ fontFamily: sans, fontSize: 11.5, color: C.mid, marginBottom: 8 }}>
-              Select subjects to assign this student immediately (controls lab access):
-            </div>
-            {loadingSubjects ? (
-              <div style={{ color: C.low, fontFamily: sans, fontSize: 12 }}>Loading subjects...</div>
-            ) : availableSubjects.length === 0 ? (
-              <div style={{ color: C.low, fontFamily: sans, fontSize: 12 }}>No subjects available.</div>
-            ) : (
-              <div style={{ maxHeight: 140, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6, padding: "4px 2px" }}>
-                {availableSubjects.map((s) => {
-                  const isChecked = form.subject_ids.includes(s.id);
-                  return (
-                    <div
-                      key={s.id}
-                      onClick={() => toggleSubject(s.id)}
-                      style={{
-                        display: "flex", alignItems: "center", justifyContent: "space-between",
-                        padding: "7px 10px", borderRadius: 6, cursor: "pointer",
-                        background: isChecked ? "rgba(240, 180, 41, 0.08)" : C.panel2,
-                        border: `1px solid ${isChecked ? C.amber : C.border}`,
-                      }}
-                    >
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={() => {}}
-                          style={{ accentColor: C.amber, cursor: "pointer" }}
-                        />
-                        <span style={{ fontFamily: sans, fontSize: 12, color: isChecked ? C.hi : C.mid, fontWeight: isChecked ? 600 : 400 }}>
-                          {s.name}
-                        </span>
-                        {s.code && (
-                          <span style={{ fontFamily: mono, fontSize: 10, color: C.cyan, background: "rgba(63,216,200,0.1)", padding: "1px 5px", borderRadius: 3 }}>
-                            {s.code}
-                          </span>
-                        )}
+          {isStudent && (
+            <>
+              {/* Lab access mode (class picker only for class-based) */}
+              <div style={{ padding: 14, background: C.panel2, borderRadius: 8, border: `1px solid ${C.border}`, marginBottom: 18 }}>
+                {sectionLabel("LAB ACCESS MODE")}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: form.lab_access_mode === "class_based" ? 12 : 0 }}>
+                  {[
+                    { mode: "unrestricted", label: "Unrestricted", desc: "All labs of assigned subjects" },
+                    { mode: "class_based", label: "Class-Based", desc: "Only class labs of assigned subjects" },
+                  ].map((opt) => {
+                    const active = form.lab_access_mode === opt.mode;
+                    return (
+                      <div
+                        key={opt.mode}
+                        onClick={() => setForm(f => ({ ...f, lab_access_mode: opt.mode }))}
+                        style={{
+                          padding: "9px 11px", borderRadius: 7, cursor: "pointer",
+                          border: `1px solid ${active ? C.amber : C.border}`,
+                          background: active ? "rgba(240, 180, 41, 0.08)" : C.panel,
+                        }}
+                      >
+                        <div style={{ fontFamily: sans, fontSize: 12.5, fontWeight: 600, color: active ? C.hi : C.mid }}>{opt.label}</div>
+                        <div style={{ fontFamily: sans, fontSize: 10.5, color: C.low, marginTop: 2 }}>{opt.desc}</div>
                       </div>
-                      {s.credits_or_hours ? (
-                        <span style={{ fontFamily: mono, fontSize: 10, color: C.low }}>
-                          {s.credits_or_hours} hrs
-                        </span>
-                      ) : null}
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
+                {form.lab_access_mode === "class_based" && (
+                  <>
+                    <select
+                      style={inputStyle(errors.assigned_class_id)}
+                      value={form.assigned_class_id || ""}
+                      onChange={e => setForm(f => ({ ...f, assigned_class_id: e.target.value ? Number(e.target.value) : null }))}
+                    >
+                      <option value="">Select a class…</option>
+                      {availableClasses.map(c => (
+                        <option key={c.id} value={c.id}>{c.name} {c.code ? `(${c.code})` : ""}</option>
+                      ))}
+                    </select>
+                    {errors.assigned_class_id && (
+                      <div style={{ color: C.danger, fontSize: 11, marginTop: 3, fontFamily: sans }}>{errors.assigned_class_id}</div>
+                    )}
+                  </>
+                )}
               </div>
-            )}
-          </div>
 
-          <div style={{ fontFamily: mono, fontSize: 10, color: C.low, letterSpacing: "0.05em", marginBottom: 14, marginTop: 6, paddingTop: 16, borderTop: `1px solid ${C.border}` }}>SET PASSWORD</div>
-          <FieldPassword label="Password" required placeholder="Min. 8 characters" value={form.password} onChange={set("password")} error={errors.password} />
-          <FieldPassword label="Confirm Password" required placeholder="Re-enter password" value={form.confirm_password} onChange={set("confirm_password")} error={errors.confirm_password} />
+              {/* Assigned subjects */}
+              {sectionLabel(`ASSIGNED SUBJECTS${form.subject_ids.length ? ` (${form.subject_ids.length} selected)` : ""}`)}
+              <div style={{ fontFamily: sans, fontSize: 11.5, color: C.mid, marginBottom: 8 }}>
+                Students can only attend labs of their assigned subjects.
+              </div>
+              <div style={{ marginBottom: 18 }}>
+                {loadingSubjects ? (
+                  <div style={{ color: C.low, fontFamily: sans, fontSize: 12 }}>Loading subjects...</div>
+                ) : availableSubjects.length === 0 ? (
+                  <div style={{ color: C.low, fontFamily: sans, fontSize: 12 }}>No subjects available.</div>
+                ) : (
+                  <div style={{ maxHeight: 200, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6, padding: "4px 2px" }}>
+                    {availableSubjects.map((s) => {
+                      const isChecked = form.subject_ids.includes(s.id);
+                      return (
+                        <div
+                          key={s.id}
+                          onClick={() => toggleSubject(s.id)}
+                          style={{
+                            display: "flex", alignItems: "center", gap: 8,
+                            padding: "7px 10px", borderRadius: 6, cursor: "pointer",
+                            background: isChecked ? "rgba(240, 180, 41, 0.08)" : C.panel2,
+                            border: `1px solid ${isChecked ? C.amber : C.border}`,
+                          }}
+                        >
+                          <input type="checkbox" checked={isChecked} onChange={() => {}} style={{ accentColor: C.amber, cursor: "pointer" }} />
+                          <span style={{ fontFamily: sans, fontSize: 12, color: isChecked ? C.hi : C.mid, fontWeight: isChecked ? 600 : 400 }}>
+                            {s.name}
+                          </span>
+                          {s.code && (
+                            <span style={{ fontFamily: mono, fontSize: 10, color: C.cyan, background: "rgba(63,216,200,0.1)", padding: "1px 5px", borderRadius: 3 }}>
+                              {s.code}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </form>
 
         {/* Footer */}
         <div style={{ padding: "16px 24px", borderTop: `1px solid ${C.border}`, display: "flex", gap: 10, flexShrink: 0 }}>
           <Btn variant="outline" onClick={onClose} style={{ flex: 1, padding: "10px 0" }}>Cancel</Btn>
           <Btn icon={loading ? Loader2 : UserPlus} disabled={loading} onClick={submit} style={{ flex: 2, padding: "10px 0" }}>
-            {loading ? "Creating..." : "Create Student"}
+            {loading ? "Creating..." : isStudent ? "Create Student" : "Create Account"}
           </Btn>
         </div>
       </div>
       <style>{`@keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }`}</style>
+    </>
+  );
+}
+
+/* ─── Change Student Password ─────────────────────────── */
+function ChangePasswordModal({ student, onClose, onChanged }) {
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [errors, setErrors] = useState({});
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const submit = async (e) => {
+    e.preventDefault();
+    const errs = {};
+    if (!password) errs.password = "Password is required.";
+    else if (password.length < 8) errs.password = "Min. 8 characters.";
+    if (password !== confirm) errs.confirm = "Passwords do not match.";
+    setErrors(errs);
+    if (Object.keys(errs).length) return;
+
+    setSaving(true); setError("");
+    try {
+      const res = await setStudentPassword(student.id, password, confirm);
+      onChanged(res.message || "Password updated.");
+    } catch (err) {
+      setError(err.message || "Failed to change password.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <>
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", backdropFilter: "blur(4px)", zIndex: 1100 }} />
+      <form
+        onSubmit={submit}
+        style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: 420, maxWidth: "92vw", background: C.panel, border: `1px solid ${C.border}`, borderRadius: 12, padding: 24, zIndex: 1101, boxShadow: "0 24px 80px rgba(0,0,0,0.5)" }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6 }}>
+          <div style={{ width: 38, height: 38, borderRadius: 9, background: "rgba(240,180,41,0.12)", border: "1px solid rgba(240,180,41,0.3)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <KeyRound size={18} color={C.amber} />
+          </div>
+          <div>
+            <div style={{ fontFamily: sans, fontSize: 16, fontWeight: 700, color: C.hi }}>Change Password</div>
+            <div style={{ fontFamily: mono, fontSize: 11, color: C.low }}>{student.full_name || student.username} · @{student.username}</div>
+          </div>
+        </div>
+        <p style={{ fontFamily: sans, fontSize: 12.5, color: C.mid, lineHeight: 1.5, margin: "10px 0 16px" }}>
+          The student will be signed out of all devices and must log in with the new password.
+        </p>
+
+        {error && (
+          <div style={{ display: "flex", gap: 8, background: "rgba(229,83,75,0.1)", border: "1px solid rgba(229,83,75,0.35)", borderRadius: 7, padding: "9px 12px", marginBottom: 14, color: "#fca5a5", fontSize: 12.5, fontFamily: sans }}>
+            <AlertCircle size={15} style={{ flexShrink: 0, marginTop: 1 }} /> {error}
+          </div>
+        )}
+
+        <FieldPassword label="New Password" required placeholder="Min. 8 characters" value={password} onChange={e => setPassword(e.target.value)} error={errors.password} />
+        <FieldPassword label="Confirm New Password" required placeholder="Re-enter password" value={confirm} onChange={e => setConfirm(e.target.value)} error={errors.confirm} />
+
+        <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
+          <Btn variant="outline" onClick={onClose} style={{ flex: 1 }}>Cancel</Btn>
+          <Btn type="submit" icon={saving ? Loader2 : KeyRound} disabled={saving} style={{ flex: 1 }}>
+            {saving ? "Saving..." : "Update Password"}
+          </Btn>
+        </div>
+      </form>
     </>
   );
 }
@@ -435,6 +472,7 @@ export default function AdminStudents({ currentUser }) {
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [assignSubjectsStudent, setAssignSubjectsStudent] = useState(null);
+  const [passwordStudent, setPasswordStudent] = useState(null);
   const [toast, setToast] = useState(null);
   const [page, setPage] = useState(1);
   const [pageMeta, setPageMeta] = useState(null);
@@ -923,6 +961,16 @@ export default function AdminStudents({ currentUser }) {
                       >
                         <Eye size={13} /> View Details
                       </button>
+                      {s.user_type === "student" && (
+                        <button
+                          onClick={() => { setMenuOpen(null); setPasswordStudent(s); }}
+                          style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "8px 10px", background: "none", border: "none", color: C.mid, fontFamily: sans, fontSize: 12.5, cursor: "pointer", borderRadius: 5, textAlign: "left" }}
+                          onMouseEnter={e => e.currentTarget.style.background = C.panel2}
+                          onMouseLeave={e => e.currentTarget.style.background = "none"}
+                        >
+                          <KeyRound size={13} /> Change Password
+                        </button>
+                      )}
                       {s.is_lab_access_blocked ? (
                         <button
                           onClick={() => { setMenuOpen(null); handleToggleLabAccessQuick(s, false); }}
@@ -967,6 +1015,16 @@ export default function AdminStudents({ currentUser }) {
 
       {/* ── Modals & Panels ── */}
       {showAddDrawer && <AddStudentDrawer onClose={() => setShowAddDrawer(false)} onCreated={handleCreated} isPlatformAdmin={isPlatformAdmin} />}
+      {passwordStudent && (
+        <ChangePasswordModal
+          student={passwordStudent}
+          onClose={() => setPasswordStudent(null)}
+          onChanged={(message) => {
+            setPasswordStudent(null);
+            setToast({ message, type: "success" });
+          }}
+        />
+      )}
 
       {assignSubjectsStudent && (
         <AssignSubjectsModal

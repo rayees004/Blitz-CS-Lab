@@ -155,3 +155,74 @@ class AuthApiTests(TestCase):
         }, format='json')
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
+
+
+class StudentCreateAndPasswordTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = User.objects.create_user(
+            username='admin', email='admin@blitzcyberlab.io', password='Admin@12345', user_type='admin'
+        )
+        self.instructor = User.objects.create_user(
+            username='instructor', email='instructor@blitzcyberlab.io', password='Instructor@12345', user_type='instructor'
+        )
+        self.student = User.objects.create_user(
+            username='rohith', email='rohith@blitzcyberlab.io', password='Student@12345', user_type='student'
+        )
+
+    def _create(self, **overrides):
+        payload = {
+            'first_name': 'Anjali', 'last_name': 'S', 'email': 'Anjali@Example.com',
+            'password': 'Strong#Pass2026', 'confirm_password': 'Strong#Pass2026',
+            'lab_access_mode': 'unrestricted', 'subject_ids': [],
+        }
+        payload.update(overrides)
+        return self.client.post('/api/students/', payload, format='json')
+
+    def test_username_defaults_to_email(self):
+        self.client.force_authenticate(self.instructor)
+        response = self._create()
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        user = User.objects.get(email='anjali@example.com')
+        self.assertEqual(user.username, 'anjali@example.com')
+        self.assertEqual(user.user_type, 'student')
+
+        # The student can log in with the email
+        login = self.client.post('/api/auth/login/', {'email': 'anjali@example.com', 'password': 'Strong#Pass2026'}, format='json')
+        self.assertEqual(login.status_code, status.HTTP_200_OK)
+
+    def test_class_based_requires_class(self):
+        self.client.force_authenticate(self.admin)
+        response = self._create(lab_access_mode='class_based')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_mismatched_passwords_rejected(self):
+        self.client.force_authenticate(self.admin)
+        response = self._create(confirm_password='Different#2026')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_instructor_and_admin_can_change_student_password(self):
+        for actor, new_password in ((self.instructor, 'NewStudent#2026'), (self.admin, 'Another#Pass2026')):
+            self.client.force_authenticate(actor)
+            response = self.client.post(f'/api/students/{self.student.id}/set-password/', {
+                'password': new_password, 'confirm_password': new_password,
+            }, format='json')
+            self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+            self.student.refresh_from_db()
+            self.assertTrue(self.student.check_password(new_password))
+
+    def test_set_password_validation_and_targets(self):
+        self.client.force_authenticate(self.instructor)
+        url = f'/api/students/{self.student.id}/set-password/'
+        self.assertEqual(self.client.post(url, {'password': 'Abc#12345', 'confirm_password': 'nope'}, format='json').status_code, 400)
+        self.assertEqual(self.client.post(url, {'password': '123', 'confirm_password': '123'}, format='json').status_code, 400)
+        # Only student accounts can be changed through this endpoint
+        admin_url = f'/api/students/{self.admin.id}/set-password/'
+        self.assertEqual(self.client.post(admin_url, {'password': 'Strong#Pass2026', 'confirm_password': 'Strong#Pass2026'}, format='json').status_code, 404)
+
+    def test_students_cannot_change_passwords(self):
+        self.client.force_authenticate(self.student)
+        response = self.client.post(f'/api/students/{self.student.id}/set-password/', {
+            'password': 'Strong#Pass2026', 'confirm_password': 'Strong#Pass2026',
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)

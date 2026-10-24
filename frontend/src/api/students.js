@@ -39,6 +39,14 @@ export async function deleteStudent(id) {
   });
 }
 
+/** Admin/instructor sets a new password for a student (signs the student out of existing sessions) */
+export async function setStudentPassword(id, password, confirmPassword) {
+  return apiFetch(`/students/${id}/set-password/`, {
+    method: 'POST',
+    body: JSON.stringify({ password, confirm_password: confirmPassword }),
+  });
+}
+
 /** Fetch unified live student activity stream (admin feed) */
 export async function fetchStudentActivity(params = {}) {
   const query = new URLSearchParams();

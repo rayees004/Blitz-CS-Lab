@@ -531,10 +531,11 @@ function ManageStudentsModal({ isOpen, classObj, onClose, onUpdated, allStudents
   const [assignAccessMode, setAssignAccessMode] = useState("class_based");
 
   // Create new student state
-  const [newStudent, setNewStudent] = useState({
-    first_name: "", last_name: "", username: "", email: "",
+  const EMPTY_NEW_STUDENT = {
+    full_name: "", email: "",
     password: "", confirm_password: "", lab_access_mode: "class_based",
-  });
+  };
+  const [newStudent, setNewStudent] = useState(EMPTY_NEW_STUDENT);
   const [createErrors, setCreateErrors] = useState({});
 
   const loadEnrolled = useCallback(async () => {
@@ -621,8 +622,7 @@ function ManageStudentsModal({ isOpen, classObj, onClose, onUpdated, allStudents
   const handleCreateStudentInClass = async (e) => {
     e.preventDefault();
     const err = {};
-    if (!newStudent.first_name.trim()) err.first_name = "First name is required.";
-    if (!newStudent.username.trim()) err.username = "Username is required.";
+    if (!newStudent.full_name.trim()) err.full_name = "Name is required.";
     if (!newStudent.email.trim()) err.email = "Email is required.";
     if (!newStudent.password) err.password = "Password is required.";
     if (newStudent.password !== newStudent.confirm_password) err.confirm_password = "Passwords do not match.";
@@ -635,14 +635,22 @@ function ManageStudentsModal({ isOpen, classObj, onClose, onUpdated, allStudents
     setActionLoading(true);
     setCreateErrors({});
     try {
-      const res = await createClassStudent(classObj.id, newStudent);
-      onUpdated(res.class, `Student ${newStudent.username} created in ${classObj.name}!`);
+      // One name field (first word = first name); the email is used as the username
+      const [firstName, ...rest] = newStudent.full_name.trim().split(/\s+/);
+      const email = newStudent.email.trim().toLowerCase();
+      const res = await createClassStudent(classObj.id, {
+        first_name: firstName,
+        last_name: rest.join(" "),
+        email,
+        username: email,
+        password: newStudent.password,
+        confirm_password: newStudent.confirm_password,
+        lab_access_mode: newStudent.lab_access_mode,
+      });
+      onUpdated(res.class, `Student ${email} created in ${classObj.name}!`);
       if (onReloadAllStudents) onReloadAllStudents();
       await loadEnrolled();
-      setNewStudent({
-        first_name: "", last_name: "", username: "", email: "",
-        password: "", confirm_password: "", lab_access_mode: "class_based",
-      });
+      setNewStudent(EMPTY_NEW_STUDENT);
       setTab("enrolled");
     } catch (err) {
       setCreateErrors({ global: err.message || "Failed to create student in class." });
@@ -914,42 +922,19 @@ function ManageStudentsModal({ isOpen, classObj, onClose, onUpdated, allStudents
               )}
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                {formField("First Name", (
+                {formField("Student Name", (
                   <>
                     <input
-                      style={inputStyle(createErrors.first_name)}
-                      placeholder="Jane"
-                      value={newStudent.first_name}
-                      onChange={e => setNewStudent(s => ({ ...s, first_name: e.target.value }))}
+                      style={inputStyle(createErrors.full_name)}
+                      placeholder="Jane Doe"
+                      value={newStudent.full_name}
+                      onChange={e => setNewStudent(s => ({ ...s, full_name: e.target.value }))}
                     />
-                    {createErrors.first_name && <div style={{ color: C.danger, fontSize: 11, marginTop: 3 }}>{createErrors.first_name}</div>}
+                    {createErrors.full_name && <div style={{ color: C.danger, fontSize: 11, marginTop: 3 }}>{createErrors.full_name}</div>}
                   </>
                 ), true)}
 
-                {formField("Last Name", (
-                  <input
-                    style={inputStyle(false)}
-                    placeholder="Doe"
-                    value={newStudent.last_name}
-                    onChange={e => setNewStudent(s => ({ ...s, last_name: e.target.value }))}
-                  />
-                ))}
-              </div>
-
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                {formField("Username", (
-                  <>
-                    <input
-                      style={inputStyle(createErrors.username)}
-                      placeholder="janedoe"
-                      value={newStudent.username}
-                      onChange={e => setNewStudent(s => ({ ...s, username: e.target.value }))}
-                    />
-                    {createErrors.username && <div style={{ color: C.danger, fontSize: 11, marginTop: 3 }}>{createErrors.username}</div>}
-                  </>
-                ), true)}
-
-                {formField("Email Address", (
+                {formField("Email (used as username)", (
                   <>
                     <input
                       type="email"

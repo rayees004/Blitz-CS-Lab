@@ -128,6 +128,8 @@ class CreateStudentSerializer(serializers.ModelSerializer):
         style={'input_type': 'password'},
     )
     email = serializers.EmailField(required=True)
+    # Optional: when omitted the student's email is used as the username
+    username = serializers.CharField(required=False, allow_blank=True, max_length=150)
     first_name = serializers.CharField(required=True, max_length=50)
     last_name = serializers.CharField(required=False, allow_blank=True, max_length=50)
     course_ids = serializers.ListField(
@@ -176,12 +178,16 @@ class CreateStudentSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('A user with this email already exists.')
         return value.lower()
 
-    def validate_username(self, value):
-        if User.objects.filter(username__iexact=value).exists():
-            raise serializers.ValidationError('This username is already taken.')
-        return value
-
     def validate(self, attrs):
+        # Username defaults to the email address
+        username = (attrs.get('username') or '').strip() or attrs['email']
+        if User.objects.filter(username__iexact=username).exists():
+            raise serializers.ValidationError({'username': 'This username is already taken.'})
+        attrs['username'] = username
+
+        if attrs.get('lab_access_mode') == 'class_based' and not attrs.get('assigned_class_id'):
+            raise serializers.ValidationError({'assigned_class_id': 'Select a class for Class-Based lab access.'})
+
         if attrs['password'] != attrs['confirm_password']:
             raise serializers.ValidationError({'confirm_password': 'Passwords do not match.'})
         try:
