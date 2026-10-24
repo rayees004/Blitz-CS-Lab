@@ -111,6 +111,30 @@ class LogoutView(APIView):
 
 
 
+def class_assignment_denied(request, current_class_id=None):
+    """
+    Moving a student into or out of a class counts as managing that class:
+    instructors may only do it for classes they created or were given access to.
+    """
+    if 'assigned_class_id' not in request.data:
+        return None
+    from courses.models import StudentClass  # local import: courses.views imports this module
+    new_id = request.data.get('assigned_class_id') or None
+    try:
+        new_id = int(new_id) if new_id is not None else None
+    except (TypeError, ValueError):
+        return None  # the serializer reports the invalid value
+    if new_id == current_class_id:
+        return None
+    for class_id in {new_id, current_class_id} - {None}:
+        class_obj = StudentClass.objects.filter(pk=class_id).first()
+        if class_obj and not class_obj.can_manage(request.user):
+            return Response({
+                'detail': f"You can't move students into or out of class '{class_obj.name}' — you don't manage it."
+            }, status=status.HTTP_403_FORBIDDEN)
+    return None
+
+
 class StudentListCreateView(APIView):
     """
     GET  /api/students/      - List all students (admin only)
@@ -174,6 +198,10 @@ class StudentListCreateView(APIView):
             return Response({
                 'detail': 'Only Platform Administrators can create Admin accounts.'
             }, status=status.HTTP_403_FORBIDDEN)
+
+        denied = class_assignment_denied(request)
+        if denied:
+            return denied
 
         serializer = CreateStudentSerializer(data=request.data)
         if serializer.is_valid():
@@ -278,6 +306,10 @@ class StudentDetailView(APIView):
             return Response({
                 'detail': 'Instructors are not authorized to modify user roles.'
             }, status=status.HTTP_403_FORBIDDEN)
+
+        denied = class_assignment_denied(request, student.assigned_class_id)
+        if denied:
+            return denied
 
         was_blocked = student.is_lab_access_blocked
         was_active = student.is_active

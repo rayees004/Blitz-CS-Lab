@@ -3099,6 +3099,15 @@ class StudentMaterialsView(APIView):
 # CLASS MANAGEMENT (StudentClass)
 # ============================================================================
 
+def class_manage_denied(class_obj, user):
+    """403 response unless the user created the class, was given access to it, or is a platform admin."""
+    if class_obj.can_manage(user):
+        return None
+    return Response({
+        'detail': 'You can only manage classes you created or were given access to.'
+    }, status=status.HTTP_403_FORBIDDEN)
+
+
 class StudentClassListCreateView(APIView):
     """
     GET  /api/classes/  — List all classes (with lab and student counts)
@@ -3107,7 +3116,7 @@ class StudentClassListCreateView(APIView):
     permission_classes = [IsAdminOrStaff]
 
     def get(self, request):
-        qs = StudentClass.objects.all().prefetch_related('labs', 'students')
+        qs = StudentClass.objects.all().select_related('created_by').prefetch_related('labs', 'students', 'managers')
         search = request.query_params.get('search') or request.query_params.get('q')
         if search:
             from django.db.models import Q
@@ -3118,7 +3127,7 @@ class StudentClassListCreateView(APIView):
             qs = qs.filter(is_active=is_active.lower() in ('true', '1'))
 
         page_items, meta = paginate(request, qs.order_by('-created_at', '-id'))
-        serializer = StudentClassListSerializer(page_items, many=True)
+        serializer = StudentClassListSerializer(page_items, many=True, context={'request': request})
         response = {**meta, 'results': serializer.data}
         if 'page' in request.query_params:
             # Totals across all classes, for stat cards on paginated screens
@@ -3133,7 +3142,7 @@ class StudentClassListCreateView(APIView):
     def post(self, request):
         serializer = CreateStudentClassSerializer(data=request.data)
         if serializer.is_valid():
-            class_obj = serializer.save()
+            class_obj = serializer.save(created_by=request.user)
 
             record_audit_log(
                 action_type='CLASS_CREATE',
@@ -3146,7 +3155,7 @@ class StudentClassListCreateView(APIView):
                 severity='NOTICE',
                 details={'code': class_obj.code, 'lab_count': class_obj.labs.count()}
             )
-            return Response(StudentClassDetailSerializer(class_obj).data, status=status.HTTP_201_CREATED)
+            return Response(StudentClassDetailSerializer(class_obj, context={'request': request}).data, status=status.HTTP_201_CREATED)
 
         errors = serializer.errors
         first_field = next(iter(errors))
@@ -3165,11 +3174,14 @@ class StudentClassDetailView(APIView):
     permission_classes = [IsAdminOrStaff]
 
     def get(self, request, pk):
-        class_obj = get_object_or_404(StudentClass.objects.prefetch_related('labs', 'students'), pk=pk)
-        return Response(StudentClassDetailSerializer(class_obj).data)
+        class_obj = get_object_or_404(StudentClass.objects.prefetch_related('labs', 'students', 'managers'), pk=pk)
+        return Response(StudentClassDetailSerializer(class_obj, context={'request': request}).data)
 
     def patch(self, request, pk):
         class_obj = get_object_or_404(StudentClass, pk=pk)
+        denied = class_manage_denied(class_obj, request.user)
+        if denied:
+            return denied
         name = request.data.get('name')
         if name is not None:
             clean_name = name.strip()
@@ -3205,10 +3217,15 @@ class StudentClassDetailView(APIView):
             severity='NOTICE',
             details={'code': class_obj.code}
         )
-        return Response(StudentClassDetailSerializer(class_obj).data)
+        return Response(StudentClassDetailSerializer(class_obj, context={'request': request}).data)
 
     def delete(self, request, pk):
         class_obj = get_object_or_404(StudentClass, pk=pk)
+        # Deleting is limited to the creator and platform admins (shared managers can't delete)
+        if not class_obj.can_manage_access(request.user):
+            return Response({
+                'detail': 'Only the class creator or a platform admin can delete this class.'
+            }, status=status.HTTP_403_FORBIDDEN)
         name = class_obj.name
         # Unassign students and return them to unrestricted access
         User.objects.filter(assigned_class=class_obj).update(assigned_class=None, lab_access_mode='unrestricted')
@@ -3227,6 +3244,77 @@ class StudentClassDetailView(APIView):
         return Response({'message': f"Class '{name}' deleted successfully."}, status=status.HTTP_200_OK)
 
 
+class StudentClassManagersView(APIView):
+    """
+    GET /api/classes/<pk>/managers/ - who may manage this class, plus the instructors that can be added
+    PUT /api/classes/<pk>/managers/ - replace the shared managers. Body: { manager_ids: [..] }
+    Only the class creator or a platform admin may change managers; managers must be active instructors.
+    """
+    permission_classes = [IsAdminOrStaff]
+    _user_row = staticmethod(LabEditorsView._user_row)
+
+    def _payload(self, class_obj, request):
+        candidates = User.objects.filter(user_type='instructor', is_active=True)
+        if class_obj.created_by_id:
+            candidates = candidates.exclude(pk=class_obj.created_by_id)
+        return {
+            'class_id': class_obj.id,
+            'class_name': class_obj.name,
+            'created_by': self._user_row(class_obj.created_by) if class_obj.created_by else None,
+            'managers': [self._user_row(u) for u in class_obj.managers.order_by('first_name', 'username')],
+            'candidates': [self._user_row(u) for u in candidates.order_by('first_name', 'username')],
+            'can_manage_access': class_obj.can_manage_access(request.user),
+        }
+
+    def get(self, request, pk):
+        class_obj = get_object_or_404(StudentClass.objects.select_related('created_by'), pk=pk)
+        return Response(self._payload(class_obj, request))
+
+    def put(self, request, pk):
+        class_obj = get_object_or_404(StudentClass.objects.select_related('created_by'), pk=pk)
+        if not class_obj.can_manage_access(request.user):
+            return Response({
+                'detail': 'Only the class creator or a platform admin can change who manages this class.'
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        raw_ids = request.data.get('manager_ids', [])
+        if not isinstance(raw_ids, list):
+            return Response({'detail': 'manager_ids must be a list.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            ids = {int(i) for i in raw_ids}
+        except (TypeError, ValueError):
+            return Response({'detail': 'manager_ids must contain user ids.'}, status=status.HTTP_400_BAD_REQUEST)
+        ids.discard(class_obj.created_by_id)
+
+        managers = list(User.objects.filter(pk__in=ids, user_type='instructor', is_active=True))
+        if len(managers) != len(ids):
+            return Response({'detail': 'Class access can only be given to active instructors.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        before = set(class_obj.managers.values_list('id', flat=True))
+        class_obj.managers.set(managers)
+        added = sorted(ids - before)
+        removed = sorted(before - ids)
+        if added or removed:
+            names = {u.id: u.username for u in User.objects.filter(pk__in=list(ids | before))}
+            record_audit_log(
+                action_type='CLASS_UPDATE',
+                description=(
+                    f"Changed manager access for class '{class_obj.name}'"
+                    + (f"; added: {', '.join('@' + names[i] for i in added)}" if added else '')
+                    + (f"; removed: {', '.join('@' + names[i] for i in removed)}" if removed else '')
+                    + '.'
+                ),
+                request=request,
+                actor=request.user,
+                target_entity='StudentClass',
+                target_id=class_obj.id,
+                target_name=class_obj.name,
+                severity='NOTICE',
+                details={'managers_added': added, 'managers_removed': removed},
+            )
+        return Response({'message': 'Class access updated.', **self._payload(class_obj, request)})
+
+
 class StudentClassAssignLabsView(APIView):
     """
     POST /api/classes/<pk>/assign-labs/
@@ -3240,6 +3328,9 @@ class StudentClassAssignLabsView(APIView):
 
     def post(self, request, pk):
         class_obj = get_object_or_404(StudentClass, pk=pk)
+        denied = class_manage_denied(class_obj, request.user)
+        if denied:
+            return denied
         lab_ids = request.data.get('lab_ids')
         add_lab_ids = request.data.get('add_lab_ids')
         remove_lab_ids = request.data.get('remove_lab_ids')
@@ -3264,7 +3355,7 @@ class StudentClassAssignLabsView(APIView):
         )
         return Response({
             'message': f"Labs updated for class '{class_obj.name}'.",
-            'class': StudentClassDetailSerializer(class_obj).data
+            'class': StudentClassDetailSerializer(class_obj, context={'request': request}).data
         })
 
 
@@ -3281,6 +3372,9 @@ class StudentClassAssignStudentsView(APIView):
 
     def post(self, request, pk):
         class_obj = get_object_or_404(StudentClass, pk=pk)
+        denied = class_manage_denied(class_obj, request.user)
+        if denied:
+            return denied
         student_ids = request.data.get('student_ids', [])
         action = request.data.get('action', 'assign')
         access_mode = request.data.get('access_mode', 'class_based')
@@ -3331,7 +3425,7 @@ class StudentClassAssignStudentsView(APIView):
 
         return Response({
             'message': msg,
-            'class': StudentClassDetailSerializer(class_obj).data
+            'class': StudentClassDetailSerializer(class_obj, context={'request': request}).data
         })
 
 
@@ -3355,6 +3449,9 @@ class StudentClassStudentsView(APIView):
 
     def post(self, request, pk):
         class_obj = get_object_or_404(StudentClass, pk=pk)
+        denied = class_manage_denied(class_obj, request.user)
+        if denied:
+            return denied
         data = request.data.copy()
         data['assigned_class_id'] = class_obj.id
         if 'lab_access_mode' not in data:
@@ -3378,7 +3475,7 @@ class StudentClassStudentsView(APIView):
             return Response({
                 'message': f"Student '{name}' created and assigned to class '{class_obj.name}'.",
                 'student': UserSerializer(student).data,
-                'class': StudentClassDetailSerializer(class_obj).data
+                'class': StudentClassDetailSerializer(class_obj, context={'request': request}).data
             }, status=status.HTTP_201_CREATED)
 
         errors = serializer.errors

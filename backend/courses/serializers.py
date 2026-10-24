@@ -514,7 +514,37 @@ class CreateStudyMaterialSerializer(serializers.ModelSerializer):
         return super().create(validated_data)
 
 
-class StudentClassListSerializer(serializers.ModelSerializer):
+class ClassAccessFieldsMixin(serializers.Serializer):
+    """Creator, shared managers, and what the viewing user may do with the class."""
+    created_by_id = serializers.IntegerField(source='created_by.id', read_only=True, default=None)
+    created_by_username = serializers.CharField(source='created_by.username', read_only=True, default=None)
+    created_by_name = serializers.SerializerMethodField()
+    managers = serializers.SerializerMethodField()
+    can_manage = serializers.SerializerMethodField()
+    can_manage_access = serializers.SerializerMethodField()
+
+    ACCESS_FIELDS = ['created_by_id', 'created_by_username', 'created_by_name', 'managers', 'can_manage', 'can_manage_access']
+
+    def _viewer(self):
+        return getattr(self.context.get('request'), 'user', None)
+
+    def get_created_by_name(self, obj):
+        return (obj.created_by.get_full_name() or obj.created_by.username) if obj.created_by else None
+
+    def get_managers(self, obj):
+        return [
+            {'id': u.id, 'username': u.username, 'name': u.get_full_name() or u.username}
+            for u in obj.managers.all()
+        ]
+
+    def get_can_manage(self, obj):
+        return obj.can_manage(self._viewer())
+
+    def get_can_manage_access(self, obj):
+        return obj.can_manage_access(self._viewer())
+
+
+class StudentClassListSerializer(ClassAccessFieldsMixin, serializers.ModelSerializer):
     student_count = serializers.IntegerField(read_only=True)
     lab_count = serializers.IntegerField(read_only=True)
     lab_ids = serializers.PrimaryKeyRelatedField(many=True, read_only=True, source='labs')
@@ -523,11 +553,11 @@ class StudentClassListSerializer(serializers.ModelSerializer):
         model = StudentClass
         fields = [
             'id', 'name', 'code', 'description', 'student_count', 'lab_count',
-            'lab_ids', 'is_active', 'created_at', 'updated_at'
-        ]
+            'lab_ids', 'is_active', 'created_at', 'updated_at',
+        ] + ClassAccessFieldsMixin.ACCESS_FIELDS
 
 
-class StudentClassDetailSerializer(serializers.ModelSerializer):
+class StudentClassDetailSerializer(ClassAccessFieldsMixin, serializers.ModelSerializer):
     student_count = serializers.SerializerMethodField()
     lab_count = serializers.SerializerMethodField()
     labs = serializers.SerializerMethodField()
@@ -538,8 +568,8 @@ class StudentClassDetailSerializer(serializers.ModelSerializer):
         model = StudentClass
         fields = [
             'id', 'name', 'code', 'description', 'student_count', 'lab_count',
-            'lab_ids', 'labs', 'students', 'is_active', 'created_at', 'updated_at'
-        ]
+            'lab_ids', 'labs', 'students', 'is_active', 'created_at', 'updated_at',
+        ] + ClassAccessFieldsMixin.ACCESS_FIELDS
 
     def get_student_count(self, obj):
         return obj.students.filter(is_active=True).count()

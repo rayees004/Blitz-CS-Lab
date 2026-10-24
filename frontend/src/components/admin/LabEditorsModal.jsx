@@ -3,12 +3,14 @@ import { X, Users, Search, Check, Loader2, AlertCircle, Crown } from "lucide-rea
 import Btn from "../common/Btn";
 import { C, sans, mono } from "../../constants/theme";
 import { fetchLabEditors, updateLabEditors } from "../../api/labs";
+import { fetchClassManagers, updateClassManagers } from "../../api/classes";
 
 /**
- * Lab edit access: the creator (or a platform admin) picks which other instructors may edit the lab.
- * Calls onSaved(editors) after a successful save.
+ * Share access with other instructors: the creator (or a platform admin) picks who else may work on an item.
+ * load() resolves to { created_by, candidates, [listKey]: [...], [canKey]: bool }; save(ids) resolves to { [listKey]: [...] }.
+ * Calls onSaved(users) after a successful save.
  */
-export default function LabEditorsModal({ lab, onClose, onSaved }) {
+export function ShareAccessModal({ title, itemName, description, badge, listKey, canKey, load, save, onClose, onSaved }) {
   const [info, setInfo] = useState(null);
   const [selected, setSelected] = useState(new Set());
   const [query, setQuery] = useState("");
@@ -18,16 +20,18 @@ export default function LabEditorsModal({ lab, onClose, onSaved }) {
 
   useEffect(() => {
     let alive = true;
-    fetchLabEditors(lab.id)
+    load()
       .then((res) => {
         if (!alive) return;
         setInfo(res);
-        setSelected(new Set((res.editors || []).map((e) => e.id)));
+        setSelected(new Set((res[listKey] || []).map((u) => u.id)));
       })
-      .catch((err) => alive && setError(err.message || "Failed to load edit access."))
+      .catch((err) => alive && setError(err.message || "Failed to load access."))
       .finally(() => alive && setLoading(false));
     return () => { alive = false; };
-  }, [lab.id]);
+    // load is recreated by the caller on each render; it only needs to run once per open
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const h = (e) => { if (e.key === "Escape") onClose(); };
@@ -35,15 +39,15 @@ export default function LabEditorsModal({ lab, onClose, onSaved }) {
     return () => document.removeEventListener("keydown", h);
   }, [onClose]);
 
-  // Current editors first, then everyone else; filtered by the search box
+  // People who already have access first, then everyone else; filtered by the search box
   const candidates = useMemo(() => {
     const q = query.trim().toLowerCase();
     const list = (info?.candidates || []).filter(
       (u) => !q || u.name.toLowerCase().includes(q) || u.username.toLowerCase().includes(q)
     );
-    const initial = new Set((info?.editors || []).map((e) => e.id));
+    const initial = new Set((info?.[listKey] || []).map((u) => u.id));
     return [...list].sort((a, b) => Number(initial.has(b.id)) - Number(initial.has(a.id)));
-  }, [info, query]);
+  }, [info, query, listKey]);
 
   const toggle = (id) => {
     setSelected((prev) => {
@@ -58,15 +62,15 @@ export default function LabEditorsModal({ lab, onClose, onSaved }) {
     setSaving(true);
     setError("");
     try {
-      const res = await updateLabEditors(lab.id, [...selected]);
-      onSaved?.(res.editors || []);
+      const res = await save([...selected]);
+      onSaved?.(res[listKey] || []);
     } catch (err) {
-      setError(err.message || "Failed to update edit access.");
+      setError(err.message || "Failed to update access.");
       setSaving(false);
     }
   };
 
-  const canManage = info?.can_manage_editors;
+  const canManage = info?.[canKey];
 
   return (
     <>
@@ -84,9 +88,9 @@ export default function LabEditorsModal({ lab, onClose, onSaved }) {
           <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
             <Users size={18} color={C.amber} style={{ flexShrink: 0 }} />
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontFamily: sans, fontSize: 16, fontWeight: 700, color: C.hi }}>Lab Edit Access</div>
+              <div style={{ fontFamily: sans, fontSize: 16, fontWeight: 700, color: C.hi }}>{title}</div>
               <div style={{ fontFamily: sans, fontSize: 11.5, color: C.low, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                {lab.name}
+                {itemName}
               </div>
             </div>
           </div>
@@ -105,7 +109,7 @@ export default function LabEditorsModal({ lab, onClose, onSaved }) {
             </strong>
           </div>
           <div style={{ fontFamily: sans, fontSize: 11.5, color: C.low, marginTop: 6, lineHeight: 1.5 }}>
-            Selected instructors can edit this lab's details, questions and files. Only the creator and platform admins can archive it or change this list. Platform admins can always edit every lab.
+            {description}
           </div>
         </div>
 
@@ -163,7 +167,7 @@ export default function LabEditorsModal({ lab, onClose, onSaved }) {
                     <span style={{ display: "block", fontFamily: sans, fontSize: 13, fontWeight: 600, color: C.hi, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{u.name}</span>
                     <span style={{ display: "block", fontFamily: mono, fontSize: 10.5, color: C.low, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>@{u.username}</span>
                   </span>
-                  {on && <span style={{ fontFamily: mono, fontSize: 10, color: C.amber, flexShrink: 0 }}>CAN EDIT</span>}
+                  {on && <span style={{ fontFamily: mono, fontSize: 10, color: C.amber, flexShrink: 0 }}>{badge}</span>}
                 </button>
               );
             })
@@ -186,5 +190,41 @@ export default function LabEditorsModal({ lab, onClose, onSaved }) {
         </div>
       </div>
     </>
+  );
+}
+
+/** Lab edit access: which other instructors may edit a lab. */
+export default function LabEditorsModal({ lab, onClose, onSaved }) {
+  return (
+    <ShareAccessModal
+      title="Lab Edit Access"
+      itemName={lab.name}
+      description="Selected instructors can edit this lab's details, questions and files. Only the creator and platform admins can archive it or change this list. Platform admins can always edit every lab."
+      badge="CAN EDIT"
+      listKey="editors"
+      canKey="can_manage_editors"
+      load={() => fetchLabEditors(lab.id)}
+      save={(ids) => updateLabEditors(lab.id, ids)}
+      onClose={onClose}
+      onSaved={onSaved}
+    />
+  );
+}
+
+/** Class access: which other instructors may manage a class. */
+export function ClassManagersModal({ classObj, onClose, onSaved }) {
+  return (
+    <ShareAccessModal
+      title="Class Access"
+      itemName={classObj.name}
+      description="Selected instructors can edit this class, assign its labs and manage its students. Only the creator and platform admins can delete it or change this list. Platform admins can always manage every class."
+      badge="CAN MANAGE"
+      listKey="managers"
+      canKey="can_manage_access"
+      load={() => fetchClassManagers(classObj.id)}
+      save={(ids) => updateClassManagers(classObj.id, ids)}
+      onClose={onClose}
+      onSaved={onSaved}
+    />
   );
 }

@@ -489,6 +489,20 @@ class StudentClass(models.Model):
     code = models.CharField(max_length=50, blank=True, default='')  # e.g., "CYBER-A", "BATCH-2026"
     description = models.TextField(blank=True, default='')
     labs = models.ManyToManyField(Lab, blank=True, related_name='assigned_classes')
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_classes',
+        help_text='Instructor or Platform Admin who created this class'
+    )
+    managers = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        blank=True,
+        related_name='managed_classes',
+        help_text='Other instructors the creator (or a platform admin) allowed to manage this class'
+    )
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -500,6 +514,21 @@ class StudentClass(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.code})" if self.code else self.name
+
+    def can_manage_access(self, user):
+        """Platform admins and the class creator decide who else may manage it."""
+        if Lab._is_platform_admin(user):
+            return True
+        return bool(user and user.is_authenticated and self.created_by_id == user.id)
+
+    def can_manage(self, user):
+        """Platform admins manage every class; instructors only classes they created or were given access to."""
+        if self.can_manage_access(user):
+            return True
+        if not (user and user.is_authenticated and getattr(user, 'user_type', None) == 'instructor'):
+            return False
+        # Uses the prefetch cache when the queryset prefetched managers
+        return any(manager.id == user.id for manager in self.managers.all())
 
     @property
     def student_count(self):

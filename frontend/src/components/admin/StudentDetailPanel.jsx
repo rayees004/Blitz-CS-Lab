@@ -370,7 +370,8 @@ export default function StudentDetailPanel({ student, onClose, onStudentUpdate, 
                       }}
                     >
                       <option value="">Independent / No Class (Unassigned)</option>
-                      {availableClasses.map(c => (
+                      {/* Only classes this user manages (plus the student's current class so it still shows) */}
+                      {availableClasses.filter(c => c.can_manage !== false || c.id === currentStudent?.assigned_class_id).map(c => (
                         <option key={c.id} value={c.id}>{c.name} {c.code ? `(${c.code})` : ""}</option>
                       ))}
                     </select>

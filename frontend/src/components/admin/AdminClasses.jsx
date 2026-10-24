@@ -3,7 +3,7 @@ import {
   GraduationCap, Plus, Search, X, FlaskConical, Users,
   Loader2, AlertCircle, CheckCircle, RefreshCw, Trash2,
   Edit2, Check, ShieldCheck, BookOpen, Layers, UserPlus,
-  ArrowRight, Filter, Sparkles
+  ArrowRight, Filter, Sparkles, User, UserCog, Share2, Eye
 } from "lucide-react";
 import Panel from "../common/Panel";
 import Btn from "../common/Btn";
@@ -22,6 +22,7 @@ import {
 import { fetchLabs } from "../../api/labs";
 import { fetchStudents, updateStudent } from "../../api/students";
 import Pagination from "../common/Pagination";
+import { ClassManagersModal } from "./LabEditorsModal";
 
 /* ─── Styling helpers ────────────────────────────────────── */
 const inputStyle = (err) => ({
@@ -1016,6 +1017,7 @@ export default function AdminClasses() {
   const [labsModalClass, setLabsModalClass] = useState(null);
   const [studentsModalClass, setStudentsModalClass] = useState(null);
   const [deleteConfirmClass, setDeleteConfirmClass] = useState(null);
+  const [accessModalClass, setAccessModalClass] = useState(null);
 
   const [page, setPage] = useState(1);
   const [pageMeta, setPageMeta] = useState(null);
@@ -1229,9 +1231,46 @@ export default function AdminClasses() {
                           CLASS ID #{c.id}
                         </span>
                       </div>
+                      <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginTop: 6 }}>
+                        <span
+                          title={c.created_by_username ? `Class creator: ${c.created_by_name} (@${c.created_by_username})` : "Class creator not recorded"}
+                          style={{ display: "inline-flex", alignItems: "center", gap: 4, fontFamily: sans, fontSize: 11, fontWeight: 600, color: "#c084fc", background: "rgba(192, 132, 252, 0.12)", padding: "1px 7px", borderRadius: 4, border: "1px solid rgba(192, 132, 252, 0.3)" }}
+                        >
+                          <User size={10} /> By: {c.created_by_username ? `@${c.created_by_username}` : "Not recorded"}
+                        </span>
+                        {c.can_manage && !c.can_manage_access && (
+                          <span
+                            title="The creator gave you access to manage this class"
+                            style={{ display: "inline-flex", alignItems: "center", gap: 4, fontFamily: sans, fontSize: 11, fontWeight: 600, color: C.amber, background: "rgba(245, 166, 35, 0.1)", padding: "1px 7px", borderRadius: 4, border: "1px solid rgba(245, 166, 35, 0.3)" }}
+                          >
+                            <Share2 size={10} /> Shared with you
+                          </span>
+                        )}
+                        {c.managers?.length > 0 && (
+                          <span
+                            title={`Can also manage: ${c.managers.map((m) => `@${m.username}`).join(", ")}`}
+                            style={{ display: "inline-flex", alignItems: "center", gap: 4, fontFamily: sans, fontSize: 11, color: C.mid, background: C.panel2, padding: "1px 7px", borderRadius: 4, border: `1px solid ${C.border}` }}
+                          >
+                            <Users size={10} /> +{c.managers.length} manager{c.managers.length !== 1 ? "s" : ""}
+                          </span>
+                        )}
+                      </div>
                     </div>
 
-                    <div style={{ display: "flex", gap: 4 }}>
+                    <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+                      {c.can_manage_access && (
+                        <button
+                          onClick={() => setAccessModalClass(c)}
+                          title="Choose other instructors who can manage this class"
+                          style={{
+                            background: C.panel2, border: `1px solid ${C.border}`,
+                            borderRadius: 6, padding: "5px 7px", color: C.amber, cursor: "pointer",
+                          }}
+                        >
+                          <UserCog size={13} />
+                        </button>
+                      )}
+                      {c.can_manage && (
                       <button
                         onClick={() => { setEditingClass(c); setShowCreateModal(true); }}
                         title="Edit Class details"
@@ -1242,6 +1281,8 @@ export default function AdminClasses() {
                       >
                         <Edit2 size={13} />
                       </button>
+                      )}
+                      {c.can_manage_access && (
                       <button
                         onClick={() => setDeleteConfirmClass(c)}
                         title="Delete Class"
@@ -1252,6 +1293,7 @@ export default function AdminClasses() {
                       >
                         <Trash2 size={13} />
                       </button>
+                      )}
                     </div>
                   </div>
 
@@ -1325,7 +1367,12 @@ export default function AdminClasses() {
                   )}
                 </div>
 
-                {/* Card Action Buttons */}
+                {/* Card Action Buttons (only for people who manage this class) */}
+                {!c.can_manage ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, borderTop: `1px solid ${C.border}`, paddingTop: 14, fontFamily: sans, fontSize: 12, color: C.low }}>
+                    <Eye size={13} /> View only — managed by {c.created_by_username ? `@${c.created_by_username}` : "a platform admin"}
+                  </div>
+                ) : (
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, borderTop: `1px solid ${C.border}`, paddingTop: 14 }}>
                   <Btn
                     variant="outline"
@@ -1346,6 +1393,7 @@ export default function AdminClasses() {
                     Manage Students
                   </Btn>
                 </div>
+                )}
               </Panel>
             );
           })}
@@ -1381,6 +1429,25 @@ export default function AdminClasses() {
         allStudents={allStudents}
         onReloadAllStudents={loadData}
       />
+
+      {/* Choose which instructors may manage a class */}
+      {accessModalClass && (
+        <ClassManagersModal
+          classObj={accessModalClass}
+          onClose={() => setAccessModalClass(null)}
+          onSaved={(managers) => {
+            const name = accessModalClass.name;
+            setAccessModalClass(null);
+            setToast({
+              message: managers.length
+                ? `"${name}" shared with ${managers.length} instructor${managers.length !== 1 ? "s" : ""}.`
+                : `Only the creator and platform admins can now manage "${name}".`,
+              type: "success",
+            });
+            loadData();
+          }}
+        />
+      )}
 
       {/* Delete Confirmation Dialog */}
       {deleteConfirmClass && (

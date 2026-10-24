@@ -266,7 +266,7 @@ function AddStudentDrawer({ onClose, onCreated, isPlatformAdmin = false }) {
                       onChange={e => setForm(f => ({ ...f, assigned_class_id: e.target.value ? Number(e.target.value) : null }))}
                     >
                       <option value="">Select a class…</option>
-                      {availableClasses.map(c => (
+                      {availableClasses.filter(c => c.can_manage !== false).map(c => (
                         <option key={c.id} value={c.id}>{c.name} {c.code ? `(${c.code})` : ""}</option>
                       ))}
                     </select>

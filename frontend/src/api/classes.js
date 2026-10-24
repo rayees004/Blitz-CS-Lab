@@ -72,6 +72,19 @@ export async function assignClassStudents(id, payload) {
   });
 }
 
+/** Who may manage a class: creator, shared managers, and instructors that can be added */
+export async function fetchClassManagers(id) {
+  return apiFetch(`/classes/${id}/managers/`);
+}
+
+/** Replace the instructors allowed to manage a class (creator or platform admin only) */
+export async function updateClassManagers(id, managerIds) {
+  return apiFetch(`/classes/${id}/managers/`, {
+    method: 'PUT',
+    body: JSON.stringify({ manager_ids: managerIds }),
+  });
+}
+
 /**
  * Fetch students enrolled in a class
  */
