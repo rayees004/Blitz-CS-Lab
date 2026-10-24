@@ -37,7 +37,7 @@ function InfoRow({ icon: Icon, label, value }) {
 }
 
 /* ─── Main Panel ─────────────────────────────────────── */
-export default function StudentDetailPanel({ student, onClose, onStudentUpdate }) {
+export default function StudentDetailPanel({ student, onClose, onStudentUpdate, canChangeStatus = false }) {
   const [activeTab, setActiveTab] = useState("overview"); // "overview" | "labs"
   const [progressData, setProgressData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -86,6 +86,8 @@ export default function StudentDetailPanel({ student, onClose, onStudentUpdate }
   useEffect(() => {
     setCurrentStudent(student);
     setBlockReasonInput(student?.lab_access_block_reason || "");
+    setConfirmDeactivate(false);
+    setStatusError("");
   }, [student]);
 
   const handleToggleLabAccess = async (targetBlock, reason = "") => {
@@ -103,6 +105,26 @@ export default function StudentDetailPanel({ student, onClose, onStudentUpdate }
       setError(err.message || "Failed to update lab access.");
     } finally {
       setBlockingLoading(false);
+    }
+  };
+
+  const [statusLoading, setStatusLoading] = useState(false);
+  const [confirmDeactivate, setConfirmDeactivate] = useState(false);
+  const [statusError, setStatusError] = useState("");
+
+  const handleSetActive = async (active) => {
+    setStatusLoading(true);
+    setStatusError("");
+    try {
+      const res = await updateStudent(currentStudent.id, { is_active: active });
+      const updated = res.student || res;
+      setCurrentStudent(updated);
+      if (onStudentUpdate) onStudentUpdate(updated);
+      setConfirmDeactivate(false);
+    } catch (err) {
+      setStatusError(err.message || "Failed to change account status.");
+    } finally {
+      setStatusLoading(false);
     }
   };
 
@@ -260,6 +282,62 @@ export default function StudentDetailPanel({ student, onClose, onStudentUpdate }
                 }
               />
             </div>
+
+            {/* Account status (platform admins only, never their own account) */}
+            {canChangeStatus && (
+              <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 16, marginTop: 14 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+                  <div>
+                    <div style={{ fontFamily: mono, fontSize: 11, fontWeight: 700, color: C.hi, letterSpacing: "0.04em", marginBottom: 3 }}>
+                      ACCOUNT STATUS
+                    </div>
+                    <div style={{ fontFamily: sans, fontSize: 12, color: C.mid }}>
+                      {currentStudent?.is_active
+                        ? "Active — the user can sign in."
+                        : "Inactive — the user cannot sign in."}
+                    </div>
+                  </div>
+                  {currentStudent?.is_active ? (
+                    confirmDeactivate ? (
+                      <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                        <Btn variant="outline" disabled={statusLoading} onClick={() => setConfirmDeactivate(false)}>Cancel</Btn>
+                        <Btn
+                          disabled={statusLoading}
+                          onClick={() => handleSetActive(false)}
+                          style={{ background: C.danger, border: `1px solid ${C.danger}`, color: "#fff" }}
+                        >
+                          {statusLoading ? "Saving..." : "Confirm"}
+                        </Btn>
+                      </div>
+                    ) : (
+                      <Btn
+                        variant="outline"
+                        icon={Ban}
+                        onClick={() => setConfirmDeactivate(true)}
+                        style={{ color: C.danger, borderColor: "rgba(229,83,75,0.4)", flexShrink: 0 }}
+                      >
+                        Set Inactive
+                      </Btn>
+                    )
+                  ) : (
+                    <Btn
+                      variant="outline"
+                      icon={CheckCircle2}
+                      disabled={statusLoading}
+                      onClick={() => handleSetActive(true)}
+                      style={{ color: C.cyan, borderColor: "rgba(63,216,200,0.4)", flexShrink: 0 }}
+                    >
+                      {statusLoading ? "Saving..." : "Set Active"}
+                    </Btn>
+                  )}
+                </div>
+                {statusError && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8, fontFamily: sans, fontSize: 12, color: "#fca5a5" }}>
+                    <AlertCircle size={13} /> {statusError}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Class Assignment & Lab Access Control */}
             <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 16, marginTop: 14 }}>

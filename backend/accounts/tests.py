@@ -2,6 +2,7 @@ from django.test import TestCase
 from django.urls import reverse
 from rest_framework.test import APIClient
 from rest_framework import status
+from rest_framework.authtoken.models import Token
 from accounts.models import User
 
 
@@ -226,3 +227,48 @@ class StudentCreateAndPasswordTests(TestCase):
             'password': 'Strong#Pass2026', 'confirm_password': 'Strong#Pass2026',
         }, format='json')
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class AccountStatusTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = User.objects.create_user(
+            username='admin', email='admin@blitzcyberlab.io', password='Admin@12345', user_type='admin'
+        )
+        self.instructor = User.objects.create_user(
+            username='instructor', email='instructor@blitzcyberlab.io', password='Instructor@12345', user_type='instructor'
+        )
+        self.student = User.objects.create_user(
+            username='rohith', email='rohith@blitzcyberlab.io', password='Student@12345', user_type='student'
+        )
+
+    def _set_active(self, user, value):
+        return self.client.patch(f'/api/students/{user.id}/', {'is_active': value}, format='json')
+
+    def test_admin_can_deactivate_and_reactivate(self):
+        Token.objects.create(user=self.student)
+        self.client.force_authenticate(self.admin)
+        self.assertEqual(self._set_active(self.student, False).status_code, status.HTTP_200_OK)
+        self.student.refresh_from_db()
+        self.assertFalse(self.student.is_active)
+        self.assertFalse(Token.objects.filter(user=self.student).exists())
+
+        res = self.client.post('/api/auth/login/', {'email': 'rohith@blitzcyberlab.io', 'password': 'Student@12345'}, format='json')
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
+        self.assertEqual(self._set_active(self.student, True).status_code, status.HTTP_200_OK)
+        self.student.refresh_from_db()
+        self.assertTrue(self.student.is_active)
+
+    def test_instructor_cannot_change_status(self):
+        self.client.force_authenticate(self.instructor)
+        self.assertEqual(self._set_active(self.student, False).status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(self.client.delete(f'/api/students/{self.student.id}/').status_code, status.HTTP_403_FORBIDDEN)
+        self.student.refresh_from_db()
+        self.assertTrue(self.student.is_active)
+
+    def test_admin_cannot_deactivate_self(self):
+        self.client.force_authenticate(self.admin)
+        self.assertEqual(self._set_active(self.admin, False).status_code, status.HTTP_400_BAD_REQUEST)
+        self.admin.refresh_from_db()
+        self.assertTrue(self.admin.is_active)

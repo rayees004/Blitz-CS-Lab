@@ -280,12 +280,36 @@ class StudentDetailView(APIView):
             }, status=status.HTTP_403_FORBIDDEN)
 
         was_blocked = student.is_lab_access_blocked
+        was_active = student.is_active
+        if 'is_active' in request.data:
+            denied = self.status_change_denied(request, student)
+            if denied:
+                return denied
+
         serializer = UpdateStudentSerializer(student, data=request.data, partial=True)
         if serializer.is_valid():
             updated = serializer.save()
             name = updated.get_full_name() or updated.username
 
-            if 'is_lab_access_blocked' in request.data and was_blocked != updated.is_lab_access_blocked:
+            if 'is_active' in request.data and was_active != updated.is_active:
+                if not updated.is_active:
+                    # Sign the user out everywhere; TokenAuthentication also rejects inactive users
+                    Token.objects.filter(user=updated).delete()
+                record_audit_log(
+                    action_type='USER_UPDATE' if updated.is_active else 'USER_DELETE',
+                    description=(
+                        f"Reactivated account '{name}' (@{updated.username})." if updated.is_active
+                        else f"Deactivated account '{name}' (@{updated.username})."
+                    ),
+                    request=request,
+                    actor=request.user,
+                    target_entity='User',
+                    target_id=updated.id,
+                    target_name=name,
+                    severity='NOTICE' if updated.is_active else 'WARNING',
+                    details={'is_active': updated.is_active},
+                )
+            elif 'is_lab_access_blocked' in request.data and was_blocked != updated.is_lab_access_blocked:
                 if updated.is_lab_access_blocked:
                     reason_msg = f" Reason: '{updated.lab_access_block_reason}'." if updated.lab_access_block_reason else ""
                     record_audit_log(
@@ -333,12 +357,28 @@ class StudentDetailView(APIView):
             'errors': serializer.errors,
         }, status=status.HTTP_400_BAD_REQUEST)
 
+    @staticmethod
+    def status_change_denied(request, target):
+        """Only platform admins may activate/deactivate accounts, and never their own."""
+        actor = request.user
+        if not (getattr(actor, 'user_type', None) == 'admin' or actor.is_superuser):
+            return Response({'detail': 'Only platform administrators can change account status.'},
+                            status=status.HTTP_403_FORBIDDEN)
+        if target.pk == actor.pk:
+            return Response({'detail': 'You cannot change the status of your own account.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        return None
+
     def delete(self, request, pk):
         student = self.get_student(pk)
+        denied = self.status_change_denied(request, student)
+        if denied:
+            return denied
         name = student.get_full_name() or student.username
         # Soft delete: deactivate instead of hard-deleting
         student.is_active = False
         student.save()
+        Token.objects.filter(user=student).delete()
 
         record_audit_log(
             action_type='USER_DELETE',

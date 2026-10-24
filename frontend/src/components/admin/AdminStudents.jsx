@@ -1,15 +1,15 @@
 import React, { useState, useEffect, useCallback } from "react";
 import {
-  Plus, MoreHorizontal, Search, X,
+  Plus, Search, X,
   Eye, EyeOff, Loader2, AlertCircle, CheckCircle,
-  UserPlus, Trash2, RefreshCw, BookOpen, Layers,
+  UserPlus, RefreshCw, BookOpen,
   Ban, ShieldCheck, ShieldAlert, GraduationCap, KeyRound
 } from "lucide-react";
 import Panel from "../common/Panel";
 import Btn from "../common/Btn";
 import Badge from "../common/Badge";
 import { C, sans, mono } from "../../constants/theme";
-import { fetchStudents, createStudent, deleteStudent, updateStudent, setStudentPassword } from "../../api/students";
+import { fetchStudents, createStudent, updateStudent, setStudentPassword } from "../../api/students";
 import Pagination from "../common/Pagination";
 import { fetchSubjects } from "../../api/subjects";
 import { fetchClasses } from "../../api/classes";
@@ -402,25 +402,6 @@ function ChangePasswordModal({ student, onClose, onChanged }) {
   );
 }
 
-/* ─── Confirm Deactivate ──────────────────────────────── */
-function ConfirmDialog({ student, onConfirm, onCancel }) {
-  return (
-    <>
-      <div onClick={onCancel} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 1100 }} />
-      <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: 380, background: C.panel, border: `1px solid ${C.border}`, borderRadius: 12, padding: 28, zIndex: 1101, boxShadow: "0 24px 80px rgba(0,0,0,0.5)" }}>
-        <div style={{ fontFamily: sans, fontSize: 16, fontWeight: 700, color: C.hi, marginBottom: 8 }}>Deactivate Student?</div>
-        <p style={{ fontFamily: sans, fontSize: 13, color: C.mid, lineHeight: 1.55, marginBottom: 22 }}>
-          <strong style={{ color: C.hi }}>{student.full_name || student.username}</strong> will lose platform access. This can be reversed from the server.
-        </p>
-        <div style={{ display: "flex", gap: 10 }}>
-          <Btn variant="outline" onClick={onCancel} style={{ flex: 1 }}>Cancel</Btn>
-          <Btn icon={Trash2} onClick={onConfirm} style={{ flex: 1, background: C.danger, border: `1px solid ${C.danger}`, color: "#fff" }}>Deactivate</Btn>
-        </div>
-      </div>
-    </>
-  );
-}
-
 /* ─── Toast ──────────────────────────────────────────── */
 function Toast({ message, type = "success", onDone }) {
   useEffect(() => {
@@ -461,7 +442,7 @@ const FEE_TONE = { PAID: "cyan", DUE: "danger", PARTIAL: "warn" };
 // name & role | email | class & access | subjects | status | joined | actions
 const ROW_GRID = {
   display: "grid",
-  gridTemplateColumns: "minmax(0,1.6fr) minmax(0,1.4fr) minmax(0,1.2fr) minmax(0,1.2fr) minmax(0,0.9fr) minmax(0,0.7fr) 128px",
+  gridTemplateColumns: "minmax(0,1.6fr) minmax(0,1.4fr) minmax(0,1.2fr) minmax(0,1.2fr) minmax(0,0.9fr) minmax(0,0.7fr) 184px",
   columnGap: 14,
   alignItems: "center",
   padding: "0 18px 0 15px",
@@ -480,8 +461,6 @@ export default function AdminStudents({ currentUser }) {
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [showAddDrawer, setShowAddDrawer] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(null);
-  const [confirmDelete, setConfirmDelete] = useState(null);
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [assignSubjectsStudent, setAssignSubjectsStudent] = useState(null);
   const [passwordStudent, setPasswordStudent] = useState(null);
@@ -526,13 +505,6 @@ export default function AdminStudents({ currentUser }) {
     return () => clearTimeout(t);
   }, [searchInput]);
 
-  // Close action menus on outside click
-  useEffect(() => {
-    const h = () => setMenuOpen(null);
-    document.addEventListener("click", h);
-    return () => document.removeEventListener("click", h);
-  }, []);
-
   const handleCreated = (student) => {
     setShowAddDrawer(false);
     load();
@@ -566,20 +538,6 @@ export default function AdminStudents({ currentUser }) {
       setToast({ message: err.message || "Failed to update lab access.", type: "error" });
     } finally {
       setBlockingLoading(false);
-    }
-  };
-
-  const handleDeleteConfirm = async () => {
-    if (!confirmDelete) return;
-    const s = confirmDelete;
-    setConfirmDelete(null);
-    try {
-      await deleteStudent(s.id);
-      setStudents(prev => prev.filter(x => x.id !== s.id));
-      if (selectedStudent?.id === s.id) setSelectedStudent(null);
-      setToast({ message: `${s.full_name || s.username} deactivated.`, type: "success" });
-    } catch (err) {
-      setToast({ message: err.message || "Failed.", type: "error" });
     }
   };
 
@@ -709,7 +667,7 @@ export default function AdminStudents({ currentUser }) {
             <div>SUBJECTS</div>
             <div>STATUS</div>
             <div>JOINED</div>
-            <div style={{ textAlign: "right" }}>ACCESS</div>
+            <div style={{ textAlign: "right" }}>ACTIONS</div>
           </div>
 
           {/* Empty state */}
@@ -737,11 +695,8 @@ export default function AdminStudents({ currentUser }) {
             const joined = s.date_joined
               ? new Date(s.date_joined).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "2-digit" })
               : "—";
-            const isMenuOpen = menuOpen === s.id;
             const isSelected = selectedStudent?.id === s.id;
             const enrolledSubjects = s.enrolled_subjects || [];
-            // Menus on the last rows open upwards so the panel edge doesn't clip them
-            const menuUp = filteredStudents.length > 3 && i >= filteredStudents.length - 2;
 
             return (
               <div
@@ -937,21 +892,44 @@ export default function AdminStudents({ currentUser }) {
                   )}
                 </div>
 
-                {/* Status */}
-                <div style={{ display: "flex", gap: 5, flexWrap: "wrap", alignItems: "center" }}>
-                  <Badge tone={s.is_active ? "cyan" : "danger"}>{s.is_active ? "ACTIVE" : "INACTIVE"}</Badge>
-                  {s.is_lab_access_blocked && (
-                    <Badge tone="danger" title={s.lab_access_block_reason ? `Reason: ${s.lab_access_block_reason}` : "Practical lab access is blocked"}>
-                      BLOCKED
-                    </Badge>
+                {/* Status: one badge — INACTIVE (account deactivated) > BLOCKED (lab access) > ACTIVE */}
+                <div
+                  style={{ display: "flex", alignItems: "center" }}
+                  title={
+                    !s.is_active ? "Account deactivated — the user cannot sign in"
+                      : s.is_lab_access_blocked ? (s.lab_access_block_reason ? `Lab access blocked. Reason: ${s.lab_access_block_reason}` : "Practical lab access is blocked")
+                      : "Account active"
+                  }
+                >
+                  {!s.is_active ? (
+                    <Badge tone="default">INACTIVE</Badge>
+                  ) : s.is_lab_access_blocked ? (
+                    <Badge tone="danger">BLOCKED</Badge>
+                  ) : (
+                    <Badge tone="cyan">ACTIVE</Badge>
                   )}
                 </div>
 
                 {/* Joined */}
                 <span style={{ fontFamily: mono, fontSize: 11, color: C.low, ...ellipsis }}>{joined}</span>
 
-                {/* Access: block / unblock lab access (students only; staff always have lab access) + more menu */}
-                <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 6 }}>
+                {/* Actions: change password + block / unblock lab access (students only; staff always have lab access) */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 6 }}>
+                  {s.user_type !== "student" && (
+                    <span style={{ fontFamily: mono, fontSize: 11, color: C.low }}>—</span>
+                  )}
+                  {s.user_type === "student" && (
+                    <button
+                      type="button"
+                      title="Set a new password for this student"
+                      onClick={e => { e.stopPropagation(); setPasswordStudent(s); }}
+                      style={{ display: "inline-flex", alignItems: "center", gap: 5, height: 26, padding: "0 9px", borderRadius: 6, border: `1px solid ${C.border}`, background: C.panel2, color: C.mid, fontFamily: sans, fontSize: 11.5, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}
+                      onMouseEnter={e => { e.currentTarget.style.color = C.hi; e.currentTarget.style.borderColor = C.borderLight; }}
+                      onMouseLeave={e => { e.currentTarget.style.color = C.mid; e.currentTarget.style.borderColor = C.border; }}
+                    >
+                      <KeyRound size={12} /> Password
+                    </button>
+                  )}
                   {s.user_type === "student" && (
                     s.is_lab_access_blocked ? (
                       <button
@@ -970,7 +948,6 @@ export default function AdminStudents({ currentUser }) {
                         title="Block this student's lab access"
                         onClick={e => {
                           e.stopPropagation();
-                          setMenuOpen(null);
                           setBlockStudentModal(s);
                           setBlockReasonInput(s.lab_access_block_reason || "");
                         }}
@@ -979,56 +956,6 @@ export default function AdminStudents({ currentUser }) {
                         <Ban size={12} /> Block
                       </button>
                     )
-                  )}
-                  <button
-                    type="button"
-                    title="More actions"
-                    onClick={e => { e.stopPropagation(); setMenuOpen(isMenuOpen ? null : s.id); }}
-                    style={{ background: isMenuOpen ? C.panel3 : "none", border: "none", cursor: "pointer", padding: 5, borderRadius: 5, color: C.low, display: "flex" }}
-                  >
-                    <MoreHorizontal size={15} />
-                  </button>
-
-                  {isMenuOpen && (
-                    <div
-                      style={{ position: "absolute", right: 0, ...(menuUp ? { bottom: "calc(100% + 4px)" } : { top: "calc(100% + 4px)" }), background: C.panel, border: `1px solid ${C.border}`, borderRadius: 8, padding: 4, minWidth: 175, zIndex: 50, boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}
-                      onClick={e => e.stopPropagation()}
-                    >
-                      <button
-                        onClick={() => { setMenuOpen(null); setAssignSubjectsStudent(s); }}
-                        style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "8px 10px", background: "none", border: "none", color: C.amber, fontFamily: sans, fontSize: 12.5, cursor: "pointer", borderRadius: 5, textAlign: "left", fontWeight: 600 }}
-                        onMouseEnter={e => e.currentTarget.style.background = "rgba(240,180,41,0.1)"}
-                        onMouseLeave={e => e.currentTarget.style.background = "none"}
-                      >
-                        <Layers size={13} color={C.amber} /> Assign Subjects
-                      </button>
-                      <button
-                        onClick={() => { setMenuOpen(null); setSelectedStudent(s); }}
-                        style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "8px 10px", background: "none", border: "none", color: C.mid, fontFamily: sans, fontSize: 12.5, cursor: "pointer", borderRadius: 5, textAlign: "left" }}
-                        onMouseEnter={e => e.currentTarget.style.background = C.panel2}
-                        onMouseLeave={e => e.currentTarget.style.background = "none"}
-                      >
-                        <Eye size={13} /> View Details
-                      </button>
-                      {s.user_type === "student" && (
-                        <button
-                          onClick={() => { setMenuOpen(null); setPasswordStudent(s); }}
-                          style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "8px 10px", background: "none", border: "none", color: C.mid, fontFamily: sans, fontSize: 12.5, cursor: "pointer", borderRadius: 5, textAlign: "left" }}
-                          onMouseEnter={e => e.currentTarget.style.background = C.panel2}
-                          onMouseLeave={e => e.currentTarget.style.background = "none"}
-                        >
-                          <KeyRound size={13} /> Change Password
-                        </button>
-                      )}
-                      <button
-                        onClick={() => { setMenuOpen(null); setConfirmDelete(s); }}
-                        style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "8px 10px", background: "none", border: "none", color: C.danger, fontFamily: sans, fontSize: 12.5, cursor: "pointer", borderRadius: 5, textAlign: "left" }}
-                        onMouseEnter={e => e.currentTarget.style.background = "rgba(229,83,75,0.1)"}
-                        onMouseLeave={e => e.currentTarget.style.background = "none"}
-                      >
-                        <Trash2 size={13} /> Deactivate
-                      </button>
-                    </div>
                   )}
                 </div>
               </div>
@@ -1072,14 +999,12 @@ export default function AdminStudents({ currentUser }) {
       {selectedStudent && (
         <StudentDetailPanel
           student={selectedStudent}
+          canChangeStatus={isPlatformAdmin && selectedStudent.id !== currentUser?.id}
           onClose={() => setSelectedStudent(null)}
           onStudentUpdate={(updated) => setStudents(prev => prev.map(s => s.id === updated.id ? updated : s))}
         />
       )}
 
-      {confirmDelete && (
-        <ConfirmDialog student={confirmDelete} onConfirm={handleDeleteConfirm} onCancel={() => setConfirmDelete(null)} />
-      )}
 
       {blockStudentModal && (
         <>
