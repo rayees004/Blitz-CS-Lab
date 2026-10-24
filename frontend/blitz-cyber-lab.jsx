@@ -164,7 +164,7 @@ export default function BlitzCyberLab() {
       "a-students": <AdminStudents currentUser={currentUser} />,
       "a-classes": <AdminClasses />,
       "a-subjects": <AdminSubjects />,
-      "a-labs": <AdminLabs onOpenAddModal={() => setAdminPage("a-dashboard")} onOpenAnalysis={() => setAdminPage("a-subject-analysis")} />,
+      "a-labs": <AdminLabs onOpenAddModal={() => setAdminPage("a-dashboard")} />,
       "a-attend-lab": <AdminAttendLabView currentUser={currentUser} onNavigate={setAdminPage} />,
       "a-subject-analysis": <AdminSubjectLabAnalysis currentUser={currentUser} />,
       "a-materials": <AdminMaterials />,

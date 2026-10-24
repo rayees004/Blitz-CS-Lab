@@ -5,7 +5,7 @@ import {
   Award, Globe, ExternalLink, Flag, BookMarked, Eye, EyeOff,
   ChevronDown, ChevronUp, Database, Sparkles, X, Terminal,
   Video, Play, Film, FolderArchive, Download, Copy, Check, Code, FileCode,
-  User, BarChart3, Tags
+  User, Tags
 } from "lucide-react";
 import Panel from "../common/Panel";
 import Btn from "../common/Btn";
@@ -666,7 +666,7 @@ function LabViewDrawer({ lab, courses, onClose, onEdit, onDelete }) {
 }
 
 /* ── Main AdminLabs Component ─────────────────────────────────────────── */
-export default function AdminLabs({ onOpenAddModal = null, onOpenAnalysis = null }) {
+export default function AdminLabs({ onOpenAddModal = null }) {
   const [labs, setLabs] = useState([]);
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -824,28 +824,6 @@ export default function AdminLabs({ onOpenAddModal = null, onOpenAnalysis = null
             <Btn variant="subtle" icon={Sparkles} onClick={handleSeedLabs} small disabled={seeding}>
               {seeding ? "Seeding..." : "Seed Starter Labs"}
             </Btn>
-          )}
-          {onOpenAnalysis && (
-            <button
-              type="button"
-              onClick={onOpenAnalysis}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                background: "rgba(240, 180, 41, 0.12)",
-                border: "1px solid rgba(240, 180, 41, 0.35)",
-                color: C.amber,
-                borderRadius: 7,
-                padding: "8px 14px",
-                fontFamily: sans,
-                fontSize: 12.5,
-                fontWeight: 600,
-                cursor: "pointer",
-              }}
-            >
-              <BarChart3 size={14} /> Subject Analysis
-            </button>
           )}
           <Btn variant="subtle" icon={Tags} onClick={() => setCategoriesOpen(true)} small>
             Categories
