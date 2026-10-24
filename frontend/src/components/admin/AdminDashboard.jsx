@@ -15,6 +15,7 @@ import { fetchLabs, createLab } from "../../api/labs";
 import { fetchAdminDashboardStats, reviewAdminRetakeRequest } from "../../api/students";
 import { DJANGO_ADMIN_URL } from "../../api/client";
 import AddLabModal from "./AddLabModal";
+import CompletionsChart from "./CompletionsChart";
 
 export default function AdminDashboard({ onNavigate, currentUser }) {
   const isAdmin = currentUser?.user_type === "admin" || Boolean(currentUser?.is_superuser) || Boolean(currentUser?.can_access_django_admin);
@@ -38,7 +39,6 @@ export default function AdminDashboard({ onNavigate, currentUser }) {
     pending_retake_requests_count: 0,
     pending_retake_requests: [],
   });
-  const [chartTimeframe, setChartTimeframe] = useState("30D"); // 7D | 30D | 90D
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState(null);
   const [reviewingId, setReviewingId] = useState(null);
@@ -479,54 +479,8 @@ export default function AdminDashboard({ onNavigate, currentUser }) {
       {/* Main Grid */}
       <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1.1fr", gap: 16, marginTop: 24 }}>
         {/* Lab Completions Panel */}
-        <Panel style={{ padding: 20 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-            <div>
-              <div style={{ fontFamily: sans, fontSize: 14, fontWeight: 700, color: C.hi }}>
-                Lab Completions — {chartTimeframe}
-              </div>
-              <div style={{ fontFamily: mono, fontSize: 11, color: C.low, marginTop: 2 }}>
-                {dbStats.total_completions} Total verified lab completions recorded
-              </div>
-            </div>
-            <div style={{ display: "flex", gap: 6 }}>
-              {["7D", "30D", "90D"].map((d) => (
-                <div
-                  key={d}
-                  onClick={() => setChartTimeframe(d)}
-                  style={{
-                    fontFamily: mono,
-                    fontSize: 11,
-                    padding: "4px 9px",
-                    borderRadius: 5,
-                    color: chartTimeframe === d ? "#1A1200" : C.mid,
-                    background: chartTimeframe === d ? C.amber : C.panel2,
-                    border: `1px solid ${C.border}`,
-                    cursor: "pointer",
-                    fontWeight: chartTimeframe === d ? 700 : 500,
-                  }}
-                >
-                  {d}
-                </div>
-              ))}
-            </div>
-          </div>
-          <div style={{ display: "flex", alignItems: "flex-end", gap: 6, height: 120 }}>
-            {(dbStats.completions_chart[chartTimeframe] || [15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15]).map((v, i) => (
-              <div
-                key={i}
-                title={`Interval ${i + 1}`}
-                style={{
-                  flex: 1,
-                  height: `${v}%`,
-                  background: i === 11 ? C.amber : (v > 15 ? C.cyan : C.panel3),
-                  borderRadius: "3px 3px 0 0",
-                  border: `1px solid ${C.border}`,
-                  transition: "height 0.3s ease",
-                }}
-              />
-            ))}
-          </div>
+        <Panel style={{ padding: 20, position: "relative" }}>
+          <CompletionsChart series={dbStats.completions_series} totalAllTime={dbStats.total_completions || 0} />
         </Panel>
 
         {/* Labs Quick Overview Panel */}

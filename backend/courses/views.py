@@ -2692,6 +2692,34 @@ class AdminDashboardStatsView(APIView):
         chart_30d = get_bucket_chart(30)
         chart_90d = get_bucket_chart(90)
 
+        # Real completion counts per calendar bucket for the dashboard chart:
+        # 7D and 30D -> one bucket per day, 90D -> 13 weekly buckets (last one ends today)
+        today = timezone.localdate()
+        recent_dates = [
+            timezone.localtime(dt).date()
+            for dt in completed_scores.filter(
+                completed_at__gte=now - timezone.timedelta(days=92)
+            ).values_list('completed_at', flat=True)
+        ]
+
+        def completion_buckets(num_buckets, days_per_bucket):
+            buckets = []
+            for i in range(num_buckets):
+                end = today - timezone.timedelta(days=(num_buckets - 1 - i) * days_per_bucket)
+                start = end - timezone.timedelta(days=days_per_bucket - 1)
+                buckets.append({
+                    'start': start.isoformat(),
+                    'end': end.isoformat(),
+                    'count': sum(1 for d in recent_dates if start <= d <= end),
+                })
+            return buckets
+
+        completions_series = {
+            '7D': completion_buckets(7, 1),
+            '30D': completion_buckets(30, 1),
+            '90D': completion_buckets(13, 7),
+        }
+
         # 5. Top active labs list from database
         active_labs_qs = Lab.objects.filter(is_active=True).select_related('subject', 'course').prefetch_related('questions__hints')[:5]
         active_labs = []
@@ -2738,6 +2766,7 @@ class AdminDashboardStatsView(APIView):
             'avg_progress': avg_progress,
             'total_labs': all_labs.count(),
             'total_completions': completed_scores.count(),
+            'completions_series': completions_series,
             'completions_chart': {
                 '7D': chart_7d,
                 '30D': chart_30d,
