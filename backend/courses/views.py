@@ -7,7 +7,9 @@ import json
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.db import transaction
+from django.db.models import Q, Sum, Count
 import random
+from blitz_backend.pagination import paginate
 from accounts.models import User
 from accounts.serializers import UserSerializer, CreateStudentSerializer
 from accounts.views import IsAdminOrStaff
@@ -49,8 +51,9 @@ class CourseListCreateView(APIView):
 
     def get(self, request):
         courses = Course.objects.prefetch_related('modules', 'subjects', 'enrollments').filter(is_active=True)
-        serializer = CourseListSerializer(courses, many=True)
-        return Response({'count': courses.count(), 'results': serializer.data})
+        page_items, meta = paginate(request, courses)
+        serializer = CourseListSerializer(page_items, many=True)
+        return Response({**meta, 'results': serializer.data})
 
     def post(self, request):
         serializer = CreateCourseSerializer(data=request.data)
@@ -241,9 +244,20 @@ class SubjectListCreateView(APIView):
             qs = qs.filter(course_id=course_id)
         q = request.query_params.get('q')
         if q:
-            qs = qs.filter(name__icontains=q) | qs.filter(code__icontains=q) | qs.filter(description__icontains=q)
-        serializer = SubjectSerializer(qs, many=True)
-        return Response({'count': qs.count(), 'results': serializer.data})
+            qs = qs.filter(Q(name__icontains=q) | Q(code__icontains=q) | Q(description__icontains=q))
+        qs = qs.order_by('name', 'id')
+        page_items, meta = paginate(request, qs)
+        serializer = SubjectSerializer(page_items, many=True)
+        response = {**meta, 'results': serializer.data}
+        if 'page' in request.query_params:
+            # Totals across all active subjects, for stat cards on paginated screens
+            active = Subject.objects.filter(is_active=True)
+            response['stats'] = {
+                'total_subjects': active.count(),
+                'total_modules': Module.objects.filter(subject__is_active=True, is_active=True).count(),
+                'total_hours': active.aggregate(total=Sum('credits_or_hours'))['total'] or 0,
+            }
+        return Response(response)
 
     def post(self, request):
         serializer = CreateSubjectSerializer(data=request.data)
@@ -654,14 +668,28 @@ class LabListCreateView(APIView):
         if difficulty:
             labs = labs.filter(difficulty__iexact=difficulty)
         if search:
-            labs = labs.filter(name__icontains=search)
-        if subject_id:
+            labs = labs.filter(Q(name__icontains=search) | Q(description__icontains=search) | Q(category__icontains=search))
+        if subject_id == 'STANDALONE':
+            labs = labs.filter(subject__isnull=True, course__isnull=True)
+        elif subject_id:
             labs = labs.filter(subject_id=subject_id)
         if course_id:
             labs = labs.filter(course_id=course_id)
 
-        serializer = LabSerializer(labs, many=True, context={'request': request})
-        return Response({'count': labs.count(), 'results': serializer.data})
+        labs = labs.select_related('subject', 'course', 'created_by').order_by('-created_at', '-id')
+        page_items, meta = paginate(request, labs)
+        serializer = LabSerializer(page_items, many=True, context={'request': request})
+        response = {**meta, 'results': serializer.data}
+        if 'page' in request.query_params:
+            # Totals across all active labs, for stat cards and filter options on paginated screens
+            active_labs = Lab.objects.filter(is_active=True)
+            response['stats'] = {
+                'total_labs': active_labs.count(),
+                'total_questions': LabQuestion.objects.filter(lab__is_active=True).count(),
+                'total_hints': QuestionHint.objects.filter(question__lab__is_active=True).count(),
+            }
+            response['categories'] = sorted(set(active_labs.values_list('category', flat=True)) - {''})
+        return Response(response)
 
 
     def post(self, request):
@@ -1294,8 +1322,32 @@ class StudentLabListView(APIView):
             'is_class_restricted': getattr(student, 'is_class_restricted', False) if student else False,
         }
 
+        # Stats above cover all of the student's labs; filters and paging only narrow the returned list
+        categories = sorted({l['category'] for l in enriched_labs if l.get('category')})
+        q = request.query_params.get('q', '').strip().lower()
+        if q:
+            enriched_labs = [
+                l for l in enriched_labs
+                if q in (l['name'] or '').lower()
+                or q in (l.get('description') or '').lower()
+                or q in (l.get('category') or '').lower()
+                or q in (l.get('subject_name') or '').lower()
+            ]
+        category = request.query_params.get('category', '').strip()
+        if category and category != 'All':
+            enriched_labs = [l for l in enriched_labs if l.get('category') == category]
+        lab_status = request.query_params.get('status', '').strip()
+        if lab_status:
+            enriched_labs = [l for l in enriched_labs if l['submission_status'] == lab_status]
+            if lab_status == 'IN_PROGRESS':
+                # Most recently active first
+                enriched_labs.sort(key=lambda l: str(l.get('last_activity_at') or ''), reverse=True)
+
+        page_labs, page_meta = paginate(request, enriched_labs)
         return Response({
-            'labs': enriched_labs,
+            'labs': page_labs,
+            'pagination': page_meta,
+            'categories': categories,
             'lab_scores': lab_score_list,
             'stats': stats,
             'batch': {
@@ -1889,12 +1941,30 @@ class AdminLabRetakeRequestListView(APIView):
 
     def get(self, request):
         req_status = request.query_params.get('status')
-        qs = LabRetakeRequest.objects.select_related('student', 'lab', 'lab__subject', 'reviewed_by').all()
+        qs = LabRetakeRequest.objects.select_related('student', 'lab', 'lab__subject', 'reviewed_by').order_by('-created_at', '-id')
+        q = request.query_params.get('q', '').strip()
+        if q:
+            qs = qs.filter(
+                Q(student__first_name__icontains=q) | Q(student__last_name__icontains=q) |
+                Q(student__username__icontains=q) | Q(student__email__icontains=q) |
+                Q(lab__name__icontains=q) | Q(lab__subject__name__icontains=q) | Q(reason__icontains=q)
+            )
+        # Per-status totals for the stat cards (search applied, status filter not)
+        status_counts = {'PENDING': 0, 'APPROVED': 0, 'REJECTED': 0}
+        for row in qs.order_by().values('status').annotate(n=Count('id')):
+            status_counts[row['status']] = row['n']
         if req_status:
             qs = qs.filter(status=req_status)
 
+        if 'page' in request.query_params:
+            page_items, meta = paginate(request, qs)
+            meta['status_counts'] = status_counts
+        else:
+            page_items = qs[:100]
+            meta = None
+
         results = []
-        for r in qs[:100]:
+        for r in page_items:
             results.append({
                 'id': r.id,
                 'student_id': r.student.id,
@@ -1912,7 +1982,7 @@ class AdminLabRetakeRequestListView(APIView):
                 'reviewed_at': r.reviewed_at,
                 'reviewed_by_username': r.reviewed_by.username if r.reviewed_by else None,
             })
-        return Response({'count': len(results), 'results': results})
+        return Response({**(meta or {'count': len(results)}), 'results': results})
 
 
 class AdminLabRetakeRequestActionView(APIView):
@@ -2091,13 +2161,16 @@ class StudentLeaderboardView(APIView):
             row['rank'] = rank
 
         my_row = next((r for r in ranked if r['is_me']), None)
+        page_items, meta = paginate(request, ranked)
         return Response({
             'scope': scope,
             'class_name': class_obj.name if class_obj else None,
             'class_code': class_obj.code if class_obj else None,
             'total_students': len(ranked),
             'my_rank': my_row['rank'] if my_row else None,
-            'results': ranked,
+            'me': my_row,
+            **meta,
+            'results': page_items,
         })
 
 
@@ -2114,9 +2187,15 @@ class StudentLabScoreListView(APIView):
         if not student:
             return Response({'count': 0, 'results': []})
 
-        scores = LabScore.objects.filter(student=student).select_related('lab', 'lab__subject').order_by('-last_attended_at')
-        serializer = LabScoreSerializer(scores, many=True)
-        return Response({'count': scores.count(), 'results': serializer.data})
+        scores = LabScore.objects.filter(student=student).select_related('lab', 'lab__subject').order_by('-last_attended_at', '-id')
+        page_items, meta = paginate(request, scores)
+        serializer = LabScoreSerializer(page_items, many=True)
+        return Response({
+            **meta,
+            'total_attendances': scores.aggregate(total=Sum('attend_count'))['total'] or 0,
+            'student_name': student.get_full_name() or student.username,
+            'results': serializer.data,
+        })
 
 
 class LabSubmissionListView(APIView):
@@ -2133,8 +2212,9 @@ class LabSubmissionListView(APIView):
         student_id = request.query_params.get('student_id')
         if student_id:
             submissions = submissions.filter(student_id=student_id)
-        serializer = LabSubmissionSerializer(submissions, many=True)
-        return Response({'count': submissions.count(), 'results': serializer.data})
+        page_items, meta = paginate(request, submissions)
+        serializer = LabSubmissionSerializer(page_items, many=True)
+        return Response({**meta, 'results': serializer.data})
 
 
 class StudentActivityFeedView(APIView):
@@ -2305,10 +2385,15 @@ class StudentActivityFeedView(APIView):
                 or q in a['title'].lower()
             ]
 
-        return Response({
-            'count': len(unique_acts),
-            'results': unique_acts[:100],
-        })
+        act_type = request.query_params.get('type', '').strip()
+        if act_type and act_type != 'ALL':
+            unique_acts = [a for a in unique_acts if a['type'] == act_type]
+
+        if 'page' in request.query_params:
+            page_items, meta = paginate(request, unique_acts)
+        else:
+            page_items, meta = unique_acts[:100], {'count': len(unique_acts)}
+        return Response({**meta, 'results': page_items})
 
 
 class StudentProgressReportView(APIView):
@@ -2436,10 +2521,19 @@ class StudentProgressReportView(APIView):
         if results:
             platform_stats['average_progress_pct'] = round(total_progress_pct_sum / len(results))
 
+        # Search only narrows the rows; platform stats stay platform-wide
+        q = request.query_params.get('q', '').strip().lower()
+        if q:
+            results = [
+                r for r in results
+                if q in r['name'].lower() or q in r['username'].lower() or q in (r['email'] or '').lower()
+            ]
+
+        page_items, meta = paginate(request, results)
         return Response({
             'stats': platform_stats,
-            'count': len(results),
-            'results': results,
+            **meta,
+            'results': page_items,
         })
 
 
@@ -2628,10 +2722,21 @@ class StudyMaterialListCreateView(APIView):
 
         q = request.query_params.get('q')
         if q:
-            qs = qs.filter(title__icontains=q) | qs.filter(description__icontains=q)
+            qs = qs.filter(Q(title__icontains=q) | Q(description__icontains=q) | Q(subject__name__icontains=q) | Q(lab__name__icontains=q))
 
-        serializer = StudyMaterialSerializer(qs, many=True, context={'request': request})
-        return Response({'count': qs.count(), 'results': serializer.data})
+        page_items, meta = paginate(request, qs.order_by('-created_at', '-id'))
+        serializer = StudyMaterialSerializer(page_items, many=True, context={'request': request})
+        response = {**meta, 'results': serializer.data}
+        if 'page' in request.query_params:
+            # Totals across all active materials, for stat cards on paginated screens
+            active = StudyMaterial.objects.filter(is_active=True)
+            by_type = {row['file_type'].upper(): row['n'] for row in active.values('file_type').annotate(n=Count('id')) if row['file_type']}
+            response['stats'] = {
+                'total': active.count(),
+                'subjects': active.values('subject_id').distinct().count(),
+                'by_type': by_type,
+            }
+        return Response(response)
 
     def post(self, request):
         serializer = CreateStudyMaterialSerializer(
@@ -2779,6 +2884,11 @@ class StudentMaterialsView(APIView):
             ).values_list('subject_id', flat=True)
             qs = qs.filter(subject_id__in=enrolled_subject_ids)
 
+        # Subjects that have materials for this student (for subject tabs, before the subject filter)
+        subject_tabs = list(
+            qs.exclude(subject__isnull=True).values('subject_id', 'subject__name').distinct().order_by('subject__name')
+        )
+
         subject_id = request.query_params.get('subject_id')
         if subject_id:
             qs = qs.filter(subject_id=subject_id)
@@ -2793,10 +2903,15 @@ class StudentMaterialsView(APIView):
 
         q = request.query_params.get('q')
         if q:
-            qs = qs.filter(title__icontains=q) | qs.filter(description__icontains=q)
+            qs = qs.filter(Q(title__icontains=q) | Q(description__icontains=q) | Q(subject__name__icontains=q) | Q(lab__name__icontains=q))
 
-        serializer = StudyMaterialSerializer(qs, many=True, context={'request': request})
-        return Response({'count': qs.count(), 'results': serializer.data})
+        page_items, meta = paginate(request, qs.order_by('-created_at', '-id'))
+        serializer = StudyMaterialSerializer(page_items, many=True, context={'request': request})
+        return Response({
+            **meta,
+            'subjects': [{'id': t['subject_id'], 'name': t['subject__name']} for t in subject_tabs],
+            'results': serializer.data,
+        })
 
 
 # ============================================================================
@@ -2821,8 +2936,18 @@ class StudentClassListCreateView(APIView):
         if is_active is not None and is_active != '':
             qs = qs.filter(is_active=is_active.lower() in ('true', '1'))
 
-        serializer = StudentClassListSerializer(qs.order_by('-created_at'), many=True)
-        return Response({'count': qs.count(), 'results': serializer.data})
+        page_items, meta = paginate(request, qs.order_by('-created_at', '-id'))
+        serializer = StudentClassListSerializer(page_items, many=True)
+        response = {**meta, 'results': serializer.data}
+        if 'page' in request.query_params:
+            # Totals across all classes, for stat cards on paginated screens
+            response['stats'] = {
+                'total_classes': StudentClass.objects.count(),
+                'students_in_classes': User.objects.filter(assigned_class__isnull=False).count(),
+                'labs_assigned': StudentClass.labs.through.objects.count(),
+                'catalog_labs': Lab.objects.filter(is_active=True).count(),
+            }
+        return Response(response)
 
     def post(self, request):
         serializer = CreateStudentClassSerializer(data=request.data)
@@ -3038,12 +3163,13 @@ class StudentClassStudentsView(APIView):
 
     def get(self, request, pk):
         class_obj = get_object_or_404(StudentClass, pk=pk)
-        students = class_obj.students.all().order_by('date_joined')
+        students = class_obj.students.all().order_by('date_joined', 'id')
+        page_items, meta = paginate(request, students)
         return Response({
             'class_id': class_obj.id,
             'class_name': class_obj.name,
-            'count': students.count(),
-            'results': UserSerializer(students, many=True).data
+            **meta,
+            'results': UserSerializer(page_items, many=True).data
         })
 
     def post(self, request, pk):

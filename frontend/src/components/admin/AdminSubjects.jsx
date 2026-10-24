@@ -27,6 +27,7 @@ import {
   deleteLab,
 } from "../../api/labs";
 import AddLabModal from "./AddLabModal";
+import Pagination from "../common/Pagination";
 
 
 /* ── Form styling helpers ─────────────────────────────────── */
@@ -1123,21 +1124,36 @@ export default function AdminSubjects() {
     setTimeout(() => setToast(null), 3500);
   };
 
+  const [page, setPage] = useState(1);
+  const [pageMeta, setPageMeta] = useState(null);
+  const [subjectStats, setSubjectStats] = useState({ total_subjects: 0, total_modules: 0, total_hours: 0 });
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search.trim()), 400);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  // Server-side search + pagination (20 per page)
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetchSubjects();
+      const res = await fetchSubjects({ q: debouncedSearch, page });
       setCourses(res.results || []);
+      setPageMeta(res);
+      if (res.stats) setSubjectStats(res.stats);
     } catch (err) {
       showToast(err.message || "Failed to load courses data", "error");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [debouncedSearch, page]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => { setPage(1); }, [debouncedSearch]);
 
   const handleSaved = (savedCourse) => {
     setDrawerState(null);
@@ -1157,7 +1173,7 @@ export default function AdminSubjects() {
     try {
       await deleteSubject(course.id);
       showToast(`Course "${course.name}" removed.`);
-      setCourses(prev => prev.filter(c => c.id !== course.id));
+      loadData();
       if (modulesDrawerCourse?.id === course.id) {
         setModulesDrawerCourse(null);
       }
@@ -1180,18 +1196,11 @@ export default function AdminSubjects() {
   }, []);
 
 
-  // Filtering
-  const filtered = courses.filter(c => {
-    const q = search.toLowerCase();
-    return (
-      c.name.toLowerCase().includes(q) ||
-      (c.code && c.code.toLowerCase().includes(q)) ||
-      (c.description && c.description.toLowerCase().includes(q))
-    );
-  });
-
-  const totalHours = courses.reduce((acc, c) => acc + (c.credits_or_hours || 0), 0);
-  const totalModules = courses.reduce((acc, c) => acc + (c.module_count || 0), 0);
+  // Search is applied on the server; `courses` is the current page
+  const filtered = courses;
+  const totalCourses = subjectStats.total_subjects;
+  const totalHours = subjectStats.total_hours;
+  const totalModules = subjectStats.total_modules;
 
   return (
     <div style={{ padding: 28, overflowY: "auto", height: "100%", boxSizing: "border-box" }}>
@@ -1246,7 +1255,7 @@ export default function AdminSubjects() {
             <BookOpen size={16} color={C.amber} />
           </div>
           <div style={{ fontFamily: mono, fontSize: 26, fontWeight: 700, color: C.hi, marginTop: 8 }}>
-            {courses.length}
+            {totalCourses}
           </div>
         </Panel>
 
@@ -1276,7 +1285,7 @@ export default function AdminSubjects() {
             <Award size={16} color={C.amber} />
           </div>
           <div style={{ fontFamily: mono, fontSize: 26, fontWeight: 700, color: C.hi, marginTop: 8 }}>
-            {courses.length > 0 ? Math.round(totalHours / courses.length) : 0}h
+            {totalCourses > 0 ? Math.round(totalHours / totalCourses) : 0}h
           </div>
         </Panel>
       </div>
@@ -1307,7 +1316,7 @@ export default function AdminSubjects() {
         </div>
 
         <div style={{ fontFamily: mono, fontSize: 12, color: C.low, marginLeft: "auto" }}>
-          Showing {filtered.length} of {courses.length} courses
+          {pageMeta?.count ?? filtered.length} of {totalCourses} courses
         </div>
       </div>
 
@@ -1512,6 +1521,8 @@ export default function AdminSubjects() {
           })}
         </div>
       )}
+
+      <Pagination meta={pageMeta} onPageChange={setPage} loading={loading} />
 
       {/* Add / Edit Course Drawer */}
       {drawerState && (

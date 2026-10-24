@@ -7,6 +7,7 @@ export async function fetchSubjects(params = {}) {
   const query = new URLSearchParams();
   if (params.courseId) query.append('course_id', params.courseId);
   if (params.q) query.append('q', params.q);
+  if (params.page) query.append('page', params.page);
 
   const qs = query.toString() ? `?${query.toString()}` : '';
   return apiFetch(`/subjects/${qs}`);

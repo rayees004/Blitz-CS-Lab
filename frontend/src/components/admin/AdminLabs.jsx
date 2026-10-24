@@ -14,6 +14,7 @@ import StatCard from "../common/StatCard";
 import { C, sans, mono } from "../../constants/theme";
 import { fetchLabs, createLab, updateLab, deleteLab, seedLabs } from "../../api/labs";
 import { fetchSubjects } from "../../api/subjects";
+import Pagination from "../common/Pagination";
 import AddLabModal from "./AddLabModal";
 
 /* ── Lab Detailed View Drawer ─────────────────────────────────────────── */
@@ -680,19 +681,33 @@ export default function AdminLabs({ onOpenAddModal = null, onOpenAnalysis = null
   const [actionNotice, setActionNotice] = useState(null);
   const [seeding, setSeeding] = useState(false);
 
-  /* ── Load real backend database labs ── */
+  const [page, setPage] = useState(1);
+  const [pageMeta, setPageMeta] = useState(null);
+  const [labStats, setLabStats] = useState({ total_labs: 0, total_questions: 0, total_hints: 0 });
+  const [categories, setCategories] = useState([]);
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search.trim()), 400);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  /* ── Load real backend database labs (server-side filters, 20 per page) ── */
   const loadLabs = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [data, subjectsData] = await Promise.all([
-        fetchLabs(),
-        fetchSubjects().catch(() => ({ results: [] })),
-      ]);
-      const serverLabs = data.results || [];
-      setCourses(subjectsData.results || []);
-      // Real backend data driven
-      setLabs(serverLabs);
+      const data = await fetchLabs({
+        q: debouncedSearch,
+        category: filterCat !== "ALL" ? filterCat : "",
+        difficulty: filterDiff !== "ALL" ? filterDiff : "",
+        subject_id: filterCourse !== "ALL" ? filterCourse : "",
+        page,
+      });
+      setLabs(data.results || []);
+      setPageMeta(data);
+      if (data.stats) setLabStats(data.stats);
+      if (data.categories) setCategories(data.categories);
     } catch (err) {
       console.warn("Failed to fetch labs from backend:", err);
       setError("Unable to load labs from backend API. Please check server connection.");
@@ -700,11 +715,19 @@ export default function AdminLabs({ onOpenAddModal = null, onOpenAnalysis = null
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [debouncedSearch, filterCat, filterDiff, filterCourse, page]);
 
   useEffect(() => {
     loadLabs();
   }, [loadLabs]);
+
+  // Any filter change starts again from page 1
+  useEffect(() => { setPage(1); }, [debouncedSearch, filterCat, filterDiff, filterCourse]);
+
+  // Subjects for the filter dropdown and lab form (loaded once)
+  useEffect(() => {
+    fetchSubjects().then((d) => setCourses(d.results || [])).catch(() => setCourses([]));
+  }, []);
 
   const toggleExpandLab = (labId) => {
     setExpandedLabIds((prev) => {
@@ -754,32 +777,11 @@ export default function AdminLabs({ onOpenAddModal = null, onOpenAnalysis = null
     }
   };
 
-  const filteredLabs = labs.filter((l) => {
-    const matchesSearch =
-      l.name.toLowerCase().includes(search.toLowerCase()) ||
-      (l.description || l.desc || "").toLowerCase().includes(search.toLowerCase()) ||
-      (l.org || "").toLowerCase().includes(search.toLowerCase());
-    const matchesCat = filterCat === "ALL" || (l.category || l.cat) === filterCat;
-    const matchesDiff = filterDiff === "ALL" || (l.difficulty || l.diff) === filterDiff;
-    const matchesCourse =
-      filterCourse === "ALL" ||
-      (filterCourse === "STANDALONE" && !l.subject_id && !l.subject && !l.course_id && !l.course) ||
-      (String(l.subject_id || l.subject?.id || l.subject) === String(filterCourse));
-
-    return matchesSearch && matchesCat && matchesDiff && matchesCourse;
-  });
-
-  const totalQuestions = labs.reduce((acc, l) => acc + (l.questions?.length || l.question_count || 0), 0);
-  const totalHints = labs.reduce(
-    (acc, l) =>
-      acc +
-      (l.questions
-        ? l.questions.reduce((qAcc, q) => qAcc + (q.hints?.length || 0), 0)
-        : 0),
-    0
-  );
-
-  const categories = Array.from(new Set(labs.map((l) => l.category || l.cat))).filter(Boolean);
+  // Filters are applied on the server; `labs` is the current page
+  const filteredLabs = labs;
+  const totalLabs = labStats.total_labs;
+  const totalQuestions = labStats.total_questions;
+  const totalHints = labStats.total_hints;
 
   return (
     <div style={{ padding: 28, overflowY: "auto", height: "100%", boxSizing: "border-box" }}>
@@ -804,7 +806,7 @@ export default function AdminLabs({ onOpenAddModal = null, onOpenAnalysis = null
                 border: `1px solid rgba(63, 216, 200, 0.25)`,
               }}
             >
-              <Database size={11} /> Live Backend Data ({labs.length})
+              <Database size={11} /> Live Backend Data ({totalLabs})
             </span>
           </div>
           <p style={{ fontFamily: sans, fontSize: 13.5, color: C.mid, marginTop: 6 }}>
@@ -816,7 +818,7 @@ export default function AdminLabs({ onOpenAddModal = null, onOpenAnalysis = null
           <Btn variant="subtle" icon={RefreshCw} onClick={loadLabs} small disabled={loading}>
             Refresh
           </Btn>
-          {labs.length === 0 && (
+          {totalLabs === 0 && (
             <Btn variant="subtle" icon={Sparkles} onClick={handleSeedLabs} small disabled={seeding}>
               {seeding ? "Seeding..." : "Seed Starter Labs"}
             </Btn>
@@ -879,7 +881,7 @@ export default function AdminLabs({ onOpenAddModal = null, onOpenAnalysis = null
 
       {/* Stat Cards */}
       <div style={{ display: "flex", gap: 14, marginBottom: 24 }}>
-        <StatCard label="Database Labs" value={String(labs.length)} icon={FlaskConical} tone="cyan" sub="Real-time SQLite backend" />
+        <StatCard label="Database Labs" value={String(totalLabs)} icon={FlaskConical} tone="cyan" sub="Real-time SQLite backend" />
         <StatCard label="Total Questions" value={String(totalQuestions)} icon={HelpCircle} sub="Challenge steps" />
         <StatCard label="Configured Hints" value={String(totalHints)} icon={Lightbulb} sub="Progressive clues" />
         <StatCard label="Curriculum Courses" value={String(courses.length)} icon={Layers} />
@@ -994,15 +996,15 @@ export default function AdminLabs({ onOpenAddModal = null, onOpenAnalysis = null
           <Panel style={{ padding: 48, textAlign: "center" }}>
             <FlaskConical size={36} color={C.mid} style={{ marginBottom: 14 }} />
             <div style={{ fontFamily: sans, fontSize: 16, color: C.hi, fontWeight: 700 }}>
-              {labs.length === 0 ? "No labs in backend database yet" : "No labs match your filters"}
+              {totalLabs === 0 ? "No labs in backend database yet" : "No labs match your filters"}
             </div>
             <p style={{ fontFamily: sans, fontSize: 13, color: C.low, margin: "8px 0 20px", maxWidth: 460, marginInline: "auto" }}>
-              {labs.length === 0
+              {totalLabs === 0
                 ? "You can create custom cybersecurity labs with multiple questions and hints, or seed default sample environments directly into the database."
                 : "Try resetting your search query or category filters."}
             </p>
             <div style={{ display: "flex", justifyContent: "center", gap: 12 }}>
-              {labs.length === 0 && (
+              {totalLabs === 0 && (
                 <Btn variant="subtle" icon={Sparkles} onClick={handleSeedLabs} disabled={seeding}>
                   {seeding ? "Seeding..." : "Seed Starter Labs into DB"}
                 </Btn>
@@ -1361,6 +1363,8 @@ export default function AdminLabs({ onOpenAddModal = null, onOpenAnalysis = null
           })
         )}
       </div>
+
+      <Pagination meta={pageMeta} onPageChange={setPage} loading={loading} />
 
       {/* Add / Edit Lab Modal */}
       <AddLabModal

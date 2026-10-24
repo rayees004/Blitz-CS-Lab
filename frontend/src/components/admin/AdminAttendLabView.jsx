@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   FlaskConical, Search, Play, BookOpen, Video, Award,
   CheckCircle2, Clock, ShieldCheck, Terminal, RefreshCw,
@@ -8,7 +8,8 @@ import Panel from "../common/Panel";
 import Btn from "../common/Btn";
 import Badge, { DiffBadge } from "../common/Badge";
 import { C, sans, mono } from "../../constants/theme";
-import { fetchLabs, fetchStudentLabs } from "../../api/labs";
+import { fetchLabs } from "../../api/labs";
+import Pagination from "../common/Pagination";
 import StudentLabAttendModal from "../student/StudentLabAttendModal";
 import LabDetail from "../student/LabDetail";
 
@@ -24,42 +25,48 @@ export default function AdminAttendLabView({ currentUser, onNavigate }) {
   const [attendingLab, setAttendingLab] = useState(null);
   const [inspectingLab, setInspectingLab] = useState(null);
 
-  const loadLabs = async () => {
+  const [page, setPage] = useState(1);
+  const [pageMeta, setPageMeta] = useState(null);
+  const [allCategories, setAllCategories] = useState([]);
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search.trim()), 400);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  // Server-side filters + pagination (20 per page)
+  const loadLabs = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      // First try fetchStudentLabs to get enriched attendee data
-      const studentData = await fetchStudentLabs().catch(() => null);
-      if (studentData && studentData.labs && studentData.labs.length > 0) {
-        setLabs(studentData.labs);
-      } else {
-        const adminLabsData = await fetchLabs();
-        setLabs(adminLabsData.results || []);
-      }
+      const data = await fetchLabs({
+        q: debouncedSearch,
+        category: selectedCat !== "ALL" ? selectedCat : "",
+        difficulty: selectedDiff !== "ALL" ? selectedDiff : "",
+        page,
+      });
+      setLabs(data.results || []);
+      setPageMeta(data);
+      if (data.categories) setAllCategories(data.categories);
     } catch (err) {
       console.warn("Error loading labs for attend view:", err);
       setError(err.message || "Failed to load labs.");
     } finally {
       setLoading(false);
     }
-  };
+  }, [debouncedSearch, selectedCat, selectedDiff, page]);
 
   useEffect(() => {
     loadLabs();
-  }, []);
+  }, [loadLabs]);
 
-  const categories = ["ALL", ...new Set(labs.map((l) => l.category || l.cat).filter(Boolean))];
+  useEffect(() => { setPage(1); }, [debouncedSearch, selectedCat, selectedDiff]);
 
-  const filteredLabs = labs.filter((l) => {
-    const matchesSearch =
-      !search ||
-      l.name.toLowerCase().includes(search.toLowerCase()) ||
-      (l.description || l.desc || "").toLowerCase().includes(search.toLowerCase()) ||
-      (l.org || "").toLowerCase().includes(search.toLowerCase());
-    const matchesCat = selectedCat === "ALL" || (l.category || l.cat) === selectedCat;
-    const matchesDiff = selectedDiff === "ALL" || (l.difficulty || l.diff) === selectedDiff;
-    return matchesSearch && matchesCat && matchesDiff;
-  });
+  const categories = ["ALL", ...allCategories];
+
+  // Filters are applied on the server; `labs` is the current page
+  const filteredLabs = labs;
 
   if (inspectingLab) {
     return (
@@ -368,6 +375,8 @@ export default function AdminAttendLabView({ currentUser, onNavigate }) {
           })}
         </div>
       )}
+
+      {!error && <Pagination meta={pageMeta} onPageChange={setPage} loading={loading} />}
 
       {/* Attend Lab Modal for Instructor */}
       {attendingLab && (

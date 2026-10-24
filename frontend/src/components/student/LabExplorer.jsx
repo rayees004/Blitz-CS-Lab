@@ -4,8 +4,8 @@ import LabCard from "./LabCard";
 import RetakeRequestModal from "./RetakeRequestModal";
 import Btn from "../common/Btn";
 import { C, sans, mono } from "../../constants/theme";
-import { LABS as MOCK_LABS } from "../../data/mockData";
-import { fetchLabs, fetchStudentLabs } from "../../api/labs";
+import { fetchStudentLabs } from "../../api/labs";
+import Pagination from "../common/Pagination";
 
 export default function LabExplorer({ go }) {
   const [labs, setLabs] = useState([]);
@@ -24,12 +24,26 @@ export default function LabExplorer({ go }) {
     setTimeout(() => setRetakeSuccessMsg(""), 6000);
   };
 
+  const [page, setPage] = useState(1);
+  const [pageMeta, setPageMeta] = useState(null);
+  const [allCategories, setAllCategories] = useState([]);
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search.trim()), 400);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  // Only the student's own (subject-based) labs, filtered and paginated on the server (20 per page)
   useEffect(() => {
     let isMounted = true;
-    fetchStudentLabs()
+    setLoading(true);
+    fetchStudentLabs({ q: debouncedSearch, category: cat, page })
       .then((data) => {
         if (!isMounted) return;
         setLabs(data.labs || []);
+        setPageMeta(data.pagination || null);
+        setAllCategories(data.categories || []);
         if (data.batch || (data.stats && data.stats.is_batch_active)) {
           setBatchInfo(data.batch || { batch_index: data.stats?.batch_index });
         }
@@ -42,15 +56,8 @@ export default function LabExplorer({ go }) {
         }
       })
       .catch((err) => {
-        console.warn("Could not fetch student labs, fallback to public labs:", err);
-        fetchLabs()
-          .then((data) => {
-            if (!isMounted) return;
-            setLabs(data.results || MOCK_LABS);
-          })
-          .catch(() => {
-            if (isMounted) setLabs(MOCK_LABS);
-          });
+        console.warn("Could not fetch student labs:", err);
+        if (isMounted) setLabs([]);
       })
       .finally(() => {
         if (isMounted) setLoading(false);
@@ -59,19 +66,14 @@ export default function LabExplorer({ go }) {
     return () => {
       isMounted = false;
     };
-  }, [reloadKey]);
+  }, [reloadKey, debouncedSearch, cat, page]);
 
-  const cats = ["All", ...new Set(labs.map((l) => l.category || l.cat).filter(Boolean))];
+  useEffect(() => { setPage(1); }, [debouncedSearch, cat]);
 
-  const filtered = labs.filter((l) => {
-    const matchesCat = cat === "All" || (l.category || l.cat) === cat;
-    const matchesSearch =
-      !search ||
-      l.name.toLowerCase().includes(search.toLowerCase()) ||
-      (l.description || l.desc || "").toLowerCase().includes(search.toLowerCase()) ||
-      (l.org || "").toLowerCase().includes(search.toLowerCase());
-    return matchesCat && matchesSearch;
-  });
+  const cats = ["All", ...allCategories];
+
+  // Category and search are applied on the server; `labs` is the current page
+  const filtered = labs;
 
   return (
     <div style={{ padding: 28, overflowY: "auto", height: "100%", boxSizing: "border-box" }}>
@@ -138,8 +140,8 @@ export default function LabExplorer({ go }) {
           </div>
           <p style={{ fontFamily: sans, fontSize: 13.5, color: C.mid, marginTop: 6 }}>
             {classInfo
-              ? `Showing ${labs.length} practical environments assigned to your class "${classInfo.name}".`
-              : `${labs.length} isolated environments across ${Math.max(1, cats.length - 1)} security domains.`}
+              ? `${pageMeta?.count ?? labs.length} practical environments assigned to your class "${classInfo.name}".`
+              : `${pageMeta?.count ?? labs.length} isolated environments across ${Math.max(1, cats.length - 1)} security domains.`}
             {batchInfo ? " Only this 5-lab batch is visible until all 5 labs are completed." : (!classInfo ? " Assigned interactive security labs for your enrolled courses." : "")}
           </p>
         </div>
@@ -243,6 +245,8 @@ export default function LabExplorer({ go }) {
           })}
         </div>
       )}
+
+      <Pagination meta={pageMeta} onPageChange={setPage} loading={loading} />
 
       {retakeSuccessMsg && (
         <div

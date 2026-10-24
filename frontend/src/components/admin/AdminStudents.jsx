@@ -10,6 +10,7 @@ import Btn from "../common/Btn";
 import Badge from "../common/Badge";
 import { C, sans, mono } from "../../constants/theme";
 import { fetchStudents, createStudent, deleteStudent, updateStudent } from "../../api/students";
+import Pagination from "../common/Pagination";
 import { fetchSubjects } from "../../api/subjects";
 import { fetchClasses } from "../../api/classes";
 import StudentDetailPanel from "./StudentDetailPanel";
@@ -435,30 +436,39 @@ export default function AdminStudents({ currentUser }) {
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [assignSubjectsStudent, setAssignSubjectsStudent] = useState(null);
   const [toast, setToast] = useState(null);
+  const [page, setPage] = useState(1);
+  const [pageMeta, setPageMeta] = useState(null);
+  const [roleCounts, setRoleCounts] = useState({ student: 0, instructor: 0, admin: 0 });
 
+  // Server-side filtering + pagination (20 per page)
   const load = useCallback(async () => {
     setLoading(true); setError("");
     try {
-      const [dataRes, classRes] = await Promise.allSettled([
-        fetchStudents(search),
-        fetchClasses(),
-      ]);
-      if (dataRes.status === "fulfilled") {
-        setStudents(dataRes.value?.results || []);
-      } else {
-        throw dataRes.reason || new Error("Failed to load students.");
-      }
-      if (classRes.status === "fulfilled") {
-        setClasses(classRes.value?.results || []);
-      }
+      const res = await fetchStudents({
+        search,
+        user_type: roleFilter !== "all" ? roleFilter : "",
+        class_id: classFilter !== "all" ? classFilter : "",
+        page,
+      });
+      setStudents(res?.results || []);
+      setPageMeta(res);
+      if (res?.role_counts) setRoleCounts(res.role_counts);
     } catch (err) {
       setError(err.message || "Failed to load students.");
     } finally {
       setLoading(false);
     }
-  }, [search]);
+  }, [search, roleFilter, classFilter, page]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Classes for the class filter dropdown (loaded once)
+  useEffect(() => {
+    fetchClasses().then((res) => setClasses(res?.results || [])).catch(() => {});
+  }, []);
+
+  // Any filter change starts again from page 1
+  useEffect(() => { setPage(1); }, [search, roleFilter, classFilter]);
 
   // Debounce search
   useEffect(() => {
@@ -475,7 +485,7 @@ export default function AdminStudents({ currentUser }) {
 
   const handleCreated = (student) => {
     setShowAddDrawer(false);
-    setStudents(prev => [student, ...prev]);
+    load();
     setToast({ message: `${student.full_name || student.username} added!`, type: "success" });
   };
 
@@ -523,18 +533,10 @@ export default function AdminStudents({ currentUser }) {
     }
   };
 
-  const filteredStudents = students.filter(s => {
-    if (roleFilter !== "all" && s.user_type !== roleFilter) return false;
-    if (classFilter !== "all") {
-      if (classFilter === "unassigned") {
-        if (s.assigned_class_id) return false;
-      } else {
-        if (String(s.assigned_class_id) !== String(classFilter)) return false;
-      }
-    }
-    return true;
-  });
-  const activeCount = filteredStudents.filter(s => s.is_active).length;
+  // Role/class/search filters are applied on the server; this is the current page
+  const filteredStudents = students;
+  const totalUsers = roleCounts.student + roleCounts.instructor + roleCounts.admin;
+  const matchingCount = pageMeta?.count ?? students.length;
 
   return (
     <div style={{ padding: 28, overflowY: "auto", height: "100%", boxSizing: "border-box" }}>
@@ -545,7 +547,7 @@ export default function AdminStudents({ currentUser }) {
             Users & Students
           </h1>
           <div style={{ fontFamily: mono, fontSize: 11, color: C.low }}>
-            {loading ? "Loading..." : `${filteredStudents.length} of ${students.length} user${students.length !== 1 ? "s" : ""} · ${activeCount} active`}
+            {loading ? "Loading..." : `${matchingCount} of ${totalUsers} user${totalUsers !== 1 ? "s" : ""}`}
           </div>
         </div>
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
@@ -606,10 +608,10 @@ export default function AdminStudents({ currentUser }) {
         {/* Role Filter Tabs */}
         <div style={{ display: "flex", gap: 5, background: C.panel2, padding: 3, borderRadius: 8, border: `1px solid ${C.border}` }}>
           {[
-            { id: "all", label: `All Users (${students.length})` },
-            { id: "student", label: `Students (${students.filter(s => s.user_type === "student").length})` },
-            { id: "instructor", label: `Instructors (${students.filter(s => s.user_type === "instructor").length})` },
-            { id: "admin", label: `Admins (${students.filter(s => s.user_type === "admin").length})` },
+            { id: "all", label: `All Users (${totalUsers})` },
+            { id: "student", label: `Students (${roleCounts.student})` },
+            { id: "instructor", label: `Instructors (${roleCounts.instructor})` },
+            { id: "admin", label: `Admins (${roleCounts.admin})` },
           ].map(tab => {
             const active = roleFilter === tab.id;
             return (
@@ -960,6 +962,8 @@ export default function AdminStudents({ currentUser }) {
           })}
         </Panel>
       )}
+
+      {!error && <Pagination meta={pageMeta} onPageChange={setPage} loading={loading} />}
 
       {/* ── Modals & Panels ── */}
       {showAddDrawer && <AddStudentDrawer onClose={() => setShowAddDrawer(false)} onCreated={handleCreated} isPlatformAdmin={isPlatformAdmin} />}

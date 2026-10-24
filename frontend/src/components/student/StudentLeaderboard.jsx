@@ -5,6 +5,7 @@ import Btn from "../common/Btn";
 import StatCard from "../common/StatCard";
 import { C, sans, mono } from "../../constants/theme";
 import { fetchStudentLeaderboard } from "../../api/labs";
+import Pagination from "../common/Pagination";
 
 const MEDAL_COLORS = { 1: "#F5C542", 2: "#C0C7D1", 3: "#D08A4E" };
 
@@ -23,18 +24,20 @@ export default function StudentLeaderboard() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [page, setPage] = useState(1);
 
+  // Rankings, 20 per page (ranks are computed across everyone on the server)
   const loadData = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      setData(await fetchStudentLeaderboard());
+      setData(await fetchStudentLeaderboard(page));
     } catch (err) {
       setError(err.message || "Failed to load leaderboard.");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [page]);
 
   useEffect(() => {
     loadData();
@@ -42,7 +45,7 @@ export default function StudentLeaderboard() {
 
   const isClassScope = data?.scope === "class";
   const results = data?.results || [];
-  const me = results.find((r) => r.is_me);
+  const me = data?.me || results.find((r) => r.is_me);
 
   return (
     <div style={{ padding: 28, overflowY: "auto", height: "100%", boxSizing: "border-box" }}>
@@ -141,6 +144,8 @@ export default function StudentLeaderboard() {
           </table>
         )}
       </Panel>
+
+      <Pagination meta={data} onPageChange={setPage} loading={loading} />
     </div>
   );
 }

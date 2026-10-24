@@ -16,6 +16,7 @@ export async function fetchAuditLogs(params = {}) {
   if (params.severity && params.severity !== 'ALL') query.append('severity', params.severity);
   if (params.entity && params.entity !== 'ALL') query.append('entity', params.entity);
   if (params.limit) query.append('limit', params.limit);
+  if (params.page) query.append('page', params.page);
 
   const qs = query.toString() ? `?${query.toString()}` : '';
   return apiFetch(`/audit-logs/${qs}`);

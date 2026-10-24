@@ -9,6 +9,7 @@ export async function fetchClasses(params = {}) {
   const query = new URLSearchParams();
   if (params.search) query.append('search', params.search);
   if (params.is_active !== undefined) query.append('is_active', params.is_active);
+  if (params.page) query.append('page', params.page);
   const qs = query.toString() ? `?${query.toString()}` : '';
   return apiFetch(`/classes/${qs}`);
 }
@@ -74,8 +75,8 @@ export async function assignClassStudents(id, payload) {
 /**
  * Fetch students enrolled in a class
  */
-export async function fetchClassStudents(id) {
-  return apiFetch(`/classes/${id}/students/`);
+export async function fetchClassStudents(id, page = null) {
+  return apiFetch(`/classes/${id}/students/${page ? `?page=${page}` : ''}`);
 }
 
 /**

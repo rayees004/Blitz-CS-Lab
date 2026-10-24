@@ -13,7 +13,8 @@ from .serializers import (
     AuditLogSerializer,
 )
 from .audit import record_audit_log
-from django.db.models import Q
+from django.db.models import Q, Count
+from blitz_backend.pagination import paginate
 
 
 class IsAdminOrStaff(IsAuthenticated):
@@ -118,12 +119,8 @@ class StudentListCreateView(APIView):
     def get(self, request):
         search = request.query_params.get('search', '').strip()
         user_type_filter = request.query_params.get('user_type') or request.query_params.get('role')
-        if user_type_filter:
-            students = User.objects.filter(user_type=user_type_filter)
-        else:
-            students = User.objects.filter(user_type__in=['student', 'instructor', 'admin'])
-
-        students = students.select_related('assigned_class').order_by('date_joined')
+        students = User.objects.filter(user_type__in=['student', 'instructor', 'admin'])
+        students = students.select_related('assigned_class').order_by('date_joined', 'id')
 
         class_id = request.query_params.get('class_id') or request.query_params.get('assigned_class')
         if class_id:
@@ -145,9 +142,19 @@ class StudentListCreateView(APIView):
                 Q(username__icontains=search)
             )
 
-        serializer = UserSerializer(students, many=True)
+        # Per-role totals for the filter tabs (all other filters applied, role filter not)
+        role_counts = {'student': 0, 'instructor': 0, 'admin': 0}
+        for row in students.order_by().values('user_type').annotate(n=Count('id')):
+            role_counts[row['user_type']] = row['n']
+
+        if user_type_filter:
+            students = students.filter(user_type=user_type_filter)
+
+        page_items, meta = paginate(request, students)
+        serializer = UserSerializer(page_items, many=True)
         return Response({
-            'count': students.count(),
+            **meta,
+            'role_counts': role_counts,
             'results': serializer.data,
         }, status=status.HTTP_200_OK)
 
@@ -349,13 +356,16 @@ class AuditLogListView(APIView):
         warning_count = all_logs.filter(severity='WARNING').count()
         danger_count = all_logs.filter(severity='DANGER').count()
 
-        # Slice limit for fast snappy loading
-        limit = min(int(request.query_params.get('limit', 200)), 500)
-        logs = qs[:limit]
+        if 'page' in request.query_params:
+            logs, meta = paginate(request, qs)
+        else:
+            # Unpaginated callers keep the old capped slice for fast loading
+            limit = min(int(request.query_params.get('limit', 200)), 500)
+            logs, meta = qs[:limit], {'count': qs.count()}
 
         serializer = AuditLogSerializer(logs, many=True)
         return Response({
-            'count': qs.count(),
+            **meta,
             'stats': {
                 'total': all_logs.count(),
                 'info': info_count,

@@ -6,28 +6,31 @@ import Btn from "../common/Btn";
 import ProgressBar from "../common/ProgressBar";
 import { DiffBadge } from "../common/Badge";
 import { C, sans, mono } from "../../constants/theme";
-import { fetchStudentLabs } from "../../api/labs";
+import { fetchStudentLabScores } from "../../api/labs";
+import Pagination from "../common/Pagination";
 
 export default function StudentAttendanceLog() {
-  const [labs, setLabs] = useState([]);
   const [labScores, setLabScores] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [viewingCert, setViewingCert] = useState(null);
+  const [page, setPage] = useState(1);
+  const [pageMeta, setPageMeta] = useState(null);
 
+  // Attended labs, 20 per page
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetchStudentLabs();
-      setLabs(res.labs || []);
-      setLabScores(res.lab_scores || []);
-      setStats(res.stats || {});
+      const res = await fetchStudentLabScores(page);
+      setLabScores(res.results || []);
+      setPageMeta(res);
+      setStats({ total_attendances: res.total_attendances, student_name: res.student_name });
     } catch (err) {
       console.error("Failed to load lab attendance log:", err);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [page]);
 
   useEffect(() => {
     loadData();
@@ -48,7 +51,7 @@ export default function StudentAttendanceLog() {
 
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <span style={{ fontFamily: mono, fontSize: 11, color: C.cyan }}>
-            {labScores.length} Lab{labScores.length !== 1 ? "s" : ""} Attended · {stats?.total_attendances ?? 0} Visits
+            {pageMeta?.count ?? labScores.length} Lab{(pageMeta?.count ?? labScores.length) !== 1 ? "s" : ""} Attended · {stats?.total_attendances ?? 0} Visits
           </span>
           <Btn icon={RefreshCw} variant="outline" sm onClick={loadData}>
             {loading ? "Syncing..." : "Refresh"}
@@ -73,7 +76,6 @@ export default function StudentAttendanceLog() {
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {labScores.map((sc) => {
-              const matchingLab = labs.find((l) => String(l.id) === String(sc.lab || sc.lab_id));
               const isCompleted = sc.is_completed;
               const pct = sc.max_score > 0 ? Math.round((sc.score / sc.max_score) * 100) : 0;
 
@@ -176,7 +178,7 @@ export default function StudentAttendanceLog() {
                             certId: `BLITZ-CERT-${String(sc.lab || sc.lab_id).padStart(3, "0")}-${String(sc.id).padStart(4, "0")}`,
                             studentName: stats?.student_name || "Student",
                             labName: sc.lab_name,
-                            labDesc: matchingLab?.description || matchingLab?.desc || "Hands-on cybersecurity evaluation.",
+                            labDesc: sc.lab_description || "Hands-on cybersecurity evaluation.",
                             category: sc.lab_category,
                             subjectName: sc.subject_name || "",
                             score: typeof sc.score === "number" ? sc.score : 0,
@@ -229,6 +231,8 @@ export default function StudentAttendanceLog() {
           </div>
         )}
       </div>
+
+      <Pagination meta={pageMeta} onPageChange={setPage} loading={loading} />
 
       {viewingCert && (
         <CertificateModal

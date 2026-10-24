@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   FileText, Download, Eye, Layers, FlaskConical,
   Search, X, BookOpen, Clock, RefreshCw, Presentation, File
@@ -8,6 +8,7 @@ import Btn from "../common/Btn";
 import Badge from "../common/Badge";
 import { C, sans, mono } from "../../constants/theme";
 import { fetchStudentMaterials } from "../../api/materials";
+import Pagination from "../common/Pagination";
 
 function getFileTypeMeta(type, fileName = "") {
   const upper = (type || "").toUpperCase();
@@ -54,12 +55,25 @@ export default function Materials() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [activeSubject, setActiveSubject] = useState("All");
+  const [subjectTabs, setSubjectTabs] = useState([]);
+  const [page, setPage] = useState(1);
+  const [pageMeta, setPageMeta] = useState(null);
+  const [debouncedSearch, setDebouncedSearch] = useState("");
 
-  const loadMaterials = () => {
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search.trim()), 400);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  // Server-side subject filter + search + pagination (20 per page)
+  const loadMaterials = useCallback(() => {
     setLoading(true);
-    fetchStudentMaterials()
+    const subject = subjectTabs.find((s) => s.name === activeSubject);
+    fetchStudentMaterials({ q: debouncedSearch, subject_id: subject ? subject.id : "", page })
       .then((data) => {
         setMaterials(data.results || []);
+        setPageMeta(data);
+        if (data.subjects) setSubjectTabs(data.subjects);
       })
       .catch((err) => {
         console.warn("Could not load student materials from backend:", err);
@@ -68,27 +82,20 @@ export default function Materials() {
       .finally(() => {
         setLoading(false);
       });
-  };
+    // subjectTabs is only read to map the active tab name to its id
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearch, activeSubject, page]);
 
   useEffect(() => {
     loadMaterials();
-  }, []);
+  }, [loadMaterials]);
 
-  // Distinct subjects present in student materials
-  const subjectsList = ["All", ...new Set(materials.map((m) => m.subject_name).filter(Boolean))];
+  useEffect(() => { setPage(1); }, [debouncedSearch, activeSubject]);
 
-  const filtered = materials.filter((m) => {
-    const matchesSearch =
-      !search ||
-      m.title.toLowerCase().includes(search.toLowerCase()) ||
-      (m.description || "").toLowerCase().includes(search.toLowerCase()) ||
-      (m.subject_name || "").toLowerCase().includes(search.toLowerCase()) ||
-      (m.lab_name || "").toLowerCase().includes(search.toLowerCase());
+  const subjectsList = ["All", ...subjectTabs.map((s) => s.name)];
 
-    const matchesSubject = activeSubject === "All" || m.subject_name === activeSubject;
-
-    return matchesSearch && matchesSubject;
-  });
+  // Filters are applied on the server; `materials` is the current page
+  const filtered = materials;
 
   return (
     <div style={{ padding: 28, overflowY: "auto", height: "100%", boxSizing: "border-box" }}>
@@ -99,7 +106,7 @@ export default function Materials() {
             <h1 style={{ fontFamily: sans, fontSize: 22, fontWeight: 700, color: C.hi, margin: 0 }}>
               Study Materials
             </h1>
-            <Badge tone="cyan">{materials.length} Documents</Badge>
+            <Badge tone="cyan">{pageMeta?.count ?? materials.length} Documents</Badge>
           </div>
           <p style={{ fontFamily: sans, fontSize: 13.5, color: C.mid, marginTop: 6 }}>
             Subject curriculum documentation, cheat sheets, and lab guides for your enrolled courses.
@@ -338,6 +345,8 @@ export default function Materials() {
           })}
         </Panel>
       )}
+
+      <Pagination meta={pageMeta} onPageChange={setPage} loading={loading} />
     </div>
   );
 }

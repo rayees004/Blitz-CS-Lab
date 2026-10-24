@@ -12,6 +12,7 @@ import { C, sans, mono } from "../../constants/theme";
 import { fetchMaterials, createMaterial, deleteMaterial } from "../../api/materials";
 import { fetchSubjects } from "../../api/subjects";
 import { fetchLabs } from "../../api/labs";
+import Pagination from "../common/Pagination";
 
 /* ── File type badge & icon helpers ── */
 function getFileTypeMeta(type, fileName = "") {
@@ -75,27 +76,47 @@ export default function AdminMaterials() {
   const [formError, setFormError] = useState("");
   const [successToast, setSuccessToast] = useState("");
 
+  const [page, setPage] = useState(1);
+  const [pageMeta, setPageMeta] = useState(null);
+  const [materialStats, setMaterialStats] = useState({ total: 0, subjects: 0, by_type: {} });
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search.trim()), 400);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  // Materials list: server-side filters + pagination (20 per page)
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [matRes, subjRes, labRes] = await Promise.all([
-        fetchMaterials(),
-        fetchSubjects(),
-        fetchLabs(),
-      ]);
+      const matRes = await fetchMaterials({
+        q: debouncedSearch,
+        subject_id: filterSubject !== "All" ? filterSubject : "",
+        file_type: filterType !== "All" ? filterType : "",
+        page,
+      });
       setMaterials(matRes.results || []);
-      setSubjects(subjRes.results || []);
-      setLabs(labRes.results || []);
+      setPageMeta(matRes);
+      if (matRes.stats) setMaterialStats(matRes.stats);
     } catch (err) {
       console.error("Error loading materials:", err);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [debouncedSearch, filterSubject, filterType, page]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => { setPage(1); }, [debouncedSearch, filterSubject, filterType]);
+
+  // Subjects & labs for the filter and upload form (loaded once)
+  useEffect(() => {
+    fetchSubjects().then((r) => setSubjects(r.results || [])).catch(() => {});
+    fetchLabs().then((r) => setLabs(r.results || [])).catch(() => {});
+  }, []);
 
   // Filter labs based on subject selected in upload modal
   const availableLabsForUpload = uploadSubjectId
@@ -179,7 +200,7 @@ export default function AdminMaterials() {
     setDeletingId(id);
     try {
       await deleteMaterial(id);
-      setMaterials((prev) => prev.filter((m) => m.id !== id));
+      loadData();
       setSuccessToast(`Deleted "${title}".`);
       setTimeout(() => setSuccessToast(""), 3000);
     } catch (err) {
@@ -189,28 +210,14 @@ export default function AdminMaterials() {
     }
   };
 
-  // Filtered materials
-  const filteredMaterials = materials.filter((m) => {
-    const matchesSearch =
-      !search ||
-      m.title.toLowerCase().includes(search.toLowerCase()) ||
-      (m.description || "").toLowerCase().includes(search.toLowerCase()) ||
-      (m.subject_name || "").toLowerCase().includes(search.toLowerCase()) ||
-      (m.lab_name || "").toLowerCase().includes(search.toLowerCase());
+  // Filters are applied on the server; `materials` is the current page
+  const filteredMaterials = materials;
 
-    const matchesSubject =
-      filterSubject === "All" || String(m.subject) === String(filterSubject);
-
-    const matchesType =
-      filterType === "All" || (m.file_type || "").toUpperCase() === filterType.toUpperCase();
-
-    return matchesSearch && matchesSubject && matchesType;
-  });
-
-  // Metrics
-  const pdfCount = materials.filter((m) => (m.file_type || "").toUpperCase() === "PDF").length;
-  const wordCount = materials.filter((m) => (m.file_type || "").toUpperCase() === "WORD").length;
-  const pptxCount = materials.filter((m) => (m.file_type || "").toUpperCase() === "PPTX").length;
+  // Metrics across all materials (from the server)
+  const totalMaterials = materialStats.total;
+  const pdfCount = materialStats.by_type?.PDF || 0;
+  const wordCount = materialStats.by_type?.WORD || 0;
+  const pptxCount = materialStats.by_type?.PPTX || 0;
 
   return (
     <div style={{ padding: 28, overflowY: "auto", height: "100%", boxSizing: "border-box" }}>
@@ -246,7 +253,7 @@ export default function AdminMaterials() {
             <h1 style={{ fontFamily: sans, fontSize: 22, fontWeight: 700, color: C.hi, margin: 0 }}>
               Study Materials
             </h1>
-            <Badge tone="cyan">{materials.length} Documents</Badge>
+            <Badge tone="cyan">{totalMaterials} Documents</Badge>
           </div>
           <p style={{ fontFamily: sans, fontSize: 13.5, color: C.mid, marginTop: 6 }}>
             Upload and organize subject-based guides, syllabi, cheat sheets, and lab reference documents (PDF, Word, PPTX).
@@ -267,10 +274,10 @@ export default function AdminMaterials() {
         <Panel style={{ padding: "16px 18px" }}>
           <div style={{ fontFamily: sans, fontSize: 12, color: C.low }}>Total Documents</div>
           <div style={{ fontFamily: mono, fontSize: 24, fontWeight: 700, color: C.hi, marginTop: 6 }}>
-            {materials.length}
+            {totalMaterials}
           </div>
           <div style={{ fontFamily: sans, fontSize: 11, color: C.mid, marginTop: 4 }}>
-            Across {new Set(materials.map((m) => m.subject)).size} subjects
+            Across {materialStats.subjects} subjects
           </div>
         </Panel>
 
@@ -572,6 +579,8 @@ export default function AdminMaterials() {
           })}
         </div>
       )}
+
+      <Pagination meta={pageMeta} onPageChange={setPage} loading={loading} />
 
       {/* ── UPLOAD MODAL ── */}
       {showUploadModal && (

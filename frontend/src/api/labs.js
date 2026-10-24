@@ -10,6 +10,7 @@ export async function fetchLabs(params = {}) {
   if (params.q) query.append('q', params.q);
   if (params.subject_id) query.append('subject_id', params.subject_id);
   if (params.course_id) query.append('course_id', params.course_id);
+  if (params.page) query.append('page', params.page);
 
   const qs = query.toString() ? `?${query.toString()}` : '';
   return apiFetch(`/labs/${qs}`);
@@ -67,13 +68,20 @@ export async function seedLabs() {
 }
 
 /** Fetch student-specific labs list with completion & enrolled course filters */
-export async function fetchStudentLabs() {
-  return apiFetch('/student/labs/');
+export async function fetchStudentLabs(params = {}) {
+  // With { page } only that page of labs is returned; stats always cover all labs
+  const query = new URLSearchParams();
+  if (params.q) query.append('q', params.q);
+  if (params.category && params.category !== 'All') query.append('category', params.category);
+  if (params.status) query.append('status', params.status);
+  if (params.page) query.append('page', params.page);
+  const qs = query.toString() ? `?${query.toString()}` : '';
+  return apiFetch(`/student/labs/${qs}`);
 }
 
 /** Leaderboard: class-based students get their class ranking, others the global ranking */
-export async function fetchStudentLeaderboard() {
-  return apiFetch('/student/leaderboard/');
+export async function fetchStudentLeaderboard(page = null) {
+  return apiFetch(`/student/leaderboard/${page ? `?page=${page}` : ''}`);
 }
 
 /** Fetch student attend state for a specific lab */
@@ -124,8 +132,8 @@ export async function fetchLabSubmissions() {
 }
 
 /** Fetch student lab scores list based on Lab Foreign Key */
-export async function fetchStudentLabScores() {
-  return apiFetch('/student/lab-scores/');
+export async function fetchStudentLabScores(page = null) {
+  return apiFetch(`/student/lab-scores/${page ? `?page=${page}` : ''}`);
 }
 
 /** Fetch subject-based and instructor-based lab and question analysis */

@@ -9,6 +9,7 @@ export async function fetchMaterials(params = {}) {
   if (params.lab_id) query.append('lab_id', params.lab_id);
   if (params.file_type) query.append('file_type', params.file_type);
   if (params.q) query.append('q', params.q);
+  if (params.page) query.append('page', params.page);
 
   const qs = query.toString() ? `?${query.toString()}` : '';
   return apiFetch(`/materials/${qs}`);
@@ -21,6 +22,7 @@ export async function fetchStudentMaterials(params = {}) {
   if (params.lab_id) query.append('lab_id', params.lab_id);
   if (params.file_type) query.append('file_type', params.file_type);
   if (params.q) query.append('q', params.q);
+  if (params.page) query.append('page', params.page);
 
   const qs = query.toString() ? `?${query.toString()}` : '';
   return apiFetch(`/student/materials/${qs}`);

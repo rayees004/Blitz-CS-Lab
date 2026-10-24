@@ -3,11 +3,17 @@ import { apiFetch, authHeaders, handleApiResponse, API_BASE } from './client';
 export { authHeaders, handleApiResponse };
 
 /** Fetch all students (optionally search by name/email) */
-export async function fetchStudents(search = '') {
-  const url = search
-    ? `/students/?search=${encodeURIComponent(search)}`
-    : '/students/';
-  return apiFetch(url);
+export async function fetchStudents(params = '') {
+  // Accepts a search string (legacy) or { search, user_type, class_id, lab_access_mode, page }
+  const opts = typeof params === 'string' ? { search: params } : params;
+  const query = new URLSearchParams();
+  if (opts.search) query.append('search', opts.search);
+  if (opts.user_type) query.append('user_type', opts.user_type);
+  if (opts.class_id) query.append('class_id', opts.class_id);
+  if (opts.lab_access_mode) query.append('lab_access_mode', opts.lab_access_mode);
+  if (opts.page) query.append('page', opts.page);
+  const qs = query.toString() ? `?${query.toString()}` : '';
+  return apiFetch(`/students/${qs}`);
 }
 
 /** Create a new student (admin only) */
@@ -38,6 +44,8 @@ export async function fetchStudentActivity(params = {}) {
   const query = new URLSearchParams();
   if (params.student_id) query.append('student_id', params.student_id);
   if (params.q) query.append('q', params.q);
+  if (params.type && params.type !== 'ALL') query.append('type', params.type);
+  if (params.page) query.append('page', params.page);
   const qs = query.toString() ? `?${query.toString()}` : '';
   return apiFetch(`/student-activity/${qs}`);
 }
@@ -46,6 +54,8 @@ export async function fetchStudentActivity(params = {}) {
 export async function fetchStudentProgress(params = {}) {
   const query = new URLSearchParams();
   if (params.student_id) query.append('student_id', params.student_id);
+  if (params.q) query.append('q', params.q);
+  if (params.page) query.append('page', params.page);
   const qs = query.toString() ? `?${query.toString()}` : '';
   return apiFetch(`/student-progress/${qs}`);
 }
@@ -81,8 +91,12 @@ export async function fetchStudentLabRetakeStatus(labId) {
 }
 
 /** Admin fetches list of student retake requests */
-export async function fetchAdminRetakeRequests(status = 'PENDING') {
-  const qs = status ? `?status=${status}` : '';
+export async function fetchAdminRetakeRequests(status = 'PENDING', page = null, q = '') {
+  const query = new URLSearchParams();
+  if (status) query.append('status', status);
+  if (q) query.append('q', q);
+  if (page) query.append('page', page);
+  const qs = query.toString() ? `?${query.toString()}` : '';
   return apiFetch(`/admin/labs/retake-requests/${qs}`);
 }
 

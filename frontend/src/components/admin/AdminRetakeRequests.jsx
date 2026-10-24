@@ -10,6 +10,7 @@ import Badge, { DiffBadge } from "../common/Badge";
 import StatCard from "../common/StatCard";
 import { C, sans, mono } from "../../constants/theme";
 import { fetchAdminRetakeRequests, reviewAdminRetakeRequest } from "../../api/students";
+import Pagination from "../common/Pagination";
 
 export default function AdminRetakeRequests({ currentUser, onNavigate }) {
   const [requests, setRequests] = useState([]);
@@ -22,24 +23,38 @@ export default function AdminRetakeRequests({ currentUser, onNavigate }) {
   const [toastMessage, setToastMessage] = useState(null);
   const [errorMessage, setErrorMessage] = useState(null);
 
+  const [page, setPage] = useState(1);
+  const [pageMeta, setPageMeta] = useState(null);
+  const [statusCounts, setStatusCounts] = useState({ PENDING: 0, APPROVED: 0, REJECTED: 0 });
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQuery(searchQuery.trim()), 400);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
+
+  // Server-side status filter + search + pagination (20 per page)
   const loadRequests = useCallback(async () => {
     setLoading(true);
     setErrorMessage(null);
     try {
-      const res = await fetchAdminRetakeRequests("");
-      const list = Array.isArray(res) ? res : (res?.results || []);
-      setRequests(list);
+      const res = await fetchAdminRetakeRequests(statusFilter !== "ALL" ? statusFilter : "", page, debouncedQuery);
+      setRequests(res?.results || []);
+      setPageMeta(res);
+      if (res?.status_counts) setStatusCounts(res.status_counts);
     } catch (err) {
       console.error("Failed to fetch retake requests:", err);
       setErrorMessage(err.message || "Failed to load retake requests. Please try again.");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [statusFilter, page, debouncedQuery]);
 
   useEffect(() => {
     loadRequests();
   }, [loadRequests]);
+
+  useEffect(() => { setPage(1); }, [statusFilter, debouncedQuery]);
 
   // Show a temporary toast message
   const triggerToast = (msg) => {
@@ -72,34 +87,14 @@ export default function AdminRetakeRequests({ currentUser, onNavigate }) {
     }
   };
 
-  // Compute stats across all recorded requests
-  const totalCount = requests.length;
-  const pendingCount = requests.filter((r) => r.status === "PENDING").length;
-  const approvedCount = requests.filter((r) => r.status === "APPROVED").length;
-  const rejectedCount = requests.filter((r) => r.status === "REJECTED").length;
+  // Stats across all requests (from the server)
+  const pendingCount = statusCounts.PENDING;
+  const approvedCount = statusCounts.APPROVED;
+  const rejectedCount = statusCounts.REJECTED;
+  const totalCount = pendingCount + approvedCount + rejectedCount;
 
-  // Filter based on tab and search query
-  const filteredRequests = requests.filter((r) => {
-    if (statusFilter !== "ALL" && r.status !== statusFilter) {
-      return false;
-    }
-    if (!searchQuery) return true;
-    const q = searchQuery.toLowerCase();
-    const studentName = (r.student_name || "").toLowerCase();
-    const username = (r.student_username || "").toLowerCase();
-    const email = (r.student_email || "").toLowerCase();
-    const labName = (r.lab_name || "").toLowerCase();
-    const subject = (r.subject_name || "").toLowerCase();
-    const reason = (r.reason || "").toLowerCase();
-    return (
-      studentName.includes(q) ||
-      username.includes(q) ||
-      email.includes(q) ||
-      labName.includes(q) ||
-      subject.includes(q) ||
-      reason.includes(q)
-    );
-  });
+  // Status filter and search are applied on the server; this is the current page
+  const filteredRequests = requests;
 
   const formatDate = (isoStr) => {
     if (!isoStr) return "—";
@@ -707,6 +702,8 @@ export default function AdminRetakeRequests({ currentUser, onNavigate }) {
           })}
         </div>
       )}
+
+      <Pagination meta={pageMeta} onPageChange={setPage} loading={loading} />
     </div>
   );
 }

@@ -12,6 +12,7 @@ import StatCard from "../common/StatCard";
 import ProgressBar from "../common/ProgressBar";
 import { C, sans, mono } from "../../constants/theme";
 import { fetchStudentActivity, fetchStudentProgress } from "../../api/students";
+import Pagination from "../common/Pagination";
 
 export default function AdminActivity({ onSelectStudent }) {
   const [tab, setTab] = useState("activity"); // "activity" | "progress"
@@ -22,45 +23,49 @@ export default function AdminActivity({ onSelectStudent }) {
   const [activityFilter, setActivityFilter] = useState("ALL"); // ALL | lab_completed | flag_solve | lab_attended
   const [selectedStudentDetail, setSelectedStudentDetail] = useState(null);
 
+  const [actPage, setActPage] = useState(1);
+  const [actMeta, setActMeta] = useState(null);
+  const [progPage, setProgPage] = useState(1);
+  const [progMeta, setProgMeta] = useState(null);
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQuery(searchQuery.trim()), 400);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
+
+  // Both tabs: server-side search/filter + pagination (20 per page), paged independently
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const [actRes, progRes] = await Promise.all([
-        fetchStudentActivity({ q: searchQuery }),
-        fetchStudentProgress(),
+        fetchStudentActivity({ q: debouncedQuery, type: activityFilter, page: actPage }),
+        fetchStudentProgress({ q: debouncedQuery, page: progPage }),
       ]);
       setActivities(actRes.results || []);
+      setActMeta(actRes);
       setProgressData({
         stats: progRes.stats || {},
         results: progRes.results || [],
       });
+      setProgMeta(progRes);
     } catch (err) {
       console.error("Failed to load activity & progress data:", err);
     } finally {
       setLoading(false);
     }
-  }, [searchQuery]);
+  }, [debouncedQuery, activityFilter, actPage, progPage]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
 
-  // Filter activities
-  const filteredActivities = activities.filter((act) => {
-    if (activityFilter === "ALL") return true;
-    return act.type === activityFilter;
-  });
+  useEffect(() => { setActPage(1); setProgPage(1); }, [debouncedQuery]);
+  useEffect(() => { setActPage(1); }, [activityFilter]);
 
-  // Filter student progress rows
-  const filteredProgress = progressData.results.filter((st) => {
-    if (!searchQuery) return true;
-    const q = searchQuery.toLowerCase();
-    return (
-      st.name.toLowerCase().includes(q) ||
-      st.username.toLowerCase().includes(q) ||
-      (st.email && st.email.toLowerCase().includes(q))
-    );
-  });
+  // Filters are applied on the server; these are the current pages
+  const filteredActivities = activities;
+  const filteredProgress = progressData.results;
 
   const getEventBadge = (act) => {
     switch (act.type) {
@@ -193,7 +198,7 @@ export default function AdminActivity({ onSelectStudent }) {
             }}
           >
             <Activity size={15} />
-            Live Activity Feed ({activities.length})
+            Live Activity Feed ({actMeta?.count ?? activities.length})
           </button>
           <button
             onClick={() => setTab("progress")}
@@ -213,7 +218,7 @@ export default function AdminActivity({ onSelectStudent }) {
             }}
           >
             <BarChart3 size={15} />
-            Student Progress & Scores ({progressData.results.length})
+            Student Progress & Scores ({progMeta?.count ?? progressData.results.length})
           </button>
         </div>
 
@@ -380,6 +385,7 @@ export default function AdminActivity({ onSelectStudent }) {
               ))}
             </div>
           )}
+          <Pagination meta={actMeta} onPageChange={setActPage} loading={loading} />
         </Panel>
       ) : (
         /* ──────── STUDENT OVERALL PROGRESS & SCORES LISTING ──────── */
@@ -596,6 +602,7 @@ export default function AdminActivity({ onSelectStudent }) {
               </table>
             </div>
           )}
+          <Pagination meta={progMeta} onPageChange={setProgPage} loading={loading} />
         </Panel>
       )}
 

@@ -47,7 +47,8 @@ export default function AdminDashboard({ onNavigate, currentUser }) {
     setLoading(true);
     try {
       const [labsData, statsData] = await Promise.all([
-        fetchLabs().catch(() => ({ results: [] })),
+        // Only a few labs are shown here, so fetch just the first page instead of every lab
+        fetchLabs({ page: 1 }).catch(() => ({ results: [] })),
         fetchAdminDashboardStats().catch(() => null),
       ]);
 

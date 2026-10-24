@@ -21,6 +21,7 @@ import {
 } from "../../api/classes";
 import { fetchLabs } from "../../api/labs";
 import { fetchStudents, updateStudent } from "../../api/students";
+import Pagination from "../common/Pagination";
 
 /* ─── Styling helpers ────────────────────────────────────── */
 const inputStyle = (err) => ({
@@ -1031,39 +1032,48 @@ export default function AdminClasses() {
   const [studentsModalClass, setStudentsModalClass] = useState(null);
   const [deleteConfirmClass, setDeleteConfirmClass] = useState(null);
 
+  const [page, setPage] = useState(1);
+  const [pageMeta, setPageMeta] = useState(null);
+  const [classStats, setClassStats] = useState({ total_classes: 0, students_in_classes: 0, labs_assigned: 0, catalog_labs: 0 });
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search.trim()), 400);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  // Classes list: server-side search + pagination (20 per page)
   const loadData = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      const [classRes, labRes, studentRes] = await Promise.allSettled([
-        fetchClasses(),
-        fetchLabs(),
-        fetchStudents(),
-      ]);
-      if (classRes.status === "fulfilled") {
-        const val = classRes.value;
-        setClasses(Array.isArray(val) ? val : (val?.results || []));
-      } else {
-        throw classRes.reason || new Error("Failed to load classes.");
-      }
-      if (labRes.status === "fulfilled") {
-        const val = labRes.value;
-        setAllLabs(Array.isArray(val) ? val : (val?.results || val?.labs || []));
-      }
-      if (studentRes.status === "fulfilled") {
-        const val = studentRes.value;
-        setAllStudents(Array.isArray(val) ? val : (val?.results || val?.students || []));
-      }
+      const res = await fetchClasses({ search: debouncedSearch, page });
+      setClasses(res?.results || []);
+      setPageMeta(res);
+      if (res?.stats) setClassStats(res.stats);
     } catch (err) {
       setError(err.message || "Failed to load classes.");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [debouncedSearch, page]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => { setPage(1); }, [debouncedSearch]);
+
+  // Full lab & student lists for the assign pickers (loaded once, refreshed after changes)
+  const loadPickers = useCallback(async () => {
+    const [labRes, studentRes] = await Promise.allSettled([fetchLabs(), fetchStudents()]);
+    if (labRes.status === "fulfilled") setAllLabs(labRes.value?.results || []);
+    if (studentRes.status === "fulfilled") setAllStudents(studentRes.value?.results || []);
+  }, []);
+
+  useEffect(() => {
+    loadPickers();
+  }, [loadPickers]);
 
   const handleClassSaved = (savedClass, msg) => {
     const targetClass = savedClass?.class || savedClass;
@@ -1080,6 +1090,7 @@ export default function AdminClasses() {
     }
     setToast({ message: msg, type: "success" });
     loadData();
+    loadPickers();
   };
 
   const handleDeleteClass = async () => {
@@ -1088,22 +1099,19 @@ export default function AdminClasses() {
     setDeleteConfirmClass(null);
     try {
       await deleteClass(target.id);
-      setClasses(prev => prev.filter(c => c.id !== target.id));
+      loadData();
       setToast({ message: `Class "${target.name}" deleted successfully.`, type: "success" });
     } catch (err) {
       setToast({ message: err.message || "Failed to delete class.", type: "error" });
     }
   };
 
-  const filteredClasses = classes.filter(c =>
-    c.name.toLowerCase().includes(search.toLowerCase()) ||
-    (c.code && c.code.toLowerCase().includes(search.toLowerCase())) ||
-    (c.description && c.description.toLowerCase().includes(search.toLowerCase()))
-  );
+  // Search is applied on the server; `classes` is the current page
+  const filteredClasses = classes;
 
-  // Quick summary counts
-  const totalStudentsInClasses = classes.reduce((acc, c) => acc + (c.student_count || (c.students?.length || 0)), 0);
-  const totalLabsAssigned = classes.reduce((acc, c) => acc + (c.lab_count || (c.labs?.length || 0)), 0);
+  // Summary counts across all classes (from the server)
+  const totalStudentsInClasses = classStats.students_in_classes;
+  const totalLabsAssigned = classStats.labs_assigned;
 
   return (
     <div style={{ padding: 28, overflowY: "auto", height: "100%", boxSizing: "border-box" }}>
@@ -1134,10 +1142,10 @@ export default function AdminClasses() {
       {/* Summary Stat Cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14, marginBottom: 24 }}>
         {[
-          { label: "TOTAL CLASSES", value: classes.length, icon: GraduationCap, color: C.amber },
+          { label: "TOTAL CLASSES", value: classStats.total_classes, icon: GraduationCap, color: C.amber },
           { label: "ENROLLED STUDENTS", value: totalStudentsInClasses, icon: Users, color: C.cyan },
           { label: "ASSIGNED LABS", value: totalLabsAssigned, icon: FlaskConical, color: "#a78bfa" },
-          { label: "CATALOG LABS", value: allLabs.length, icon: Layers, color: C.hi },
+          { label: "CATALOG LABS", value: classStats.catalog_labs, icon: Layers, color: C.hi },
         ].map((st, i) => {
           const Icon = st.icon;
           return (
@@ -1173,7 +1181,7 @@ export default function AdminClasses() {
         </div>
 
         <div style={{ fontFamily: mono, fontSize: 12, color: C.low }}>
-          Showing {filteredClasses.length} of {classes.length} classes
+          {pageMeta?.count ?? filteredClasses.length} of {classStats.total_classes} classes
         </div>
       </div>
 
@@ -1358,6 +1366,8 @@ export default function AdminClasses() {
           })}
         </div>
       )}
+
+      {!error && <Pagination meta={pageMeta} onPageChange={setPage} loading={loading} />}
 
       {/* Create / Edit Class Form Modal */}
       <ClassFormModal

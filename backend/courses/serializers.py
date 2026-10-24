@@ -341,6 +341,7 @@ class LabScoreSerializer(serializers.ModelSerializer):
     lab_name = serializers.CharField(source='lab.name', read_only=True)
     lab_category = serializers.CharField(source='lab.category', read_only=True)
     lab_difficulty = serializers.CharField(source='lab.difficulty', read_only=True)
+    lab_description = serializers.CharField(source='lab.description', read_only=True)
     subject_name = serializers.CharField(source='lab.subject.name', read_only=True, default=None)
     student_username = serializers.CharField(source='student.username', read_only=True)
 
@@ -348,7 +349,7 @@ class LabScoreSerializer(serializers.ModelSerializer):
         model = LabScore
         fields = [
             'id', 'student', 'student_username', 'lab', 'lab_id', 'lab_name',
-            'lab_category', 'lab_difficulty', 'subject_name',
+            'lab_category', 'lab_difficulty', 'lab_description', 'subject_name',
             'score', 'max_score', 'attend_count', 'is_completed',
             'solved_questions_count', 'total_questions_count',
             'first_attended_at', 'last_attended_at', 'completed_at'

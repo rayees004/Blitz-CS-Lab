@@ -10,6 +10,7 @@ import Badge from "../common/Badge";
 import StatCard from "../common/StatCard";
 import { C, sans, mono } from "../../constants/theme";
 import { fetchAuditLogs } from "../../api/audit";
+import Pagination from "../common/Pagination";
 
 export default function AdminAuditLogs() {
   const [logs, setLogs] = useState([]);
@@ -20,17 +21,28 @@ export default function AdminAuditLogs() {
   const [selectedSeverity, setSelectedSeverity] = useState("ALL");
   const [selectedEntity, setSelectedEntity] = useState("ALL");
   const [expandedLogId, setExpandedLogId] = useState(null);
+  const [page, setPage] = useState(1);
+  const [pageMeta, setPageMeta] = useState(null);
+  const [debouncedQuery, setDebouncedQuery] = useState("");
 
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQuery(searchQuery.trim()), 400);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
+
+  // Server-side filters + pagination (20 per page)
   const loadLogs = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetchAuditLogs({
-        q: searchQuery,
+        q: debouncedQuery,
         action: selectedAction,
         severity: selectedSeverity,
         entity: selectedEntity,
+        page,
       });
       setLogs(res.results || []);
+      setPageMeta(res);
       if (res.stats) {
         setStats(res.stats);
       }
@@ -39,11 +51,13 @@ export default function AdminAuditLogs() {
     } finally {
       setLoading(false);
     }
-  }, [searchQuery, selectedAction, selectedSeverity, selectedEntity]);
+  }, [debouncedQuery, selectedAction, selectedSeverity, selectedEntity, page]);
 
   useEffect(() => {
     loadLogs();
   }, [loadLogs]);
+
+  useEffect(() => { setPage(1); }, [debouncedQuery, selectedAction, selectedSeverity, selectedEntity]);
 
   const toggleExpand = (id) => {
     setExpandedLogId((prev) => (prev === id ? null : id));
@@ -525,6 +539,8 @@ export default function AdminAuditLogs() {
           })
         )}
       </Panel>
+
+      <Pagination meta={pageMeta} onPageChange={setPage} loading={loading} />
     </div>
   );
 }

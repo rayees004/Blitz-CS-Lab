@@ -30,12 +30,16 @@ export default function StudentDashboard({ go, onNavigate }) {
   // Lab modal state for attending and submitting marks
   const [attendingLab, setAttendingLab] = useState(null);
 
+  const [inProgressTotal, setInProgressTotal] = useState(0);
+
+  // Only in-progress labs (most recent first, first page); stats always cover all labs
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetchStudentLabs();
+      const res = await fetchStudentLabs({ status: "IN_PROGRESS", page: 1 });
       setLabs(res.labs || []);
       setStats(res.stats || {});
+      setInProgressTotal(res.pagination?.count ?? (res.labs || []).length);
     } catch (err) {
       console.error("Failed to load student dashboard labs:", err);
     } finally {
@@ -47,12 +51,6 @@ export default function StudentDashboard({ go, onNavigate }) {
     loadData();
   }, [loadData]);
 
-  // Fallbacks when the backend does not send these counts yet
-  const assignedLabsCount = labs.filter(
-    (l) => !l.is_locked || l.is_completed || (l.submission_status && l.submission_status !== "NOT_STARTED")
-  ).length;
-  const questionsCompletedCount = labs.reduce((sum, l) => sum + (l.solved_questions_count || 0), 0);
-
   // Retake request sent to instructor/admin
   const handleRetakeSubmitted = async (message) => {
     setRetakeSuccessMsg(message);
@@ -60,15 +58,9 @@ export default function StudentDashboard({ go, onNavigate }) {
     setTimeout(() => setRetakeSuccessMsg(""), 6000);
   };
 
-  // Dashboard shows only in-progress labs (most recently active first), capped at 10
+  // Dashboard shows only in-progress labs (most recently active first, sorted by the server), capped at 10
   const MAX_DASHBOARD_LABS = 10;
-  const allInProgressLabs = labs
-    .filter((lab) => {
-      const isCompleted = lab.submission_status === "COMPLETED" || lab.is_completed;
-      return !isCompleted && (lab.submission_status === "IN_PROGRESS" || (lab.attend_count && lab.attend_count > 0));
-    })
-    .sort((a, b) => new Date(b.last_activity_at || 0) - new Date(a.last_activity_at || 0));
-  const dashboardLabs = allInProgressLabs.slice(0, MAX_DASHBOARD_LABS);
+  const dashboardLabs = labs.slice(0, MAX_DASHBOARD_LABS);
 
   return (
     <div style={{ padding: 28, overflowY: "auto", height: "100%", boxSizing: "border-box" }}>
@@ -158,7 +150,7 @@ export default function StudentDashboard({ go, onNavigate }) {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 14, marginTop: 22 }}>
         <StatCard
           label="Assigned Labs"
-          value={`${stats?.labs_assigned ?? assignedLabsCount}`}
+          value={`${stats?.labs_assigned ?? 0}`}
           icon={FlaskConical}
           sub="labs you can attend"
         />
@@ -185,7 +177,7 @@ export default function StudentDashboard({ go, onNavigate }) {
         />
         <StatCard
           label="Questions Completed"
-          value={`${stats?.total_questions_completed ?? questionsCompletedCount}`}
+          value={`${stats?.total_questions_completed ?? 0}`}
           icon={HelpCircle}
           sub="correct flags submitted"
           tone="green"
@@ -206,8 +198,8 @@ export default function StudentDashboard({ go, onNavigate }) {
               In Progress Labs
             </span>
             <div style={{ fontFamily: sans, fontSize: 12.5, color: C.mid, marginTop: 2 }}>
-              {allInProgressLabs.length > MAX_DASHBOARD_LABS
-                ? `Showing your ${MAX_DASHBOARD_LABS} most recent of ${allInProgressLabs.length} labs in progress.`
+              {inProgressTotal > MAX_DASHBOARD_LABS
+                ? `Showing your ${MAX_DASHBOARD_LABS} most recent of ${inProgressTotal} labs in progress.`
                 : "Labs you have started but not finished yet."}
             </div>
           </div>

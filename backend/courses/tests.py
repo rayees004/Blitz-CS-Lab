@@ -254,3 +254,83 @@ class LeaderboardTests(TestCase):
 
     def test_leaderboard_requires_login(self):
         self.assertEqual(self.client.get('/api/student/leaderboard/').status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class PaginationTests(TestCase):
+    """List endpoints return 20 items per page with ?page=, and the full list without it."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = User.objects.create_user(
+            username='admin', email='admin@blitz.io', password='Admin@12345', user_type='admin'
+        )
+        Lab.objects.bulk_create([Lab(name=f'Lab {i:02d}') for i in range(45)])
+        self.client.force_authenticate(self.admin)
+
+    def test_paginated_labs(self):
+        page1 = self.client.get('/api/labs/?page=1').data
+        self.assertEqual(page1['count'], 45)
+        self.assertEqual(page1['page_size'], 20)
+        self.assertEqual(page1['total_pages'], 3)
+        self.assertEqual(len(page1['results']), 20)
+        self.assertTrue(page1['has_next'])
+        self.assertFalse(page1['has_previous'])
+
+        page3 = self.client.get('/api/labs/?page=3').data
+        self.assertEqual(len(page3['results']), 5)
+        self.assertFalse(page3['has_next'])
+        self.assertTrue(page3['has_previous'])
+
+        page2_ids = {l['id'] for l in self.client.get('/api/labs/?page=2').data['results']}
+        page1_ids = {l['id'] for l in page1['results']}
+        self.assertFalse(page1_ids & page2_ids)
+
+    def test_out_of_range_page_is_clamped(self):
+        data = self.client.get('/api/labs/?page=99').data
+        self.assertEqual(data['page'], 3)
+        self.assertEqual(len(data['results']), 5)
+
+    def test_unpaginated_request_returns_everything(self):
+        data = self.client.get('/api/labs/').data
+        self.assertEqual(len(data['results']), 45)
+        self.assertNotIn('page', data)
+
+    def test_paginated_search_counts_matches(self):
+        data = self.client.get('/api/labs/?page=1&q=Lab 1').data
+        self.assertEqual(data['count'], 10)  # Lab 10 .. Lab 19
+
+    def test_students_endpoint_paginates(self):
+        User.objects.bulk_create([
+            User(username=f's{i}', email=f's{i}@blitz.io', user_type='student') for i in range(25)
+        ])
+        data = self.client.get('/api/students/?page=2&user_type=student').data
+        self.assertEqual(data['count'], 25)
+        self.assertEqual(len(data['results']), 5)
+
+    def test_paginated_labs_include_platform_stats(self):
+        data = self.client.get('/api/labs/?page=2').data
+        self.assertEqual(data['stats']['total_labs'], 45)
+        self.assertIn('categories', data)
+
+    def test_students_role_counts_ignore_role_filter(self):
+        User.objects.create_user(username='inst', email='inst@blitz.io', password='x', user_type='instructor')
+        User.objects.bulk_create([
+            User(username=f'st{i}', email=f'st{i}@blitz.io', user_type='student') for i in range(3)
+        ])
+        data = self.client.get('/api/students/?page=1&user_type=student').data
+        self.assertEqual(data['count'], 3)
+        self.assertEqual(data['role_counts'], {'student': 3, 'instructor': 1, 'admin': 1})
+
+    def test_student_labs_status_filter_and_stats_cover_all_labs(self):
+        subject = Subject.objects.create(name='CEH')
+        student = User.objects.create_user(username='stu', email='stu@blitz.io', password='x', user_type='student')
+        SubjectEnrollment.objects.create(student=student, subject=subject)
+        Lab.objects.filter(name__in=['Lab 00', 'Lab 01', 'Lab 02']).update(subject=subject)
+        started = Lab.objects.get(name='Lab 01')
+        LabScore.objects.create(student=student, lab=started, score=10)
+
+        self.client.force_authenticate(student)
+        data = self.client.get('/api/student/labs/?status=IN_PROGRESS&page=1').data
+        self.assertEqual([l['id'] for l in data['labs']], [started.id])
+        self.assertEqual(data['pagination']['count'], 1)
+        self.assertEqual(data['stats']['labs_assigned'], 3)
