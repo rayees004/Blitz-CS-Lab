@@ -61,6 +61,11 @@ export default function StudentDetailPanel({ student, onClose, onStudentUpdate, 
     fetchClasses().then(res => setAvailableClasses(res.results || [])).catch(() => {});
   }, []);
 
+  // The student's class is hidden from this instructor (not created by or shared with them)
+  const classLocked = Boolean(
+    currentStudent?.assigned_class_id && !availableClasses.some(c => c.id === currentStudent.assigned_class_id)
+  );
+
   const handleUpdateClassAndAccess = async (newClassId, newAccessMode) => {
     if (!currentStudent?.id) return;
     setClassUpdateLoading(true);
@@ -360,13 +365,14 @@ export default function StudentDetailPanel({ student, onClose, onStudentUpdate, 
                   <div>
                     <div style={{ fontFamily: sans, fontSize: 11, color: C.low, marginBottom: 4 }}>Assigned Class</div>
                     <select
-                      disabled={classUpdateLoading}
+                      disabled={classUpdateLoading || classLocked}
+                      title={classLocked ? "This student is in a class you don't manage" : undefined}
                       value={currentStudent?.assigned_class_id || ""}
                       onChange={e => handleUpdateClassAndAccess(e.target.value, currentStudent?.lab_access_mode)}
                       style={{
                         width: "100%", background: C.panel3, border: `1px solid ${C.border}`,
                         borderRadius: 6, padding: "6px 8px", color: C.hi, fontFamily: sans, fontSize: 12,
-                        outline: "none", cursor: "pointer",
+                        outline: "none", cursor: classLocked ? "not-allowed" : "pointer",
                       }}
                     >
                       <option value="">Independent / No Class (Unassigned)</option>
@@ -374,6 +380,9 @@ export default function StudentDetailPanel({ student, onClose, onStudentUpdate, 
                       {availableClasses.filter(c => c.can_manage !== false || c.id === currentStudent?.assigned_class_id).map(c => (
                         <option key={c.id} value={c.id}>{c.name} {c.code ? `(${c.code})` : ""}</option>
                       ))}
+                      {classLocked && (
+                        <option value={currentStudent.assigned_class_id}>{currentStudent.assigned_class_name || "Another instructor's class"}</option>
+                      )}
                     </select>
                   </div>
 

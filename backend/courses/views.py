@@ -3099,6 +3099,14 @@ class StudentMaterialsView(APIView):
 # CLASS MANAGEMENT (StudentClass)
 # ============================================================================
 
+def visible_classes(user):
+    """Platform admins see every class; instructors only classes they created or were given access to."""
+    qs = StudentClass.objects.all()
+    if Lab._is_platform_admin(user):
+        return qs
+    return qs.filter(Q(created_by=user) | Q(managers=user)).distinct()
+
+
 def class_manage_denied(class_obj, user):
     """403 response unless the user created the class, was given access to it, or is a platform admin."""
     if class_obj.can_manage(user):
@@ -3116,7 +3124,8 @@ class StudentClassListCreateView(APIView):
     permission_classes = [IsAdminOrStaff]
 
     def get(self, request):
-        qs = StudentClass.objects.all().select_related('created_by').prefetch_related('labs', 'students', 'managers')
+        qs = visible_classes(request.user).select_related('created_by').prefetch_related('labs', 'students', 'managers')
+        scope = qs
         search = request.query_params.get('search') or request.query_params.get('q')
         if search:
             from django.db.models import Q
@@ -3130,11 +3139,12 @@ class StudentClassListCreateView(APIView):
         serializer = StudentClassListSerializer(page_items, many=True, context={'request': request})
         response = {**meta, 'results': serializer.data}
         if 'page' in request.query_params:
-            # Totals across all classes, for stat cards on paginated screens
+            # Totals across the classes this user can see, for stat cards on paginated screens
+            scope_ids = scope.values('id')
             response['stats'] = {
-                'total_classes': StudentClass.objects.count(),
-                'students_in_classes': User.objects.filter(assigned_class__isnull=False).count(),
-                'labs_assigned': StudentClass.labs.through.objects.count(),
+                'total_classes': scope.count(),
+                'students_in_classes': User.objects.filter(assigned_class_id__in=scope_ids).count(),
+                'labs_assigned': StudentClass.labs.through.objects.filter(studentclass_id__in=scope_ids).count(),
                 'catalog_labs': Lab.objects.filter(is_active=True).count(),
             }
         return Response(response)
@@ -3174,7 +3184,7 @@ class StudentClassDetailView(APIView):
     permission_classes = [IsAdminOrStaff]
 
     def get(self, request, pk):
-        class_obj = get_object_or_404(StudentClass.objects.prefetch_related('labs', 'students', 'managers'), pk=pk)
+        class_obj = get_object_or_404(visible_classes(request.user).prefetch_related('labs', 'students', 'managers'), pk=pk)
         return Response(StudentClassDetailSerializer(class_obj, context={'request': request}).data)
 
     def patch(self, request, pk):
@@ -3267,7 +3277,7 @@ class StudentClassManagersView(APIView):
         }
 
     def get(self, request, pk):
-        class_obj = get_object_or_404(StudentClass.objects.select_related('created_by'), pk=pk)
+        class_obj = get_object_or_404(visible_classes(request.user).select_related('created_by'), pk=pk)
         return Response(self._payload(class_obj, request))
 
     def put(self, request, pk):
@@ -3437,7 +3447,7 @@ class StudentClassStudentsView(APIView):
     permission_classes = [IsAdminOrStaff]
 
     def get(self, request, pk):
-        class_obj = get_object_or_404(StudentClass, pk=pk)
+        class_obj = get_object_or_404(visible_classes(request.user), pk=pk)
         students = class_obj.students.all().order_by('date_joined', 'id')
         page_items, meta = paginate(request, students)
         return Response({

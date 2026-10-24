@@ -522,8 +522,9 @@ class ClassManageAccessTests(TestCase):
         self.assertEqual(self._as(self.other).post(url + 'assign-labs/', {'lab_ids': [self.lab.id]}, format='json').status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(self._as(self.other).post(url + 'assign-students/', {'student_ids': [self.student.id]}, format='json').status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(self._as(self.other).delete(url).status_code, status.HTTP_403_FORBIDDEN)
-        # Viewing is still allowed
-        self.assertEqual(self._as(self.other).get(url).status_code, status.HTTP_200_OK)
+        # Classes they don't manage are hidden from them entirely
+        self.assertEqual(self._as(self.other).get(url).status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(self._as(self.other).get(url + 'students/').status_code, status.HTTP_404_NOT_FOUND)
 
     def test_shared_managers_manage_but_cannot_share_or_delete(self):
         url = f'/api/classes/{self.klass.id}/'
@@ -545,8 +546,13 @@ class ClassManageAccessTests(TestCase):
         self.klass.managers.add(self.other)
         rows = {c['name']: c for c in self._as(self.other).get('/api/classes/?page=1').data['results']}
         self.assertEqual((rows['Owner Class']['can_manage'], rows['Owner Class']['can_manage_access']), (True, False))
-        rows = {c['name']: c for c in self._as(self.third).get('/api/classes/').data['results']}
-        self.assertFalse(rows['Owner Class']['can_manage'])
+        # Instructors only see classes they created or were given access to; admins see all
+        StudentClass.objects.create(name='Third Class', created_by=self.third)
+        response = self._as(self.third).get('/api/classes/?page=1')
+        self.assertEqual([c['name'] for c in response.data['results']], ['Third Class'])
+        self.assertEqual(response.data['stats']['total_classes'], 1)
+        admin_names = {c['name'] for c in self._as(self.admin).get('/api/classes/').data['results']}
+        self.assertEqual(admin_names, {'Owner Class', 'Third Class'})
 
     def test_student_class_assignment_requires_managing_the_class(self):
         url = f'/api/students/{self.student.id}/'
