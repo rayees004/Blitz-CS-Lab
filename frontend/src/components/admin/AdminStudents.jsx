@@ -457,6 +457,18 @@ function avatarColor(name) {
 /* ─── Main Component ─────────────────────────────────── */
 const FEE_TONE = { PAID: "cyan", DUE: "danger", PARTIAL: "warn" };
 
+// One column template shared by header, skeletons and rows so every cell lines up:
+// name & role | email | class & access | subjects | status | joined | actions
+const ROW_GRID = {
+  display: "grid",
+  gridTemplateColumns: "minmax(0,1.6fr) minmax(0,1.4fr) minmax(0,1.2fr) minmax(0,1.2fr) minmax(0,0.9fr) minmax(0,0.7fr) 128px",
+  columnGap: 14,
+  alignItems: "center",
+  padding: "0 18px 0 15px",
+  borderLeft: "3px solid transparent",
+};
+const ellipsis = { whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" };
+
 export default function AdminStudents({ currentUser }) {
   const isPlatformAdmin = currentUser?.user_type === "admin" || Boolean(currentUser?.is_superuser) || Boolean(currentUser?.can_access_django_admin);
   const [roleFilter, setRoleFilter] = useState("all");
@@ -688,15 +700,16 @@ export default function AdminStudents({ currentUser }) {
 
       {/* Table */}
       {!error && (
-        <Panel style={{ overflow: "hidden" }}>
+        <Panel style={{ overflow: "visible" }}>
           {/* Column headers */}
-          <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1.3fr 1.3fr 1.3fr 0.8fr 0.4fr", padding: "10px 18px", borderBottom: `1px solid ${C.border}`, fontFamily: mono, fontSize: 10.5, color: C.low, letterSpacing: "0.04em" }}>
+          <div style={{ ...ROW_GRID, paddingTop: 10, paddingBottom: 10, borderBottom: `1px solid ${C.border}`, fontFamily: mono, fontSize: 10.5, color: C.low, letterSpacing: "0.04em" }}>
             <div>NAME & ROLE</div>
             <div>EMAIL</div>
             <div>CLASS & LAB ACCESS</div>
             <div>SUBJECTS</div>
             <div>STATUS</div>
-            <div />
+            <div>JOINED</div>
+            <div style={{ textAlign: "right" }}>ACCESS</div>
           </div>
 
           {/* Empty state */}
@@ -710,9 +723,9 @@ export default function AdminStudents({ currentUser }) {
 
           {/* Loading skeletons */}
           {loading && [1, 2, 3].map(i => (
-            <div key={i} style={{ display: "grid", gridTemplateColumns: "1.5fr 1.3fr 1.3fr 1.3fr 0.8fr 0.4fr", padding: "13px 18px", alignItems: "center", borderTop: `1px solid ${C.border}`, gap: 12 }}>
-              {[120, 140, 110, 110, 60, 20].map((w, j) => (
-                <div key={j} style={{ height: 12, width: w, borderRadius: 4, background: C.panel3, animation: "pulse 1.4s ease infinite" }} />
+            <div key={i} style={{ ...ROW_GRID, paddingTop: 16, paddingBottom: 16, borderTop: i === 1 ? "none" : `1px solid ${C.border}` }}>
+              {[120, 140, 110, 110, 60, 50, 90].map((w, j) => (
+                <div key={j} style={{ height: 12, width: w, maxWidth: "100%", borderRadius: 4, background: C.panel3, animation: "pulse 1.4s ease infinite", justifySelf: j === 6 ? "end" : "start" }} />
               ))}
             </div>
           ))}
@@ -727,16 +740,19 @@ export default function AdminStudents({ currentUser }) {
             const isMenuOpen = menuOpen === s.id;
             const isSelected = selectedStudent?.id === s.id;
             const enrolledSubjects = s.enrolled_subjects || [];
+            // Menus on the last rows open upwards so the panel edge doesn't clip them
+            const menuUp = filteredStudents.length > 3 && i >= filteredStudents.length - 2;
 
             return (
               <div
                 key={s.id}
                 onClick={() => setSelectedStudent(s)}
                 style={{
-                  display: "grid",
-                  gridTemplateColumns: "1.5fr 1.3fr 1.3fr 1.3fr 0.8fr 0.4fr",
-                  padding: "13px 18px",
-                  alignItems: "center",
+                  ...ROW_GRID,
+                  minHeight: 64,
+                  paddingTop: 12,
+                  paddingBottom: 12,
+                  boxSizing: "border-box",
                   borderTop: i === 0 ? "none" : `1px solid ${C.border}`,
                   cursor: "pointer",
                   background: isSelected ? C.panel2 : "transparent",
@@ -748,7 +764,7 @@ export default function AdminStudents({ currentUser }) {
                 onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = "transparent"; }}
               >
                 {/* Name + avatar */}
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
                   <div style={{
                     width: 30, height: 30, borderRadius: 7, background: bg,
                     display: "flex", alignItems: "center", justifyContent: "center",
@@ -756,9 +772,9 @@ export default function AdminStudents({ currentUser }) {
                   }}>
                     {initials}
                   </div>
-                  <div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                      <span style={{ fontFamily: sans, fontSize: 13, fontWeight: 600, color: C.hi }}>{s.full_name || s.username}</span>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+                      <span title={s.full_name || s.username} style={{ fontFamily: sans, fontSize: 13, fontWeight: 600, color: C.hi, minWidth: 0, ...ellipsis }}>{s.full_name || s.username}</span>
                       {s.user_type === "admin" && (
                         <span style={{
                           fontFamily: mono,
@@ -770,6 +786,7 @@ export default function AdminStudents({ currentUser }) {
                           padding: "1px 5px",
                           borderRadius: 4,
                           letterSpacing: "0.04em",
+                          flexShrink: 0,
                         }}>
                           ADMIN
                         </span>
@@ -785,6 +802,7 @@ export default function AdminStudents({ currentUser }) {
                           padding: "1px 5px",
                           borderRadius: 4,
                           letterSpacing: "0.04em",
+                          flexShrink: 0,
                         }}>
                           INSTRUCTOR
                         </span>
@@ -800,24 +818,25 @@ export default function AdminStudents({ currentUser }) {
                           padding: "1px 5px",
                           borderRadius: 4,
                           letterSpacing: "0.04em",
+                          flexShrink: 0,
                         }}>
                           STUDENT
                         </span>
                       )}
                     </div>
-                    <div style={{ fontFamily: mono, fontSize: 10.5, color: C.low }}>@{s.username}</div>
+                    <div title={`@${s.username}`} style={{ fontFamily: mono, fontSize: 10.5, color: C.low, marginTop: 2, ...ellipsis }}>@{s.username}</div>
                   </div>
                 </div>
 
                 {/* Email */}
-                <span style={{ fontFamily: mono, fontSize: 11.5, color: C.mid }}>{s.email || "—"}</span>
+                <span title={s.email || ""} style={{ fontFamily: mono, fontSize: 11.5, color: C.mid, ...ellipsis }}>{s.email || "—"}</span>
 
                 {/* Class & Lab Access Mode */}
-                <div>
+                <div style={{ minWidth: 0 }}>
                   {s.assigned_class_name ? (
-                    <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 3 }}>
-                      <GraduationCap size={12} color={C.amber} />
-                      <span style={{ fontFamily: sans, fontSize: 12, fontWeight: 600, color: C.hi }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 3, minWidth: 0 }}>
+                      <GraduationCap size={12} color={C.amber} style={{ flexShrink: 0 }} />
+                      <span title={s.assigned_class_name} style={{ fontFamily: sans, fontSize: 12, fontWeight: 600, color: C.hi, minWidth: 0, ...ellipsis }}>
                         {s.assigned_class_name}
                       </span>
                       {s.assigned_class_code && (
@@ -929,20 +948,50 @@ export default function AdminStudents({ currentUser }) {
                 </div>
 
                 {/* Joined */}
-                <span style={{ fontFamily: mono, fontSize: 11, color: C.low }}>{joined}</span>
+                <span style={{ fontFamily: mono, fontSize: 11, color: C.low, ...ellipsis }}>{joined}</span>
 
-                {/* Actions */}
-                <div style={{ position: "relative" }}>
+                {/* Access: block / unblock lab access (students only; staff always have lab access) + more menu */}
+                <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 6 }}>
+                  {s.user_type === "student" && (
+                    s.is_lab_access_blocked ? (
+                      <button
+                        type="button"
+                        disabled={blockingLoading}
+                        title="Restore this student's lab access"
+                        onClick={e => { e.stopPropagation(); handleToggleLabAccessQuick(s, false); }}
+                        style={{ display: "inline-flex", alignItems: "center", gap: 5, height: 26, padding: "0 9px", borderRadius: 6, border: "1px solid rgba(63,216,200,0.4)", background: "rgba(63,216,200,0.08)", color: C.cyan, fontFamily: sans, fontSize: 11.5, fontWeight: 600, cursor: blockingLoading ? "wait" : "pointer", whiteSpace: "nowrap" }}
+                      >
+                        <ShieldCheck size={12} /> Unblock
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={blockingLoading}
+                        title="Block this student's lab access"
+                        onClick={e => {
+                          e.stopPropagation();
+                          setMenuOpen(null);
+                          setBlockStudentModal(s);
+                          setBlockReasonInput(s.lab_access_block_reason || "");
+                        }}
+                        style={{ display: "inline-flex", alignItems: "center", gap: 5, height: 26, padding: "0 9px", borderRadius: 6, border: "1px solid rgba(229,83,75,0.4)", background: "rgba(229,83,75,0.08)", color: "#f87171", fontFamily: sans, fontSize: 11.5, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}
+                      >
+                        <Ban size={12} /> Block
+                      </button>
+                    )
+                  )}
                   <button
+                    type="button"
+                    title="More actions"
                     onClick={e => { e.stopPropagation(); setMenuOpen(isMenuOpen ? null : s.id); }}
-                    style={{ background: "none", border: "none", cursor: "pointer", padding: 4, borderRadius: 4, color: C.low, display: "flex" }}
+                    style={{ background: isMenuOpen ? C.panel3 : "none", border: "none", cursor: "pointer", padding: 5, borderRadius: 5, color: C.low, display: "flex" }}
                   >
                     <MoreHorizontal size={15} />
                   </button>
 
                   {isMenuOpen && (
                     <div
-                      style={{ position: "absolute", right: 0, top: "calc(100% + 4px)", background: C.panel, border: `1px solid ${C.border}`, borderRadius: 8, padding: 4, minWidth: 175, zIndex: 50, boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}
+                      style={{ position: "absolute", right: 0, ...(menuUp ? { bottom: "calc(100% + 4px)" } : { top: "calc(100% + 4px)" }), background: C.panel, border: `1px solid ${C.border}`, borderRadius: 8, padding: 4, minWidth: 175, zIndex: 50, boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}
                       onClick={e => e.stopPropagation()}
                     >
                       <button
@@ -969,29 +1018,6 @@ export default function AdminStudents({ currentUser }) {
                           onMouseLeave={e => e.currentTarget.style.background = "none"}
                         >
                           <KeyRound size={13} /> Change Password
-                        </button>
-                      )}
-                      {s.is_lab_access_blocked ? (
-                        <button
-                          onClick={() => { setMenuOpen(null); handleToggleLabAccessQuick(s, false); }}
-                          style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "8px 10px", background: "none", border: "none", color: C.cyan, fontFamily: sans, fontSize: 12.5, cursor: "pointer", borderRadius: 5, textAlign: "left" }}
-                          onMouseEnter={e => e.currentTarget.style.background = "rgba(63,216,200,0.1)"}
-                          onMouseLeave={e => e.currentTarget.style.background = "none"}
-                        >
-                          <ShieldCheck size={13} color={C.cyan} /> Unblock Lab Access
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => {
-                            setMenuOpen(null);
-                            setBlockStudentModal(s);
-                            setBlockReasonInput(s.lab_access_block_reason || "");
-                          }}
-                          style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "8px 10px", background: "none", border: "none", color: "#f87171", fontFamily: sans, fontSize: 12.5, cursor: "pointer", borderRadius: 5, textAlign: "left" }}
-                          onMouseEnter={e => e.currentTarget.style.background = "rgba(229,83,75,0.1)"}
-                          onMouseLeave={e => e.currentTarget.style.background = "none"}
-                        >
-                          <Ban size={13} color="#f87171" /> Block Lab Access
                         </button>
                       )}
                       <button
