@@ -8,3 +8,14 @@
   RewriteCond %{REQUEST_FILENAME} !-d
   RewriteRule . /index.html [L]
 </IfModule>
+
+# Always revalidate the app shell so browsers pick up a new deploy immediately;
+# hashed build assets never change, so they can be cached for a long time.
+<IfModule mod_headers.c>
+  <FilesMatch "^(index|200)\.html$">
+    Header set Cache-Control "no-cache, must-revalidate"
+  </FilesMatch>
+  <FilesMatch "^index-[A-Za-z0-9_-]+\.(js|css)$">
+    Header set Cache-Control "public, max-age=31536000, immutable"
+  </FilesMatch>
+</IfModule>
