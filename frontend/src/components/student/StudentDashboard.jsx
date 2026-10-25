@@ -16,6 +16,26 @@ import { CATEGORIES } from "../../data/mockData";
 import { fetchStudentLabs } from "../../api/labs";
 import StudentLabAttendModal from "./StudentLabAttendModal";
 import RetakeRequestModal from "./RetakeRequestModal";
+import { useTimeLeft, formatTimeLeft } from "../../utils/labTime";
+
+/** "5h 12m left to finish" for a lab in progress (24-hour attempt window) */
+function TimeLeftNote({ deadline }) {
+  const ms = useTimeLeft(deadline);
+  if (ms === null) return null;
+  const urgent = ms < 2 * 3600 * 1000;
+  return (
+    <div
+      title="A started lab must be finished within 24 hours. After that it locks and you need to request a retake."
+      style={{
+        display: "flex", alignItems: "center", gap: 6, marginTop: 10, fontFamily: sans, fontSize: 11.5,
+        color: urgent ? "#fca5a5" : C.amber,
+      }}
+    >
+      <Clock size={12} />
+      {ms <= 0 ? "Time is up — sync to request a retake." : `${formatTimeLeft(ms)} to finish this lab`}
+    </div>
+  );
+}
 
 export default function StudentDashboard({ go, onNavigate }) {
   const [labs, setLabs] = useState([]);
@@ -143,6 +163,30 @@ export default function StudentDashboard({ go, onNavigate }) {
                 : "Your practical lab access is currently suspended. Please contact your instructor or platform administrator."}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Labs whose 24-hour window ran out: point the student to the retake request */}
+      {stats?.labs_expired > 0 && (
+        <div
+          style={{
+            marginTop: 18, padding: "12px 18px", borderRadius: 8,
+            background: "rgba(229, 83, 75, 0.08)", border: "1px solid rgba(229, 83, 75, 0.3)",
+            display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap",
+          }}
+        >
+          <Clock size={18} color="#f87171" style={{ flexShrink: 0 }} />
+          <div style={{ flex: 1, minWidth: 220, fontFamily: sans, fontSize: 12.5, color: C.mid, lineHeight: 1.45 }}>
+            <strong style={{ color: "#fca5a5" }}>
+              {stats.labs_expired} lab{stats.labs_expired !== 1 ? "s" : ""} timed out.
+            </strong>{" "}
+            You didn't finish {stats.labs_expired !== 1 ? "them" : "it"} within {stats.attempt_window_hours || 24} hours of starting, so {stats.labs_expired !== 1 ? "they are" : "it is"} locked. Send a retake request from the Labs page to attend again.
+          </div>
+          {onNavigate && (
+            <Btn icon={RotateCcw} variant="outline" sm onClick={() => onNavigate("labs")}>
+              Go to Labs
+            </Btn>
+          )}
         </div>
       )}
 
@@ -414,6 +458,8 @@ export default function StudentDashboard({ go, onNavigate }) {
                         Attended {lab.attend_count || 0}x
                       </span>
                     </div>
+
+                    {isInProgress && !isLocked && <TimeLeftNote deadline={lab.attempt_deadline} />}
 
                     {/* Progress Bar for In Progress or Completed */}
                     {!isLocked && (isInProgress || isCompleted) && (

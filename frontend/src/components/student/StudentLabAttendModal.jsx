@@ -13,11 +13,13 @@ import ProgressBar from "../common/ProgressBar";
 import { C, sans, mono } from "../../constants/theme";
 import {
   attendStudentLab,
+  startStudentLabAttempt,
   submitStudentLabFlag,
   unlockStudentLabHint,
   finalizeStudentLab
 } from "../../api/labs";
 import { getStoredUser } from "../../api/auth";
+import { useTimeLeft, formatTimeLeft } from "../../utils/labTime";
 
 export default function StudentLabAttendModal({ lab, onClose, onUpdated }) {
   const [loading, setLoading] = useState(true);
@@ -43,7 +45,8 @@ export default function StudentLabAttendModal({ lab, onClose, onUpdated }) {
     setLoading(true);
     setError(null);
     try {
-      const data = await attendStudentLab(lab.id);
+      // Opening the lab records an attendance and starts its 24-hour window on the first open
+      const data = await startStudentLabAttempt(lab.id);
       setWorkspace(data);
 
       // Pre-fill already submitted flags
@@ -160,6 +163,10 @@ export default function StudentLabAttendModal({ lab, onClose, onUpdated }) {
     }
   };
 
+  const timeLeft = useTimeLeft(
+    workspace?.lab_score?.is_completed ? null : workspace?.lab_score?.attempt_deadline
+  );
+
   if (!lab) return null;
 
   const questions = workspace?.questions || [];
@@ -267,6 +274,20 @@ export default function StudentLabAttendModal({ lab, onClose, onUpdated }) {
                 >
                   Attended {attendCount} time{attendCount > 1 ? "s" : ""}
                 </span>
+                {timeLeft !== null && !isCompleted && (
+                  <span
+                    title="A started lab must be finished within 24 hours. After that it locks and you need to request a retake."
+                    style={{
+                      display: "inline-flex", alignItems: "center", gap: 4, fontFamily: mono, fontSize: 10, fontWeight: 700,
+                      padding: "2px 7px", borderRadius: 4,
+                      color: timeLeft < 2 * 3600 * 1000 ? "#fca5a5" : C.amber,
+                      background: timeLeft < 2 * 3600 * 1000 ? "rgba(229, 83, 75, 0.1)" : "rgba(245, 166, 35, 0.08)",
+                      border: `1px solid ${timeLeft < 2 * 3600 * 1000 ? "rgba(229, 83, 75, 0.3)" : "rgba(245, 166, 35, 0.25)"}`,
+                    }}
+                  >
+                    <Clock size={10} /> {formatTimeLeft(timeLeft)}
+                  </span>
+                )}
               </div>
               <div style={{ fontFamily: mono, fontSize: 11, color: C.low, marginTop: 2 }}>
                 {lab.category}{lab.org && lab.org !== "BlitzLab" ? ` · ${lab.org}` : ""} · <span style={{ color: C.cyan }}>Score is lab-based only (repeat visits do not increase score)</span>

@@ -562,3 +562,82 @@ class ClassManageAccessTests(TestCase):
         self.assertEqual(self._as(self.other).patch(url, {'assigned_class_id': None}, format='json').status_code, status.HTTP_403_FORBIDDEN)
         # Unrelated edits by another instructor still work
         self.assertEqual(self._as(self.other).patch(url, {'first_name': 'Stu'}, format='json').status_code, status.HTTP_200_OK)
+
+
+class LabAttemptWindowTests(TestCase):
+    """A started lab locks 24 hours later unless finished; the student can then request a retake."""
+
+    def setUp(self):
+        from datetime import timedelta
+        from django.utils import timezone
+        self.timedelta, self.timezone = timedelta, timezone
+        self.client = APIClient()
+        self.admin = User.objects.create_user(username='admin', email='admin@blitz.io', password='x', user_type='admin')
+        self.student = User.objects.create_user(username='stud', email='stud@blitz.io', password='x', user_type='student')
+        subject = Subject.objects.create(name='CEH', code='CEH')
+        SubjectEnrollment.objects.create(student=self.student, subject=subject)
+        self.lab = Lab.objects.create(name='Timed Lab', subject=subject)
+        LabQuestion.objects.create(lab=self.lab, title='Q1', flag='flag{1}', points=50)
+        self.client.force_authenticate(self.student)
+
+    def _attend(self):
+        return self.client.post(f'/api/student/labs/{self.lab.id}/attend/')
+
+    def _listed(self):
+        return self.client.get('/api/student/labs/').data['labs'][0]
+
+    def _age_attempt(self, hours):
+        LabScore.objects.filter(student=self.student, lab=self.lab).update(
+            attempt_started_at=self.timezone.now() - self.timedelta(hours=hours)
+        )
+
+    def test_attempt_window_starts_on_first_attend(self):
+        self.assertEqual(self._attend().status_code, status.HTTP_200_OK)
+        score = LabScore.objects.get(student=self.student, lab=self.lab)
+        self.assertIsNotNone(score.attempt_started_at)
+        lab = self._listed()
+        self.assertEqual(lab['submission_status'], 'IN_PROGRESS')
+        self.assertIsNotNone(lab['attempt_deadline'])
+        self.assertFalse(lab['can_request_retake'])
+
+    def test_lab_locks_after_24_hours_and_retake_can_be_requested(self):
+        self._attend()
+        self._age_attempt(23)
+        self.assertEqual(self._attend().status_code, status.HTTP_200_OK)
+        # Still open just before the deadline: no retake yet
+        self.assertEqual(self.client.post(f'/api/student/labs/{self.lab.id}/retake-request/', {}, format='json').status_code, status.HTTP_400_BAD_REQUEST)
+
+        self._age_attempt(25)
+        lab = self._listed()
+        self.assertEqual(lab['submission_status'], 'EXPIRED')
+        self.assertTrue(lab['is_locked'])
+        self.assertTrue(lab['can_request_retake'])
+        self.assertIn('24-hour', lab['lock_reason'])
+        self.assertEqual(self._attend().status_code, status.HTTP_403_FORBIDDEN)
+        submit = self.client.post(f'/api/student/labs/{self.lab.id}/submit/', {'action': 'submit_flag', 'question_id': self.lab.questions.first().id, 'flag': 'flag{1}'}, format='json')
+        self.assertEqual(submit.status_code, status.HTTP_403_FORBIDDEN)
+
+        response = self.client.post(f'/api/student/labs/{self.lab.id}/retake-request/', {'reason': 'Ran out of time'}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertEqual(self._listed()['retake_request_status'], 'PENDING')
+
+    def test_approved_retake_restarts_the_window_on_next_attend(self):
+        self._attend()
+        self._age_attempt(30)
+        req = self.client.post(f'/api/student/labs/{self.lab.id}/retake-request/', {}, format='json').data
+        self.client.force_authenticate(self.admin)
+        approve = self.client.post(f"/api/admin/labs/retake-requests/{req['request_id']}/action/", {'action': 'approve'}, format='json')
+        self.assertEqual(approve.status_code, status.HTTP_200_OK, approve.data)
+        self.assertIsNone(LabScore.objects.get(student=self.student, lab=self.lab).attempt_started_at)
+
+        self.client.force_authenticate(self.student)
+        self.assertEqual(self._listed()['submission_status'], 'IN_PROGRESS')
+        self.assertEqual(self._attend().status_code, status.HTTP_200_OK)
+        started = LabScore.objects.get(student=self.student, lab=self.lab).attempt_started_at
+        self.assertLess(self.timezone.now() - started, self.timedelta(minutes=1))
+
+    def test_completed_lab_never_expires(self):
+        self._attend()
+        LabScore.objects.filter(student=self.student, lab=self.lab).update(is_completed=True)
+        self._age_attempt(48)
+        self.assertEqual(self._listed()['submission_status'], 'COMPLETED')

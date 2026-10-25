@@ -82,7 +82,9 @@ export default function RetakeRequestModal({ lab, onClose, onSubmitted }) {
         </div>
 
         <p style={{ fontFamily: sans, fontSize: 13, color: C.mid, lineHeight: 1.55, margin: "0 0 16px" }}>
-          This lab is completed and marks are locked. Send a retake request to your instructor/admin to unlock this lab and allow you to attempt it again.
+          {lab.is_expired || lab.submission_status === "EXPIRED"
+            ? "Your 24-hour time to finish this lab has ended, so it is locked. Send a retake request to your instructor/admin. Once approved, you get a fresh 24 hours from when you start it again."
+            : "This lab is completed and marks are locked. Send a retake request to your instructor/admin to unlock this lab and allow you to attempt it again."}
         </p>
 
         <div style={{ marginBottom: 18 }}>

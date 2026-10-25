@@ -120,6 +120,14 @@ export async function fetchStudentLabAttendState(labId) {
 /** Alias for fetchStudentLabAttendState used by StudentLabAttendModal */
 export const attendStudentLab = fetchStudentLabAttendState;
 
+/**
+ * Open (start or resume) a lab: records an attendance and, on the first open,
+ * starts the 24-hour window to finish it. Returns the same workspace as the GET.
+ */
+export async function startStudentLabAttempt(labId) {
+  return apiFetch(`/student/labs/${labId}/attend/`, { method: 'POST' });
+}
+
 /** Submit a CTF flag or answer for a specific question */
 export async function submitStudentLabFlag(labId, questionId, flag) {
   return apiFetch(`/student/labs/${labId}/submit/`, {

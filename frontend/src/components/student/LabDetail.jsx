@@ -13,10 +13,12 @@ import ProgressBar from "../common/ProgressBar";
 import { C, sans, mono } from "../../constants/theme";
 import {
   attendStudentLab,
+  startStudentLabAttempt,
   submitStudentLabFlag,
   unlockStudentLabHint,
   finalizeStudentLab
 } from "../../api/labs";
+import { useTimeLeft, formatTimeLeft } from "../../utils/labTime";
 
 export default function LabDetail({ lab, back }) {
   const [loading, setLoading] = useState(true);
@@ -38,7 +40,8 @@ export default function LabDetail({ lab, back }) {
     setLoading(true);
     setError(null);
     try {
-      const data = await attendStudentLab(labId);
+      // Opening the lab records an attendance and starts its 24-hour window on the first open
+      const data = await startStudentLabAttempt(labId);
       setWorkspace(data);
 
       const inputs = {};
@@ -72,6 +75,7 @@ export default function LabDetail({ lab, back }) {
       : isCompleted
       ? 100
       : 0;
+  const timeLeft = useTimeLeft(isCompleted ? null : workspace?.lab_score?.attempt_deadline);
 
   const handleSubmitFlag = async (questionId) => {
     const val = flagInputs[questionId]?.trim();
@@ -227,6 +231,20 @@ export default function LabDetail({ lab, back }) {
         )}
 
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 16 }}>
+          {timeLeft !== null && (
+            <div
+              title="A started lab must be finished within 24 hours. After that it locks and you need to request a retake."
+              style={{
+                display: "flex", alignItems: "center", gap: 6, fontFamily: mono, fontSize: 12, fontWeight: 700,
+                padding: "4px 10px", borderRadius: 5,
+                color: timeLeft < 2 * 3600 * 1000 ? "#fca5a5" : C.amber,
+                background: timeLeft < 2 * 3600 * 1000 ? "rgba(229, 83, 75, 0.1)" : "rgba(245, 166, 35, 0.08)",
+                border: `1px solid ${timeLeft < 2 * 3600 * 1000 ? "rgba(229, 83, 75, 0.3)" : "rgba(245, 166, 35, 0.25)"}`,
+              }}
+            >
+              <Clock size={13} /> {formatTimeLeft(timeLeft)}
+            </div>
+          )}
           <div
             style={{
               background: isCompleted ? "rgba(0, 230, 118, 0.12)" : "rgba(245, 166, 35, 0.12)",

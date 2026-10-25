@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Play, Lock, Video, CheckCircle2, Clock, FileBadge, RotateCcw } from "lucide-react";
+import { Play, Lock, Video, CheckCircle2, Clock, FileBadge, RotateCcw, Hourglass } from "lucide-react";
 import Panel from "../common/Panel";
 import Btn from "../common/Btn";
 import Badge, { DiffBadge } from "../common/Badge";
@@ -7,6 +7,7 @@ import ProgressBar from "../common/ProgressBar";
 import { C, sans, mono } from "../../constants/theme";
 import CertificateModal from "./CertificateModal";
 import { getStoredUser } from "../../api/auth";
+import { useTimeLeft, formatTimeLeft } from "../../utils/labTime";
 
 export default function LabCard({ lab, onOpen, onRequestRetake }) {
   const [showCert, setShowCert] = useState(false);
@@ -25,17 +26,23 @@ export default function LabCard({ lab, onOpen, onRequestRetake }) {
     (typeof lab.pct === "number" && lab.pct >= 100)
   );
 
-  // A lab is locked ONLY if completed (all questions attended) OR explicitly locked by system/subject
-  const isLocked = Boolean(lab.is_locked || isCompleted);
+  // Started but not finished within the 24-hour window: locked until a retake is approved
+  const isExpired = !isCompleted && Boolean(lab.is_expired || lab.submission_status === "EXPIRED");
 
-  // A lab is in-progress/started if attend_count > 0 or in-progress, but NOT completed
-  const isStarted = !isCompleted && Boolean(
+  // A lab is locked ONLY if completed (all questions attended) OR explicitly locked by system/subject/time
+  const isLocked = Boolean(lab.is_locked || isCompleted || isExpired);
+
+  // A lab is in-progress/started if attend_count > 0 or in-progress, but NOT completed or timed out
+  const isStarted = !isCompleted && !isExpired && Boolean(
     (lab.pct && lab.pct > 0) ||
     lab.submission_status === "IN_PROGRESS" ||
     (lab.attend_count && lab.attend_count > 0)
   );
 
   const hasPendingRetake = lab.retake_request_status === "PENDING";
+  const timeLeft = useTimeLeft(isStarted ? lab.attempt_deadline : null);
+  const timeUpNow = timeLeft !== null && timeLeft <= 0; // ran out while the page was open
+  const lowTime = timeLeft !== null && timeLeft > 0 && timeLeft < 2 * 3600 * 1000;
 
   const certData = isCompleted ? {
     certId: `BLITZ-CERT-${String(lab.id).padStart(3, "0")}-${Math.floor(1000 + Math.random() * 9000)}`,
@@ -80,6 +87,12 @@ export default function LabCard({ lab, onOpen, onRequestRetake }) {
             <Badge tone="green">
               <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
                 <CheckCircle2 size={10} /> COMPLETED
+              </span>
+            </Badge>
+          ) : isExpired ? (
+            <Badge tone="danger">
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
+                <Hourglass size={10} /> TIME UP
               </span>
             </Badge>
           ) : isLocked ? (
@@ -138,8 +151,24 @@ export default function LabCard({ lab, onOpen, onRequestRetake }) {
             fontSize: 11, fontFamily: sans, color: "#fca5a5", background: "rgba(229, 83, 75, 0.08)",
             padding: "5px 8px", borderRadius: 4, display: "flex", alignItems: "center", gap: 5
           }}>
-            <Lock size={11} color={C.danger} />
+            {isExpired ? <Hourglass size={11} color={C.danger} /> : <Lock size={11} color={C.danger} />}
             <span>{lab.lock_reason || `Requires assignment to subject ${lab.subject_name || 'subject'}`}</span>
+          </div>
+        ) : isStarted && timeLeft !== null ? (
+          <div
+            title="A started lab must be finished within 24 hours. After that it locks and you need to request a retake."
+            style={{
+              fontSize: 11, fontFamily: sans, padding: "5px 8px", borderRadius: 4, display: "flex", alignItems: "center", gap: 5,
+              color: timeUpNow || lowTime ? "#fca5a5" : C.amber,
+              background: timeUpNow || lowTime ? "rgba(229, 83, 75, 0.08)" : "rgba(245, 166, 35, 0.08)",
+            }}
+          >
+            <Hourglass size={11} />
+            <span>
+              {timeUpNow
+                ? "Time is up — refresh to request a retake."
+                : `${formatTimeLeft(timeLeft)} to finish this lab`}
+            </span>
           </div>
         ) : null}
 
@@ -233,16 +262,35 @@ export default function LabCard({ lab, onOpen, onRequestRetake }) {
               </Btn>
             ) : null}
           </div>
+        ) : isExpired ? (
+          // Time window ran out: the only way back in is an approved retake
+          hasPendingRetake ? (
+            <span
+              style={{
+                marginTop: 4, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
+                padding: "8px 14px", borderRadius: 6, border: "1px solid rgba(245, 166, 35, 0.35)",
+                background: "rgba(245, 166, 35, 0.08)", color: C.amber, fontFamily: sans, fontSize: 12.5, fontWeight: 600,
+              }}
+            >
+              <Clock size={14} /> Retake Pending
+            </span>
+          ) : onRequestRetake ? (
+            <Btn icon={RotateCcw} variant="outline" onClick={() => onRequestRetake(lab)} style={{ marginTop: 4 }}>
+              Request Retake
+            </Btn>
+          ) : null
         ) : (
           <Btn
-            onClick={isLocked ? undefined : onOpen}
-            disabled={isLocked}
-            icon={isLocked ? Lock : Play}
-            style={{ marginTop: 4, cursor: isLocked ? "not-allowed" : "pointer" }}
-            variant={isLocked ? "subtle" : "primary"}
+            onClick={isLocked || timeUpNow ? undefined : onOpen}
+            disabled={isLocked || timeUpNow}
+            icon={isLocked || timeUpNow ? Lock : Play}
+            style={{ marginTop: 4, cursor: isLocked || timeUpNow ? "not-allowed" : "pointer" }}
+            variant={isLocked || timeUpNow ? "subtle" : "primary"}
           >
             {isLocked
               ? "Locked (Subject Required)"
+              : timeUpNow
+              ? "Time Up"
               : isStarted
               ? "Continue Lab"
               : "Start Lab"}

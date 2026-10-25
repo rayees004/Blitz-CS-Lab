@@ -1,5 +1,8 @@
+from datetime import timedelta
+
 from django.db import models
 from django.conf import settings
+from django.utils import timezone
 
 
 class Course(models.Model):
@@ -343,6 +346,12 @@ class LabScore(models.Model):
     first_attended_at = models.DateTimeField(auto_now_add=True)
     last_attended_at = models.DateTimeField(auto_now=True)
     completed_at = models.DateTimeField(null=True, blank=True)
+    # Start of the current attempt's time window. Empty = no attempt running yet
+    # (e.g. right after a retake is approved): the window starts on the next attend.
+    attempt_started_at = models.DateTimeField(null=True, blank=True)
+
+    # How long a student has to finish a lab once they start it; after that it locks until a retake is approved
+    ATTEMPT_WINDOW = timedelta(hours=24)
 
     class Meta:
         ordering = ['-last_attended_at']
@@ -355,6 +364,15 @@ class LabScore(models.Model):
 
     def __str__(self):
         return f"LabScore: {self.student.username} → {self.lab.name}: {self.score}/{self.max_score} pts (Attended {self.attend_count}x)"
+
+    @property
+    def attempt_deadline(self):
+        return self.attempt_started_at + self.ATTEMPT_WINDOW if self.attempt_started_at else None
+
+    def is_attempt_expired(self, now=None):
+        """An unfinished attempt whose time window has run out."""
+        deadline = self.attempt_deadline
+        return bool(not self.is_completed and deadline and (now or timezone.now()) >= deadline)
 
 
 class StudyMaterial(models.Model):

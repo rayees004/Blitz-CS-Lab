@@ -1258,6 +1258,17 @@ def can_student_attend_lab(student, lab):
         msg = "Lab completed (All questions submitted). Retake request is pending administrator approval." if pending_retake else "Lab completed (All questions submitted). You can request a retake to attend again."
         return False, msg, lab.subject
 
+    # A started lab must be finished within 24 hours; after that it locks until a retake is approved
+    if prior_score and prior_score.is_attempt_expired():
+        pending_retake = LabRetakeRequest.objects.filter(student=student, lab=lab, status='PENDING').exists()
+        hours = int(LabScore.ATTEMPT_WINDOW.total_seconds() // 3600)
+        msg = (
+            f"Your {hours}-hour time to finish this lab has ended. Retake request is pending approval."
+            if pending_retake else
+            f"Your {hours}-hour time to finish this lab has ended. Send a retake request to attend it again."
+        )
+        return False, msg, lab.subject
+
     # Class-Based mode: the lab must also be assigned to the student's class
     access_mode = getattr(student, 'lab_access_mode', 'unrestricted')
     if access_mode == 'class_based':
@@ -1328,10 +1339,12 @@ class StudentLabListView(APIView):
                 retake_requests_by_lab[rr.lab_id] = rr
 
         enriched_labs = []
+        now = timezone.now()
         total_points_earned = 0
         total_possible_points = 0
         labs_completed_count = 0
         labs_in_progress_count = 0
+        labs_expired_count = 0
         total_attendances = 0
         assigned_labs_count = 0
         total_questions_completed = 0
@@ -1358,6 +1371,10 @@ class StudentLabListView(APIView):
             elif sub and sub.status == 'COMPLETED':
                 sub_status = 'COMPLETED'
                 labs_completed_count += 1
+            elif ls and ls.is_attempt_expired(now):
+                # Started but not finished within the 24-hour window: locked until a retake is approved
+                sub_status = 'EXPIRED'
+                labs_expired_count += 1
             elif (ls and ls.attend_count > 0) or (sub and sub.status == 'IN_PROGRESS'):
                 sub_status = 'IN_PROGRESS'
                 labs_in_progress_count += 1
@@ -1435,6 +1452,10 @@ class StudentLabListView(APIView):
                 'submitted_at': ls.completed_at if ls else (sub.submitted_at if sub else None),
                 'retake_request_status': retake_requests_by_lab.get(lab.id).status if retake_requests_by_lab.get(lab.id) else None,
                 'retake_request_id': retake_requests_by_lab.get(lab.id).id if retake_requests_by_lab.get(lab.id) else None,
+                # 24-hour attempt window: when the running attempt locks, and whether it already has
+                'attempt_deadline': ls.attempt_deadline if ls and sub_status == 'IN_PROGRESS' else None,
+                'is_expired': sub_status == 'EXPIRED',
+                'can_request_retake': sub_status in ('COMPLETED', 'EXPIRED'),
             })
 
         overall_pct = round((total_points_earned / total_possible_points) * 100) if total_possible_points > 0 else 0
@@ -1456,6 +1477,8 @@ class StudentLabListView(APIView):
             'student_username': student.username if student else 'student',
             'labs_completed': labs_completed_count,
             'labs_in_progress': labs_in_progress_count,
+            'labs_expired': labs_expired_count,
+            'attempt_window_hours': int(LabScore.ATTEMPT_WINDOW.total_seconds() // 3600),
             'labs_available': labs.count(),
             'labs_assigned': assigned_labs_count,
             'total_questions_completed': total_questions_completed,
@@ -1548,12 +1571,18 @@ class StudentLabAttendView(APIView):
                     'attend_count': 1,
                     'total_questions_count': lab.questions.count(),
                     'solved_questions_count': 0,
+                    'attempt_started_at': timezone.now(),
                 }
             )
             if not score_created:
                 # Increment attendance count, but DO NOT increase score!
                 lab_score.attend_count += 1
-                lab_score.save(update_fields=['attend_count', 'last_attended_at'])
+                fields = ['attend_count', 'last_attended_at']
+                if lab_score.attempt_started_at is None:
+                    # First attend after a retake approval starts a fresh 24-hour window
+                    lab_score.attempt_started_at = timezone.now()
+                    fields.append('attempt_started_at')
+                lab_score.save(update_fields=fields)
 
             # 2. Update or create LabSubmission
             sub, created = LabSubmission.objects.get_or_create(
@@ -1646,6 +1675,8 @@ class StudentLabAttendView(APIView):
             'lab_score': {
                 'score': current_score,
                 'max_score': lab.points,
+                'attempt_deadline': lab_score.attempt_deadline if lab_score and not lab_score.is_completed else None,
+                'attempt_window_hours': int(LabScore.ATTEMPT_WINDOW.total_seconds() // 3600),
                 'attend_count': lab_score.attend_count if lab_score else 1,
                 'is_completed': lab_score.is_completed if lab_score else (submission.status == 'COMPLETED' if submission else False),
             },
@@ -1701,8 +1732,12 @@ class StudentLabSubmitMarkView(APIView):
                 'attend_count': 1,
                 'total_questions_count': lab.questions.count(),
                 'solved_questions_count': 0,
+                'attempt_started_at': timezone.now(),
             }
         )
+        if lab_score.attempt_started_at is None and not lab_score.is_completed:
+            lab_score.attempt_started_at = timezone.now()
+            lab_score.save(update_fields=['attempt_started_at'])
 
         action = request.data.get('action', 'submit_flag')
         answers = dict(submission.answers) if isinstance(submission.answers, dict) else {}
@@ -1946,10 +1981,11 @@ class AdminStudentLabRetakePermissionView(APIView):
                 answers={}
             )
 
-        # Unlock lab score
+        # Unlock lab score; the next attend starts a fresh 24-hour window
         if lab_score:
             lab_score.is_completed = False
             lab_score.completed_at = None
+            lab_score.attempt_started_at = None
             if reset_score:
                 lab_score.score = 0
                 lab_score.solved_questions_count = 0
@@ -2036,14 +2072,16 @@ class StudentLabRetakeRequestView(APIView):
             return Response({'detail': 'Authentication required.'}, status=status.HTTP_401_UNAUTHORIZED)
         lab = get_object_or_404(Lab, pk=pk)
 
-        # Retakes can only be requested for labs the student has completed
+        # Retakes can be requested for completed labs, or labs whose 24-hour window ran out
+        lab_score = LabScore.objects.filter(student=student, lab=lab).first()
         is_completed = (
-            LabScore.objects.filter(student=student, lab=lab, is_completed=True).exists()
+            bool(lab_score and lab_score.is_completed)
             or LabSubmission.objects.filter(student=student, lab=lab, status='COMPLETED').exists()
         )
-        if not is_completed:
+        is_expired = bool(lab_score and lab_score.is_attempt_expired())
+        if not (is_completed or is_expired):
             return Response({
-                'detail': 'You can only request a retake for a lab you have completed.',
+                'detail': 'You can only request a retake for a lab you have completed or whose time has ended.',
             }, status=status.HTTP_400_BAD_REQUEST)
 
         # Check if there is already a PENDING request
@@ -2191,6 +2229,7 @@ class AdminLabRetakeRequestActionView(APIView):
             if lab_score:
                 lab_score.is_completed = False
                 lab_score.completed_at = None
+                lab_score.attempt_started_at = None  # next attend starts a fresh 24-hour window
                 if reset_score:
                     lab_score.score = 0
                     lab_score.solved_questions_count = 0
