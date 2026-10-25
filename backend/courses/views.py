@@ -10,6 +10,7 @@ from django.db import transaction
 from django.db.models import Q, Sum, Count
 import random
 from blitz_backend.pagination import paginate
+from blitz_backend.throttling import with_default_throttles, UploadRateThrottle
 from accounts.models import User
 from accounts.serializers import UserSerializer, CreateStudentSerializer
 from accounts.views import IsAdminOrStaff
@@ -649,6 +650,8 @@ class LabListCreateView(APIView):
     POST /api/labs/  - Create a new lab with questions and hints (Admin/Staff only)
     """
     parser_classes = [MultiPartParser, FormParser, JSONParser]
+    # File uploads get a stricter per-user limit (only requests that include a file count)
+    throttle_classes = with_default_throttles(UploadRateThrottle)
 
     def get_permissions(self):
         if self.request.method == 'GET':
@@ -807,6 +810,8 @@ class LabDetailView(APIView):
     DELETE /api/labs/<id>/  - Soft-delete or delete lab (Admin/Staff only)
     """
     parser_classes = [MultiPartParser, FormParser, JSONParser]
+    # File uploads get a stricter per-user limit (only requests that include a file count)
+    throttle_classes = with_default_throttles(UploadRateThrottle)
 
     def get_permissions(self):
         if self.request.method == 'GET':
@@ -2919,6 +2924,8 @@ class StudyMaterialListCreateView(APIView):
     POST /api/materials/  — upload a new study material (Admin only, multipart/form-data)
     """
     parser_classes = [MultiPartParser, FormParser, JSONParser]
+    # File uploads get a stricter per-user limit (only requests that include a file count)
+    throttle_classes = with_default_throttles(UploadRateThrottle)
 
     def get_permissions(self):
         if self.request.method == 'GET':
@@ -2998,6 +3005,8 @@ class StudyMaterialDetailView(APIView):
     DELETE /api/materials/<id>/ — delete material (Admin only)
     """
     parser_classes = [MultiPartParser, FormParser, JSONParser]
+    # File uploads get a stricter per-user limit (only requests that include a file count)
+    throttle_classes = with_default_throttles(UploadRateThrottle)
 
     def get_permissions(self):
         if self.request.method == 'GET':

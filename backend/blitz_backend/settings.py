@@ -204,5 +204,42 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
     ],
+    # API rate limiting (see blitz_backend/throttling.py). Applied to every DRF endpoint:
+    # anonymous requests are limited per client IP, signed-in requests per user account,
+    # so each user has an independent budget. Over the limit → HTTP 429 with Retry-After.
+    'DEFAULT_THROTTLE_CLASSES': [
+        'blitz_backend.throttling.AnonIPRateThrottle',
+        'blitz_backend.throttling.PerUserRateThrottle',
+    ],
+    # Rates are "<count>/<second|minute|hour|day>" and can be changed per environment in .env.
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': os.getenv('THROTTLE_RATE_ANON', '20/minute'),         # anonymous, per IP
+        'user': os.getenv('THROTTLE_RATE_USER', '100/minute'),        # signed in, per user
+        'login': os.getenv('THROTTLE_RATE_LOGIN', '20/minute'),       # login attempts, per IP (a classroom shares one IP)
+        'password_change': os.getenv('THROTTLE_RATE_PASSWORD', '3/minute'),  # setting passwords, per user
+        'uploads': os.getenv('THROTTLE_RATE_UPLOADS', '10/hour'),     # requests carrying a file, per user
+    },
 }
+
+# Caches. 'default' stays Django's per-process memory cache (unchanged behaviour).
+# 'throttle' holds rate-limit counters and must be shared by every app process — the server
+# runs several, and a per-process memory cache would give each its own separate limit.
+# A file-based cache is shared on this single-server deployment without extra infrastructure;
+# point THROTTLE_CACHE_DIR elsewhere if needed. (Switch to Redis if the app ever runs on
+# more than one machine.)
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+    },
+    'throttle': {
+        'BACKEND': 'django.core.cache.backends.filebased.FileBasedCache',
+        'LOCATION': os.getenv('THROTTLE_CACHE_DIR', str(BASE_DIR / '.throttle_cache')),
+        'TIMEOUT': 24 * 60 * 60,
+        'OPTIONS': {'MAX_ENTRIES': 20000},
+    },
+}
+if 'test' in sys.argv:
+    # In tests the counters are discarded, so ordinary tests are never rate limited;
+    # blitz_backend/tests_throttling.py switches to a real cache to test the limits.
+    CACHES['throttle'] = {'BACKEND': 'django.core.cache.backends.dummy.DummyCache'}
 

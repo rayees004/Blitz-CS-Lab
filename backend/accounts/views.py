@@ -17,6 +17,7 @@ from django.db.models import Q, Count
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from blitz_backend.pagination import paginate
+from blitz_backend.throttling import with_default_throttles, LoginRateThrottle, PasswordChangeRateThrottle
 
 
 class IsAdminOrStaff(IsAuthenticated):
@@ -35,6 +36,8 @@ class IsAdminOrStaff(IsAuthenticated):
 class LoginView(APIView):
     authentication_classes = []
     permission_classes = [AllowAny]
+    # Brute-force protection: strict per-IP limit on login attempts
+    throttle_classes = with_default_throttles(LoginRateThrottle)
 
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
@@ -249,6 +252,8 @@ class StudentSetPasswordView(APIView):
     Body: { password, confirm_password }. Existing sessions of the student are signed out.
     """
     permission_classes = [IsAdminOrStaff]
+    # Credential changes get a strict per-user limit
+    throttle_classes = with_default_throttles(PasswordChangeRateThrottle)
 
     def post(self, request, pk):
         student = get_object_or_404(User, pk=pk, user_type='student')
