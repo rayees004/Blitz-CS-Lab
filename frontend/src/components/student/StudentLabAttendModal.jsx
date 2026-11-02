@@ -797,7 +797,7 @@ export default function StudentLabAttendModal({ lab, onClose, onUpdated }) {
                                   handleSubmitFlag(q.id);
                                 }
                               }}
-                              placeholder={isSolved ? "Solved! Flag submitted." : "BLITZ{ enter captured flag }"}
+                              placeholder={isSolved ? "Solved! Flag submitted." : "Enter your answer"}
                               style={{
                                 flex: 1,
                                 minWidth: 0,

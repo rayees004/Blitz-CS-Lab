@@ -43,6 +43,10 @@ from .serializers import (
 )
 
 
+def normalize_flag(value):
+    """Comparable form of a lab flag: case-insensitive, with runs of whitespace collapsed."""
+    return ' '.join(str(value).split()).casefold()
+
 
 class CourseListCreateView(APIView):
     """
@@ -1786,9 +1790,9 @@ class StudentLabSubmitMarkView(APIView):
             already_solved = bool(q_ans.get('is_correct'))
             unlocked_hints = q_ans.get('hints_unlocked', [])
 
-            expected_flag = question.flag.strip()
-            # Flag match check (case-insensitive strip)
-            is_correct = (submitted_flag.lower() == expected_flag.lower()) if expected_flag else (len(submitted_flag) > 0)
+            expected_flag = normalize_flag(question.flag)
+            # Flags are free-form answers: match the same text, ignoring case and spacing
+            is_correct = (normalize_flag(submitted_flag) == expected_flag) if expected_flag else (len(submitted_flag) > 0)
 
             if is_correct:
                 if already_solved:

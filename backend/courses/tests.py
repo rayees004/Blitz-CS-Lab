@@ -130,6 +130,20 @@ class LabSecurityTests(TestCase):
         self.assertTrue(LabSubmission.objects.filter(student=self.student, lab=self.lab).exists())
         self.assertFalse(LabSubmission.objects.filter(student=self.other_student).exists())
 
+    def _submit_flag(self, flag):
+        return self.client.post(f'/api/student/labs/{self.lab.id}/submit/', {
+            'action': 'submit_flag', 'question_id': self.question.id, 'flag': flag
+        }, format='json')
+
+    def test_plain_sentence_flag_matches_without_special_format(self):
+        self.question.flag = 'Digital Forensics and Incident Response'
+        self.question.save()
+        self.client.force_authenticate(self.student)
+
+        self.assertFalse(self._submit_flag('BLITZ{Digital Forensics and Incident Response}').data['is_correct'])
+        self.assertFalse(self._submit_flag('Digital Forensics').data['is_correct'])
+        self.assertTrue(self._submit_flag('  digital forensics   AND incident response ').data['is_correct'])
+
 
 class SubjectBasedLabAccessTests(TestCase):
     """Students may only attend labs of their assigned subjects, in both access modes."""

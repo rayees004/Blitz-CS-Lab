@@ -12,6 +12,8 @@ deploy_secrets.*
 id_rsa*
 id_ed25519*
 
+DEPLOYMENT.md
+
 # Virtual environments
 env/
 env

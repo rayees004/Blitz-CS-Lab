@@ -76,7 +76,7 @@ function AddLabModalContent({ onClose, onLabCreated, initialLab = null, initialC
               {
                 title: "Vulnerability Discovery & Exploitation",
                 description: "Identify the vulnerability and extract the validation flag.",
-                flag: "BLITZ{sample_flag_123}",
+                flag: "",
                 points: 50,
                 hints: [
                   { hint_text: "Examine request parameters in browser developer tools.", cost: 10 },
@@ -104,7 +104,7 @@ function AddLabModalContent({ onClose, onLabCreated, initialLab = null, initialC
         {
           title: "Vulnerability Discovery & Exploitation",
           description: "Identify the vulnerability and extract the validation flag.",
-          flag: "BLITZ{example_secret_flag}",
+          flag: "",
           points: 50,
           hints: [
             { hint_text: "Check common endpoint parameters and response headers.", cost: 10 },
@@ -249,6 +249,9 @@ function AddLabModalContent({ onClose, onLabCreated, initialLab = null, initialC
     form.questions.forEach((q, qIdx) => {
       if (!q.title.trim()) {
         errs[`q_${qIdx}_title`] = `Question #${qIdx + 1} title is required`;
+      }
+      if (!q.flag.trim()) {
+        errs[`q_${qIdx}_flag`] = `Question #${qIdx + 1} flag is required`;
       }
     });
 
@@ -1268,14 +1271,14 @@ function AddLabModalContent({ onClose, onLabCreated, initialLab = null, initialC
                         <div style={{ position: "relative" }}>
                           <input
                             type="text"
-                            placeholder="BLITZ{flag_here}"
+                            placeholder="e.g. Digital Forensics and Incident Response"
                             value={q.flag}
                             onChange={(e) => updateQuestion(qIdx, "flag", e.target.value)}
                             style={{
                               width: "100%",
                               boxSizing: "border-box",
                               background: C.panel,
-                              border: `1px solid ${C.border}`,
+                              border: `1px solid ${errors[`q_${qIdx}_flag`] ? C.danger : C.border}`,
                               borderRadius: 6,
                               padding: "8px 10px 8px 28px",
                               fontFamily: mono,
@@ -1286,6 +1289,15 @@ function AddLabModalContent({ onClose, onLabCreated, initialLab = null, initialC
                           />
                           <Flag size={13} color={C.mid} style={{ position: "absolute", left: 9, top: 10 }} />
                         </div>
+                        {errors[`q_${qIdx}_flag`] ? (
+                          <div style={{ color: C.danger, fontSize: 11, marginTop: 3 }}>
+                            {errors[`q_${qIdx}_flag`]}
+                          </div>
+                        ) : (
+                          <div style={{ fontFamily: sans, fontSize: 11, color: C.mid, marginTop: 3 }}>
+                            Any format. Students must enter this same text; capital letters and extra spaces are ignored.
+                          </div>
+                        )}
                       </div>
                     </div>
 

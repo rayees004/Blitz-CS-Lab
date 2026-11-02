@@ -687,7 +687,7 @@ export default function LabDetail({ lab, back }) {
                         onKeyDown={(e) => {
                           if (e.key === "Enter" && !isSolved) handleSubmitFlag(q.id);
                         }}
-                        placeholder={isSolved ? "Solved! Flag submitted." : "BLITZ{ submit question flag }"}
+                        placeholder={isSolved ? "Solved! Flag submitted." : "Enter your answer"}
                         style={{
                           flex: 1,
                           minWidth: 0,
