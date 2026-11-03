@@ -12,10 +12,10 @@ export const API_BASE =
 export const DJANGO_ADMIN_URL =
   import.meta.env.VITE_ADMIN_URL ||
   (import.meta.env.VITE_BACKEND_URL
-    ? `${import.meta.env.VITE_BACKEND_URL.replace(/\/+$/, '')}/admin/`
+    ? `${import.meta.env.VITE_BACKEND_URL.replace(/\/+$/, '')}/asdfg/hjkl/admin/`
     : import.meta.env.PROD
-    ? 'https://backend.decodexe.com/admin/'
-    : '/admin/');
+    ? 'https://backend.decodexe.com/asdfg/hjkl/admin/'
+    : '/asdfg/hjkl/admin/');
 
 /**
  * Returns standard authentication headers, automatically attaching the auth token if present.
