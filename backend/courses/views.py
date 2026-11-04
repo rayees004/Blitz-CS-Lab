@@ -1558,9 +1558,19 @@ class StudentLabAttendView(APIView):
         student = get_current_student(request)
         lab = self.get_lab(pk)
         can_attend, lock_reason, _ = can_student_attend_lab(student, lab)
-        if not can_attend:
+        if not can_attend and not self._is_completed_by(student, lab):
             return Response({'detail': lock_reason, 'is_locked': True, 'lock_reason': lock_reason}, status=status.HTTP_403_FORBIDDEN)
+        # A completed lab stays viewable (read-only) so the final marks and certificate can be shown;
+        # starting a new attempt (POST) and submitting answers remain blocked until a retake is approved.
         return self._render_attend_workspace(request, pk)
+
+    @staticmethod
+    def _is_completed_by(student, lab):
+        if not student:
+            return False
+        if LabScore.objects.filter(student=student, lab=lab, is_completed=True).exists():
+            return True
+        return LabSubmission.objects.filter(student=student, lab=lab, status='COMPLETED').exists()
 
     def post(self, request, pk):
         student = get_current_student(request)
@@ -1890,15 +1900,7 @@ class StudentLabSubmitMarkView(APIView):
             solved_count = sum(1 for a in answers.values() if isinstance(a, dict) and a.get('is_correct'))
             total_questions = lab.questions.count()
 
-            # Requirement 4: Lab only locks on after all questions complete
-            if total_questions > 0 and solved_count < total_questions:
-                return Response({
-                    'detail': f'Lab cannot be finalized or locked until all questions are completed. ({solved_count} of {total_questions} questions solved).',
-                    'solved_count': solved_count,
-                    'total_questions': total_questions,
-                    'is_completed': False,
-                }, status=status.HTTP_400_BAD_REQUEST)
-
+            # Students may finalize early: marks and certificate are based only on the questions they solved
             raw_total = sum(
                 item.get('points_awarded', 0)
                 for item in answers.values()

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   ChevronRight, Wifi, Clock, AlertTriangle, FileText, Globe,
   Terminal as TerminalIcon, Flag, Play, CheckCircle2, Lock,
@@ -76,6 +76,11 @@ export default function LabDetail({ lab, back }) {
       ? 100
       : 0;
   const timeLeft = useTimeLeft(isCompleted ? null : workspace?.lab_score?.attempt_deadline);
+  // Stable per lab so the certificate ID does not change on re-renders
+  const certId = useMemo(
+    () => `BLITZ-CERT-${String(labId).padStart(3, "0")}-${Math.floor(1000 + Math.random() * 9000)}`,
+    [labId]
+  );
 
   const handleSubmitFlag = async (questionId) => {
     const val = flagInputs[questionId]?.trim();
@@ -86,20 +91,36 @@ export default function LabDetail({ lab, back }) {
       [questionId]: { loading: true, msg: null, success: false },
     }));
 
+    let res;
     try {
-      const res = await submitStudentLabFlag(labId, questionId, val);
+      res = await submitStudentLabFlag(labId, questionId, val);
       setFeedbacks((prev) => ({
         ...prev,
         [questionId]: { loading: false, msg: res.message, success: res.is_correct },
       }));
-
-      const updated = await attendStudentLab(labId);
-      setWorkspace(updated);
     } catch (err) {
       setFeedbacks((prev) => ({
         ...prev,
         [questionId]: { loading: false, msg: err.message || "Submission failed", success: false },
       }));
+      return;
+    }
+
+    // Refresh marks; a refresh failure must not replace the submission result shown above
+    await refreshWorkspace();
+
+    // Last question answered correctly: the lab is auto-finalized, show the certificate right away
+    if (res.is_correct && (res.all_solved || res.is_completed)) {
+      setShowCert(true);
+    }
+  };
+
+  const refreshWorkspace = async () => {
+    try {
+      const updated = await attendStudentLab(labId);
+      setWorkspace(updated);
+    } catch {
+      // Keep the current view if the refresh fails
     }
   };
 
@@ -130,15 +151,16 @@ export default function LabDetail({ lab, back }) {
 
     setFinalizing(true);
     try {
-      const res = await finalizeStudentLab(labId);
-      alert(res.message || "Lab completed!");
-      const updated = await attendStudentLab(labId);
-      setWorkspace(updated);
+      await finalizeStudentLab(labId);
     } catch (err) {
       alert(err.message || "Failed to finalize lab.");
-    } finally {
       setFinalizing(false);
+      return;
     }
+    await refreshWorkspace();
+    setFinalizing(false);
+    // Certificate reflects the questions actually solved and the marks earned
+    setShowCert(true);
   };
 
   if (error) {
@@ -834,7 +856,7 @@ export default function LabDetail({ lab, back }) {
       {showCert && (
         <CertificateModal
           certificate={{
-            certId: `BLITZ-CERT-${String(labId).padStart(3, "0")}-${Math.floor(1000 + Math.random() * 9000)}`,
+            certId,
             studentName: workspace?.student_name || "Student",
             labName: l.name || lab?.name || "Security Lab",
             labDesc: l.description || lab?.description || "",

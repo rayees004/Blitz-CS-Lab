@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   X, FlaskConical, CheckCircle2, AlertCircle, HelpCircle,
   Lightbulb, ExternalLink, Copy, Check, Send, Trophy,
@@ -87,8 +87,9 @@ export default function StudentLabAttendModal({ lab, onClose, onUpdated }) {
       [questionId]: { submitting: true, msg: null, success: false },
     }));
 
+    let res;
     try {
-      const res = await submitStudentLabFlag(lab.id, questionId, flagVal);
+      res = await submitStudentLabFlag(lab.id, questionId, flagVal);
       setFeedback((prev) => ({
         ...prev,
         [questionId]: {
@@ -97,11 +98,6 @@ export default function StudentLabAttendModal({ lab, onClose, onUpdated }) {
           success: res.is_correct,
         },
       }));
-
-      // Reload fresh workspace state to reflect awarded points
-      const updatedData = await attendStudentLab(lab.id);
-      setWorkspace(updatedData);
-      if (onUpdated) onUpdated();
     } catch (err) {
       setFeedback((prev) => ({
         ...prev,
@@ -111,6 +107,25 @@ export default function StudentLabAttendModal({ lab, onClose, onUpdated }) {
           success: false,
         },
       }));
+      return;
+    }
+
+    // Reload fresh workspace state to reflect awarded points (never overrides the result shown above)
+    await refreshWorkspace();
+    if (onUpdated) onUpdated();
+
+    // Last question answered correctly: the lab is auto-finalized, show the certificate right away
+    if (res.is_correct && (res.all_solved || res.is_completed)) {
+      setShowCert(true);
+    }
+  };
+
+  const refreshWorkspace = async () => {
+    try {
+      const updatedData = await attendStudentLab(lab.id);
+      setWorkspace(updatedData);
+    } catch {
+      // Keep the current view if the refresh fails
     }
   };
 
@@ -135,17 +150,13 @@ export default function StudentLabAttendModal({ lab, onClose, onUpdated }) {
     }
   };
 
-  // Finalize lab and submit marks - only permitted after ALL questions are completed
+  // Finalize lab and submit marks - early finalize records marks for the solved questions only
   const handleFinalize = async () => {
-    if (questions.length > 0 && solvedQuestionsCount < questions.length) {
-      alert(
-        `Lab cannot be locked or finalized until all questions are completed.\n\nCurrently completed: ${solvedQuestionsCount} of ${questions.length} questions.`
-      );
-      return;
-    }
-
+    const isPartial = questions.length > 0 && solvedQuestionsCount < questions.length;
     const ok = window.confirm(
-      `You have completed all ${questions.length} questions!\n\nFinalize and record your marks (${currentScore} / ${maxScore} pts)? This will lock the lab.`
+      isPartial
+        ? `You have solved ${solvedQuestionsCount} of ${questions.length} questions.\n\nSubmitting now records your final score based ONLY on your attended questions (${currentScore} / ${maxScore} pts) and locks the lab.\n\nProceed with final submission?`
+        : `You have completed all ${questions.length} questions!\n\nFinalize and record your marks (${currentScore} / ${maxScore} pts)? This will lock the lab.`
     );
     if (!ok) return;
 
@@ -153,18 +164,25 @@ export default function StudentLabAttendModal({ lab, onClose, onUpdated }) {
     try {
       const res = await finalizeStudentLab(lab.id);
       setFinalSuccess(res.message || "Lab completed and marks recorded!");
-      const updatedData = await attendStudentLab(lab.id);
-      setWorkspace(updatedData);
-      if (onUpdated) onUpdated();
     } catch (err) {
       alert(err.message || "Failed to finalize lab.");
-    } finally {
       setFinalizing(false);
+      return;
     }
+    await refreshWorkspace();
+    if (onUpdated) onUpdated();
+    setFinalizing(false);
+    // Certificate reflects the questions actually solved and the marks earned
+    setShowCert(true);
   };
 
   const timeLeft = useTimeLeft(
     workspace?.lab_score?.is_completed ? null : workspace?.lab_score?.attempt_deadline
+  );
+  // Stable per lab so the certificate ID does not change on re-renders
+  const certId = useMemo(
+    () => `BLITZ-CERT-${String(lab?.id || 1).padStart(3, "0")}-${Math.floor(1000 + Math.random() * 9000)}`,
+    [lab?.id]
   );
 
   if (!lab) return null;
@@ -923,18 +941,14 @@ export default function StudentLabAttendModal({ lab, onClose, onUpdated }) {
             </Btn>
             {!isCompleted && (
               <Btn
-                icon={questions.length > 0 && solvedQuestionsCount < questions.length ? Lock : Trophy}
-                disabled={finalizing || loading || (questions.length > 0 && solvedQuestionsCount < questions.length)}
+                icon={Trophy}
+                disabled={finalizing || loading || !!error}
                 onClick={handleFinalize}
-                tone={questions.length > 0 && solvedQuestionsCount < questions.length ? "ghost" : "primary"}
-                title={questions.length > 0 && solvedQuestionsCount < questions.length ? "Complete all questions before locking this lab" : "Finalize and lock lab"}
+                tone="primary"
+                title="Finalize and lock lab (marks are based on the questions you solved)"
                 sm
               >
-                {finalizing
-                  ? "Submitting Marks..."
-                  : (questions.length > 0 && solvedQuestionsCount < questions.length)
-                  ? `Complete All Questions (${solvedQuestionsCount}/${questions.length})`
-                  : "Finalize & Submit Lab"}
+                {finalizing ? "Submitting Marks..." : "Finalize & Submit Lab"}
               </Btn>
             )}
           </div>
@@ -944,7 +958,7 @@ export default function StudentLabAttendModal({ lab, onClose, onUpdated }) {
       {showCert && (
         <CertificateModal
           certificate={{
-            certId: `BLITZ-CERT-${String(lab?.id || 1).padStart(3, "0")}-${Math.floor(1000 + Math.random() * 9000)}`,
+            certId,
             studentName: workspace?.student_name || lab?.student_name || getStoredUser()?.full_name || getStoredUser()?.name || "Student",
             labName: lab?.name || "Security Lab",
             labDesc: lab?.description || "",
