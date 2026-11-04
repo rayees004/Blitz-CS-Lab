@@ -19,6 +19,7 @@ import StudentDashboard from "./src/components/student/StudentDashboard";
 import Learning from "./src/components/student/Learning";
 import LabExplorer from "./src/components/student/LabExplorer";
 import LabDetail from "./src/components/student/LabDetail";
+import LabSubmittedModal from "./src/components/student/LabSubmittedModal";
 import Materials from "./src/components/student/Materials";
 import StudentCertificates from "./src/components/student/StudentCertificates";
 
@@ -75,6 +76,8 @@ export default function BlitzCyberLab() {
   const [studentPage, setStudentPage] = useState("dashboard");
   const [adminPage, setAdminPage] = useState("a-dashboard");
   const [activeLab, setActiveLab] = useState(null);
+  // Result of a lab that was just submitted; shows the success popup on the labs list
+  const [submittedLab, setSubmittedLab] = useState(null);
 
   const [sessionNotice, setSessionNotice] = useState(null);
 
@@ -214,7 +217,16 @@ export default function BlitzCyberLab() {
     dashboard: <StudentDashboard go={goLab} onNavigate={setStudentPage} />,
     learning: <Learning go={goLab} onSelect={setStudentPage} />,
     labs: <LabExplorer go={goLab} />,
-    "lab-detail": <LabDetail lab={activeLab} back={() => setStudentPage("labs")} />,
+    "lab-detail": (
+      <LabDetail
+        lab={activeLab}
+        back={() => setStudentPage("labs")}
+        onSubmitted={(result) => {
+          setSubmittedLab(result);
+          setStudentPage("labs");
+        }}
+      />
+    ),
     attendance: <StudentAttendanceLog />,
     materials: <Materials />,
     progress: <StudentProgressView go={goLab} />,
@@ -296,6 +308,10 @@ export default function BlitzCyberLab() {
         )}
         <div style={{ flex: 1, overflow: "hidden" }}>{pages[studentPage]}</div>
       </div>
+
+      {submittedLab && (
+        <LabSubmittedModal result={submittedLab} onClose={() => setSubmittedLab(null)} />
+      )}
     </div>
   );
 }

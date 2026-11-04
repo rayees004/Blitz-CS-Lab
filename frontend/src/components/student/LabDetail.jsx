@@ -20,7 +20,9 @@ import {
 } from "../../api/labs";
 import { useTimeLeft, formatTimeLeft } from "../../utils/labTime";
 
-export default function LabDetail({ lab, back }) {
+// onSubmitted(result): optional; called when the last correct answer auto-submits the lab,
+// so the parent can return to the labs list and show a "submitted successfully" popup.
+export default function LabDetail({ lab, back, onSubmitted }) {
   const [loading, setLoading] = useState(true);
   const [workspace, setWorkspace] = useState(null);
   const [error, setError] = useState(null);
@@ -106,13 +108,33 @@ export default function LabDetail({ lab, back }) {
       return;
     }
 
+    // Last question answered correctly: the lab is auto-submitted
+    if (res.is_correct && (res.all_solved || res.is_completed)) {
+      const result = {
+        labId,
+        labName: l.name || lab?.name || "Security Lab",
+        labDesc: l.description || lab?.description || "",
+        category: l.category || lab?.category || "Cyber Security",
+        subjectName: l.subject_name || lab?.subject_name || "",
+        studentName: workspace?.student_name || "Student",
+        score: res.total_score ?? currentScore,
+        maxScore,
+        solvedQuestions: res.solved_count ?? questions.length,
+        totalQuestions: res.total_questions ?? questions.length,
+        submittedAt: new Date().toISOString(),
+      };
+      if (onSubmitted) {
+        // Go back to the labs list and show the success popup there
+        onSubmitted(result);
+        return;
+      }
+      await refreshWorkspace();
+      setShowCert(true);
+      return;
+    }
+
     // Refresh marks; a refresh failure must not replace the submission result shown above
     await refreshWorkspace();
-
-    // Last question answered correctly: the lab is auto-finalized, show the certificate right away
-    if (res.is_correct && (res.all_solved || res.is_completed)) {
-      setShowCert(true);
-    }
   };
 
   const refreshWorkspace = async () => {
