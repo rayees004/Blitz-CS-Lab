@@ -5,19 +5,11 @@ import Btn from "../common/Btn";
 import Badge, { DiffBadge } from "../common/Badge";
 import ProgressBar from "../common/ProgressBar";
 import { C, sans, mono } from "../../constants/theme";
-import CertificateModal from "./CertificateModal";
-import { getStoredUser } from "../../api/auth";
+import SubjectCertificateModal from "./SubjectCertificateModal";
 import { useTimeLeft, formatTimeLeft } from "../../utils/labTime";
 
 export default function LabCard({ lab, onOpen, onRequestRetake }) {
   const [showCert, setShowCert] = useState(false);
-  const currentUser = getStoredUser();
-  const studentName =
-    lab.student_name ||
-    currentUser?.full_name ||
-    currentUser?.name ||
-    currentUser?.username ||
-    "Student";
 
   // A lab is only completed when all questions are solved or marked completed
   const isCompleted = Boolean(
@@ -43,20 +35,6 @@ export default function LabCard({ lab, onOpen, onRequestRetake }) {
   const timeLeft = useTimeLeft(isStarted ? lab.attempt_deadline : null);
   const timeUpNow = timeLeft !== null && timeLeft <= 0; // ran out while the page was open
   const lowTime = timeLeft !== null && timeLeft > 0 && timeLeft < 2 * 3600 * 1000;
-
-  const certData = isCompleted ? {
-    certId: `BLITZ-CERT-${String(lab.id).padStart(3, "0")}-${Math.floor(1000 + Math.random() * 9000)}`,
-    studentName: studentName,
-    labName: lab.name,
-    labDesc: lab.desc || lab.description || "",
-    category: lab.cat || lab.category || "Security",
-    subjectName: lab.subject_name || "",
-    score: typeof lab.score === "number" ? lab.score : 0,
-    maxScore: lab.pts || 100,
-    solvedQuestions: typeof lab.solved_questions_count === "number" ? lab.solved_questions_count : 0,
-    totalQuestions: lab.question_count || 1,
-    completedAt: lab.updated_at || new Date().toISOString(),
-  } : null;
 
   return (
     <>
@@ -298,11 +276,8 @@ export default function LabCard({ lab, onOpen, onRequestRetake }) {
         )}
       </Panel>
 
-      {showCert && certData && (
-        <CertificateModal
-          certificate={certData}
-          onClose={() => setShowCert(false)}
-        />
+      {showCert && isCompleted && (
+        <SubjectCertificateModal subjectId={lab.subject_id} onClose={() => setShowCert(false)} />
       )}
     </>
   );

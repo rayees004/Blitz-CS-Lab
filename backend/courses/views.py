@@ -1560,6 +1560,123 @@ class StudentLabListView(APIView):
         })
 
 
+class StudentSubjectCertificateView(APIView):
+    """
+    GET /api/student/certificates/                  — one certificate per subject
+    GET /api/student/certificates/?subject_id=<id>  — only that subject's certificate
+
+    Certificates are subject based: a subject's certificate covers every lab of that subject
+    the student has completed (total score, labs completed, questions solved), plus a
+    per-lab breakdown (lab name, score, questions solved, time of completion).
+    A subject only gets a certificate once at least one of its labs is completed.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        student = get_current_student(request)
+        if not student:
+            return Response({'detail': 'No active student found.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        subject_id = request.query_params.get('subject_id')
+
+        scores = {
+            ls.lab_id: ls
+            for ls in LabScore.objects.filter(student=student).select_related('lab', 'lab__subject')
+        }
+        submissions = {
+            sub.lab_id: sub
+            for sub in LabSubmission.objects.filter(student=student)
+        }
+        completed_lab_ids = {
+            lab_id for lab_id, ls in scores.items() if ls.is_completed
+        } | {
+            lab_id for lab_id, sub in submissions.items() if sub.status == 'COMPLETED'
+        }
+
+        labs_qs = (
+            Lab.objects.filter(id__in=completed_lab_ids, subject__isnull=False)
+            .select_related('subject', 'subject__course', 'course')
+            .prefetch_related('questions')
+        )
+        if subject_id:
+            labs_qs = labs_qs.filter(subject_id=subject_id)
+
+        # Labs of each subject the student can work on (class-based students: their class's labs only)
+        access_mode = getattr(student, 'lab_access_mode', 'unrestricted')
+        is_student = getattr(student, 'user_type', None) == 'student' and not (student.is_staff or student.is_superuser)
+        if is_student and access_mode == 'class_based':
+            subject_labs_base = student.assigned_class.labs.all() if student.assigned_class else Lab.objects.none()
+        else:
+            subject_labs_base = Lab.objects.all()
+
+        by_subject = {}
+        for lab in labs_qs:
+            ls = scores.get(lab.id)
+            sub = submissions.get(lab.id)
+
+            score = ls.score if ls else (sub.score if sub else 0)
+            score = min(lab.points, max(0, score))
+
+            total_questions = len(lab.questions.all())
+            if sub:
+                solved, _ = tally_lab_answers(lab, sub.answers)
+            else:
+                solved = ls.solved_questions_count if ls else 0
+            solved = min(solved, total_questions) if total_questions else solved
+
+            completed_at = (ls.completed_at if ls else None) or (sub.submitted_at if sub else None)
+
+            entry = by_subject.setdefault(lab.subject_id, {'subject': lab.subject, 'labs': []})
+            entry['labs'].append({
+                'lab_id': lab.id,
+                'lab_name': lab.name,
+                'category': lab.category,
+                'difficulty': lab.difficulty,
+                'score': score,
+                'max_score': lab.points,
+                'solved_questions': solved,
+                'total_questions': total_questions,
+                'attend_count': ls.attend_count if ls else 1,
+                'completed_at': completed_at,
+            })
+
+        student_name = (f"{student.first_name} {student.last_name}".strip() or student.username)
+        certificates = []
+        for subj_id, entry in by_subject.items():
+            subject = entry['subject']
+            labs = sorted(entry['labs'], key=lambda l: (l['completed_at'] is None, l['completed_at'] or timezone.now()))
+            total_score = sum(l['score'] for l in labs)
+            max_score = sum(l['max_score'] for l in labs)
+            completion_times = [l['completed_at'] for l in labs if l['completed_at']]
+            labs_in_subject = subject_labs_base.filter(subject_id=subj_id, is_active=True).count()
+
+            certificates.append({
+                'certificate_id': f"BLITZ-SUB-{subject.id:03d}-{student.id:05d}",
+                'student_name': student_name,
+                'student_username': student.username,
+                'subject_id': subject.id,
+                'subject_name': subject.name,
+                'subject_code': subject.code,
+                'course_name': subject.course.name if subject.course else None,
+                'labs_completed': len(labs),
+                'labs_in_subject': max(labs_in_subject, len(labs)),
+                'total_score': total_score,
+                'max_score': max_score,
+                'score_pct': round(total_score / max_score * 100) if max_score else 0,
+                'questions_solved': sum(l['solved_questions'] for l in labs),
+                'questions_total': sum(l['total_questions'] for l in labs),
+                'first_completed_at': min(completion_times) if completion_times else None,
+                'issued_at': max(completion_times) if completion_times else None,
+                'labs': labs,
+            })
+
+        certificates.sort(key=lambda c: (c['subject_name'] or '').lower())
+        return Response({
+            'student_name': student_name,
+            'certificates': certificates,
+        })
+
+
 class StudentLabAttendView(APIView):
     """
     GET  /api/student/labs/<id>/attend/ — fetch lab attendee workspace details
@@ -1702,6 +1819,7 @@ class StudentLabAttendView(APIView):
                 'source_file_size': lab.source_file_size,
                 'setup_guide': lab.setup_guide,
                 'setup_commands': lab.setup_commands,
+                'subject_id': lab.subject_id,
                 'subject_name': lab.subject.name if lab.subject else None,
                 'course_id': effective_course.id if effective_course else None,
                 'course_name': effective_course.name if effective_course else None,

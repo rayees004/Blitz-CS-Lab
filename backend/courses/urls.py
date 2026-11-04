@@ -21,6 +21,7 @@ from .views import (
     SubjectLabsView,
     SeedLabsView,
     StudentLabListView,
+    StudentSubjectCertificateView,
     StudentLabAttendView,
     StudentLabSubmitMarkView,
     StudentLabScoreListView,
@@ -55,6 +56,7 @@ urlpatterns = [
 
     # Student Labs & Attend / Submit Marks
     path('student/labs/', StudentLabListView.as_view(), name='api_student_labs'),
+    path('student/certificates/', StudentSubjectCertificateView.as_view(), name='api_student_certificates'),
     path('student/lab-scores/', StudentLabScoreListView.as_view(), name='api_student_lab_scores'),
     path('student/leaderboard/', StudentLeaderboardView.as_view(), name='api_student_leaderboard'),
     path('student/labs/<int:pk>/attend/', StudentLabAttendView.as_view(), name='api_student_lab_attend'),

@@ -706,3 +706,59 @@ class LabCompletionTests(TestCase):
         self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
         self.assertEqual(res.data['final_score'], 50)
         self.assertEqual(res.data['solved_questions_count'], 1)
+
+
+class SubjectCertificateTests(TestCase):
+    """One certificate per subject, covering the student's completed labs in that subject."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.student = User.objects.create_user(username='cert', email='cert@blitz.io', password='x', user_type='student', first_name='Asha', last_name='K')
+        self.ceh = Subject.objects.create(name='CEH', code='CEH')
+        self.web = Subject.objects.create(name='Web Security', code='WEB')
+        for s in (self.ceh, self.web):
+            SubjectEnrollment.objects.create(student=self.student, subject=s)
+        self.lab1 = Lab.objects.create(name='IDOR Lab', subject=self.ceh, points=100)
+        self.l1q1 = LabQuestion.objects.create(lab=self.lab1, title='Q1', flag='f1', points=50)
+        self.l1q2 = LabQuestion.objects.create(lab=self.lab1, title='Q2', flag='f2', points=50)
+        self.lab2 = Lab.objects.create(name='XSS Lab', subject=self.ceh, points=100)
+        self.l2q1 = LabQuestion.objects.create(lab=self.lab2, title='Q1', flag='x1', points=50)
+        LabQuestion.objects.create(lab=self.lab2, title='Q2', flag='x2', points=50)
+        self.lab3 = Lab.objects.create(name='Not started', subject=self.ceh, points=100)
+        self.web_lab = Lab.objects.create(name='Web Lab', subject=self.web, points=100)
+        LabQuestion.objects.create(lab=self.web_lab, title='Q1', flag='w1', points=100)
+        self.client.force_authenticate(self.student)
+
+    def _submit(self, lab, q, flag):
+        self.client.post(f'/api/student/labs/{lab.id}/attend/')
+        return self.client.post(f'/api/student/labs/{lab.id}/submit/', {'action': 'submit_flag', 'question_id': q.id, 'flag': flag}, format='json')
+
+    def test_certificate_covers_completed_labs_of_each_subject(self):
+        # Lab 1 fully solved (auto-completes), lab 2 finalized with 1 of 2, web lab only started
+        self._submit(self.lab1, self.l1q1, 'f1')
+        self._submit(self.lab1, self.l1q2, 'f2')
+        self._submit(self.lab2, self.l2q1, 'x1')
+        self.client.post(f'/api/student/labs/{self.lab2.id}/submit/', {'action': 'finalize_submission'}, format='json')
+        self.client.post(f'/api/student/labs/{self.web_lab.id}/attend/')
+
+        res = self.client.get('/api/student/certificates/')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        certs = res.data['certificates']
+        self.assertEqual([c['subject_name'] for c in certs], ['CEH'])  # Web Security has no completed lab
+        cert = certs[0]
+        self.assertEqual(cert['student_name'], 'Asha K')
+        self.assertEqual(cert['labs_completed'], 2)
+        self.assertEqual(cert['labs_in_subject'], 3)
+        self.assertEqual(cert['total_score'], 150)
+        self.assertEqual(cert['max_score'], 200)
+        self.assertEqual(cert['questions_solved'], 3)
+        self.assertEqual(cert['questions_total'], 4)
+        self.assertEqual([l['lab_name'] for l in cert['labs']], ['IDOR Lab', 'XSS Lab'])
+        self.assertEqual(cert['labs'][1]['solved_questions'], 1)
+        self.assertIsNotNone(cert['labs'][0]['completed_at'])
+
+    def test_filter_by_subject(self):
+        self._submit(self.lab1, self.l1q1, 'f1')
+        self._submit(self.lab1, self.l1q2, 'f2')
+        self.assertEqual(len(self.client.get(f'/api/student/certificates/?subject_id={self.ceh.id}').data['certificates']), 1)
+        self.assertEqual(self.client.get(f'/api/student/certificates/?subject_id={self.web.id}').data['certificates'], [])

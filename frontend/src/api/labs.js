@@ -112,6 +112,14 @@ export async function fetchStudentLeaderboard(page = null) {
   return apiFetch(`/student/leaderboard/${page ? `?page=${page}` : ''}`);
 }
 
+/**
+ * Subject-based certificates: one per subject with at least one completed lab.
+ * Pass a subjectId to get only that subject's certificate.
+ */
+export async function fetchStudentCertificates(subjectId = null) {
+  return apiFetch(`/student/certificates/${subjectId ? `?subject_id=${subjectId}` : ''}`);
+}
+
 /** Fetch student attend state for a specific lab */
 export async function fetchStudentLabAttendState(labId) {
   return apiFetch(`/student/labs/${labId}/attend/`);

@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect } from "react";
 import {
   X, FlaskConical, CheckCircle2, AlertCircle, HelpCircle,
   Lightbulb, ExternalLink, Copy, Check, Send, Trophy,
   Terminal, ShieldCheck, Clock, Lock, Unlock, RefreshCw,
   FolderArchive, Download, Code, FileBadge
 } from "lucide-react";
-import CertificateModal from "./CertificateModal";
+import SubjectCertificateModal from "./SubjectCertificateModal";
 import Panel from "../common/Panel";
 import Btn from "../common/Btn";
 import Badge, { DiffBadge } from "../common/Badge";
@@ -113,6 +113,19 @@ export default function StudentLabAttendModal({ lab, onClose, onUpdated }) {
         });
       }
     } catch (err) {
+      // Lab already locked as completed on the server: show the recorded result and certificate
+      if (/lab completed/i.test(err.message || "")) {
+        setFeedback((prev) => ({ ...prev, [questionId]: { submitting: false, msg: null, success: false } }));
+        await refreshWorkspace();
+        setWorkspace((ws) => ws && {
+          ...ws,
+          lab_score: { ...(ws.lab_score || {}), is_completed: true },
+          submission: { ...(ws.submission || {}), status: "COMPLETED" },
+        });
+        if (onUpdated) onUpdated();
+        setShowCert(true);
+        return;
+      }
       setFeedback((prev) => ({
         ...prev,
         [questionId]: {
@@ -192,11 +205,6 @@ export default function StudentLabAttendModal({ lab, onClose, onUpdated }) {
 
   const timeLeft = useTimeLeft(
     workspace?.lab_score?.is_completed ? null : workspace?.lab_score?.attempt_deadline
-  );
-  // Stable per lab so the certificate ID does not change on re-renders
-  const certId = useMemo(
-    () => `BLITZ-CERT-${String(lab?.id || 1).padStart(3, "0")}-${Math.floor(1000 + Math.random() * 9000)}`,
-    [lab?.id]
   );
 
   if (!lab) return null;
@@ -970,20 +978,8 @@ export default function StudentLabAttendModal({ lab, onClose, onUpdated }) {
       </div>
 
       {showCert && (
-        <CertificateModal
-          certificate={{
-            certId,
-            studentName: workspace?.student_name || lab?.student_name || getStoredUser()?.full_name || getStoredUser()?.name || "Student",
-            labName: lab?.name || "Security Lab",
-            labDesc: lab?.description || "",
-            category: lab?.category || "Cyber Security",
-            subjectName: lab?.subject_name || "",
-            score: currentScore,
-            maxScore: maxScore,
-            solvedQuestions: solvedQuestionsCount,
-            totalQuestions: questions.length || 1,
-            completedAt: submission.submitted_at || new Date().toISOString(),
-          }}
+        <SubjectCertificateModal
+          subjectId={workspace?.lab?.subject_id ?? lab?.subject_id}
           onClose={() => setShowCert(false)}
         />
       )}

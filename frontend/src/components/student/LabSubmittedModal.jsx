@@ -1,20 +1,16 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { CheckCircle2, FileBadge, X } from "lucide-react";
-import CertificateModal from "./CertificateModal";
+import SubjectCertificateModal from "./SubjectCertificateModal";
 import { C, sans, mono } from "../../constants/theme";
 
 /**
  * Shown on the labs list after a student's lab is submitted
  * (e.g. automatically when the last question is answered correctly).
- * `result`: { labId, labName, labDesc, category, subjectName, studentName,
- *             score, maxScore, solvedQuestions, totalQuestions, submittedAt }
+ * `result`: { labId, labName, subjectId, subjectName, score, maxScore, solvedQuestions, totalQuestions, ... }
+ * "Open Certificate" opens the certificate of the lab's subject.
  */
 export default function LabSubmittedModal({ result, onClose }) {
   const [showCert, setShowCert] = useState(false);
-  const certId = useMemo(
-    () => `BLITZ-CERT-${String(result?.labId || 1).padStart(3, "0")}-${Math.floor(1000 + Math.random() * 9000)}`,
-    [result?.labId]
-  );
 
   useEffect(() => {
     const onKey = (e) => {
@@ -29,24 +25,7 @@ export default function LabSubmittedModal({ result, onClose }) {
   const { labName, score = 0, maxScore = 0, solvedQuestions = 0, totalQuestions = 0 } = result;
 
   if (showCert) {
-    return (
-      <CertificateModal
-        certificate={{
-          certId,
-          studentName: result.studentName || "Student",
-          labName: labName || "Security Lab",
-          labDesc: result.labDesc || "",
-          category: result.category || "Cyber Security",
-          subjectName: result.subjectName || "",
-          score,
-          maxScore,
-          solvedQuestions,
-          totalQuestions: totalQuestions || 1,
-          completedAt: result.submittedAt || new Date().toISOString(),
-        }}
-        onClose={() => setShowCert(false)}
-      />
-    );
+    return <SubjectCertificateModal subjectId={result.subjectId} onClose={() => setShowCert(false)} />;
   }
 
   return (

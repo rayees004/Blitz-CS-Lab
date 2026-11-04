@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { CheckCircle2, FlaskConical, RefreshCw, Lock, Activity, FileBadge } from "lucide-react";
-import CertificateModal from "./CertificateModal";
+import SubjectCertificateModal from "./SubjectCertificateModal";
 import Panel from "../common/Panel";
 import Btn from "../common/Btn";
 import ProgressBar from "../common/ProgressBar";
@@ -173,21 +173,7 @@ export default function StudentAttendanceLog() {
                     {isCompleted && (
                       <button
                         type="button"
-                        onClick={() =>
-                          setViewingCert({
-                            certId: `BLITZ-CERT-${String(sc.lab || sc.lab_id).padStart(3, "0")}-${String(sc.id).padStart(4, "0")}`,
-                            studentName: stats?.student_name || "Student",
-                            labName: sc.lab_name,
-                            labDesc: sc.lab_description || "Hands-on cybersecurity evaluation.",
-                            category: sc.lab_category,
-                            subjectName: sc.subject_name || "",
-                            score: typeof sc.score === "number" ? sc.score : 0,
-                            maxScore: sc.max_score,
-                            solvedQuestions: typeof sc.solved_questions_count === "number" ? sc.solved_questions_count : 0,
-                            totalQuestions: sc.total_questions_count || 1,
-                            completedAt: sc.updated_at || new Date().toISOString(),
-                          })
-                        }
+                        onClick={() => setViewingCert({ subjectId: sc.subject_id })}
                         style={{
                           display: "inline-flex",
                           alignItems: "center",
@@ -235,8 +221,8 @@ export default function StudentAttendanceLog() {
       <Pagination meta={pageMeta} onPageChange={setPage} loading={loading} />
 
       {viewingCert && (
-        <CertificateModal
-          certificate={viewingCert}
+        <SubjectCertificateModal
+          subjectId={viewingCert.subjectId}
           onClose={() => setViewingCert(null)}
         />
       )}

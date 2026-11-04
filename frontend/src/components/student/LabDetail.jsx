@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect } from "react";
 import {
   ChevronRight, Wifi, Clock, AlertTriangle, FileText, Globe,
   Terminal as TerminalIcon, Flag, Play, CheckCircle2, Lock,
   Unlock, Lightbulb, Trophy, Send, AlertCircle, RefreshCw, ExternalLink, Video,
   FolderArchive, Download, Copy, Check, FileCode, FileBadge
 } from "lucide-react";
-import CertificateModal from "./CertificateModal";
+import SubjectCertificateModal from "./SubjectCertificateModal";
 import Panel from "../common/Panel";
 import Btn from "../common/Btn";
 import Badge, { DiffBadge } from "../common/Badge";
@@ -78,11 +78,6 @@ export default function LabDetail({ lab, back, onSubmitted }) {
       ? 100
       : 0;
   const timeLeft = useTimeLeft(isCompleted ? null : workspace?.lab_score?.attempt_deadline);
-  // Stable per lab so the certificate ID does not change on re-renders
-  const certId = useMemo(
-    () => `BLITZ-CERT-${String(labId).padStart(3, "0")}-${Math.floor(1000 + Math.random() * 9000)}`,
-    [labId]
-  );
 
   const handleSubmitFlag = async (questionId) => {
     const val = flagInputs[questionId]?.trim();
@@ -103,8 +98,12 @@ export default function LabDetail({ lab, back, onSubmitted }) {
       if (res.is_correct) markSolvedLocally(questionId, val, res);
     } catch (err) {
       // The server may have already locked this lab as completed: close it and show the result
+      // with the certificate (marks are the ones the server recorded)
       const latest = await refreshWorkspace();
-      if (isWorkspaceCompleted(latest)) {
+      const lockedAsCompleted =
+        isWorkspaceCompleted(latest) || (!latest && /lab completed/i.test(err.message || ""));
+      if (lockedAsCompleted) {
+        setFeedbacks((prev) => ({ ...prev, [questionId]: { loading: false, msg: null, success: false } }));
         finishLab(latest);
         return;
       }
@@ -180,6 +179,7 @@ export default function LabDetail({ lab, back, onSubmitted }) {
       labName: wsLab.name || lab?.name || "Security Lab",
       labDesc: wsLab.description || lab?.description || "",
       category: wsLab.category || lab?.category || "Cyber Security",
+      subjectId: wsLab.subject_id ?? lab?.subject_id ?? null,
       subjectName: wsLab.subject_name || lab?.subject_name || "",
       studentName: ws?.student_name || workspace?.student_name || "Student",
       score: ws?.lab_score?.score ?? res.total_score ?? currentScore,
@@ -926,20 +926,8 @@ export default function LabDetail({ lab, back, onSubmitted }) {
       </div>
 
       {showCert && (
-        <CertificateModal
-          certificate={{
-            certId,
-            studentName: workspace?.student_name || "Student",
-            labName: l.name || lab?.name || "Security Lab",
-            labDesc: l.description || lab?.description || "",
-            category: l.category || lab?.category || "Cyber Security",
-            subjectName: l.subject_name || lab?.subject_name || "",
-            score: currentScore,
-            maxScore: maxScore,
-            solvedQuestions: solvedCount,
-            totalQuestions: questions.length || 1,
-            completedAt: submission.submitted_at || new Date().toISOString(),
-          }}
+        <SubjectCertificateModal
+          subjectId={l.subject_id ?? lab?.subject_id}
           onClose={() => setShowCert(false)}
         />
       )}
