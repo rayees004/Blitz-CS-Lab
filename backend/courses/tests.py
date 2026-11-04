@@ -655,3 +655,54 @@ class LabAttemptWindowTests(TestCase):
         LabScore.objects.filter(student=self.student, lab=self.lab).update(is_completed=True)
         self._age_attempt(48)
         self.assertEqual(self._listed()['submission_status'], 'COMPLETED')
+
+
+class LabCompletionTests(TestCase):
+    """Lab completes only when every CURRENT question is solved; completed labs stay viewable."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.student = User.objects.create_user(username='stud', email='stud@blitz.io', password='x', user_type='student')
+        subject = Subject.objects.create(name='CEH', code='CEH')
+        SubjectEnrollment.objects.create(student=self.student, subject=subject)
+        self.lab = Lab.objects.create(name='IOT', subject=subject, points=100)
+        self.q1 = LabQuestion.objects.create(lab=self.lab, title='Q1', flag='flag{1}', points=50)
+        self.q2 = LabQuestion.objects.create(lab=self.lab, title='Q2', flag='flag{2}', points=50)
+        self.client.force_authenticate(self.student)
+        self.client.post(f'/api/student/labs/{self.lab.id}/attend/')
+
+    def _submit(self, q, flag):
+        return self.client.post(f'/api/student/labs/{self.lab.id}/submit/', {'action': 'submit_flag', 'question_id': q.id, 'flag': flag}, format='json')
+
+    def test_answers_for_deleted_questions_do_not_complete_the_lab(self):
+        # A correct answer saved for a question that no longer exists (lab was edited)
+        sub = LabSubmission.objects.get(student=self.student, lab=self.lab)
+        sub.answers = {'999999': {'is_correct': True, 'points_awarded': 50}}
+        sub.save()
+
+        first = self._submit(self.q1, 'flag{1}')
+        self.assertEqual(first.status_code, status.HTTP_200_OK)
+        self.assertFalse(first.data['all_solved'])
+        self.assertEqual(first.data['solved_count'], 1)
+        self.assertEqual(first.data['total_score'], 50)
+
+        last = self._submit(self.q2, 'flag{2}')
+        self.assertEqual(last.status_code, status.HTTP_200_OK, last.data)
+        self.assertTrue(last.data['all_solved'])
+        self.assertEqual(last.data['message'], 'Correct Flag! +50 marks awarded.')
+
+    def test_completed_lab_workspace_is_viewable_but_locked(self):
+        self._submit(self.q1, 'flag{1}')
+        self._submit(self.q2, 'flag{2}')
+        view = self.client.get(f'/api/student/labs/{self.lab.id}/attend/')
+        self.assertEqual(view.status_code, status.HTTP_200_OK)
+        self.assertTrue(view.data['lab_score']['is_completed'])
+        self.assertEqual(self.client.post(f'/api/student/labs/{self.lab.id}/attend/').status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(self._submit(self.q1, 'flag{1}').status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_partial_finalize_records_solved_questions_only(self):
+        self._submit(self.q1, 'flag{1}')
+        res = self.client.post(f'/api/student/labs/{self.lab.id}/submit/', {'action': 'finalize_submission'}, format='json')
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        self.assertEqual(res.data['final_score'], 50)
+        self.assertEqual(res.data['solved_questions_count'], 1)

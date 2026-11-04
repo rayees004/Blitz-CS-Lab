@@ -101,6 +101,12 @@ export default function LabDetail({ lab, back, onSubmitted }) {
         [questionId]: { loading: false, msg: res.message, success: res.is_correct },
       }));
     } catch (err) {
+      // The server may have already locked this lab as completed: close it and show the result
+      const latest = await refreshWorkspace();
+      if (isWorkspaceCompleted(latest)) {
+        finishLab(latest);
+        return;
+      }
       setFeedbacks((prev) => ({
         ...prev,
         [questionId]: { loading: false, msg: err.message || "Submission failed", success: false },
@@ -108,41 +114,51 @@ export default function LabDetail({ lab, back, onSubmitted }) {
       return;
     }
 
+    // Refresh marks; a refresh failure must not replace the submission result shown above
+    const latest = await refreshWorkspace();
+
     // Last question answered correctly: the lab is auto-submitted
     if (res.is_correct && (res.all_solved || res.is_completed)) {
-      const result = {
-        labId,
-        labName: l.name || lab?.name || "Security Lab",
-        labDesc: l.description || lab?.description || "",
-        category: l.category || lab?.category || "Cyber Security",
-        subjectName: l.subject_name || lab?.subject_name || "",
-        studentName: workspace?.student_name || "Student",
-        score: res.total_score ?? currentScore,
-        maxScore,
-        solvedQuestions: res.solved_count ?? questions.length,
-        totalQuestions: res.total_questions ?? questions.length,
-        submittedAt: new Date().toISOString(),
-      };
-      if (onSubmitted) {
-        // Go back to the labs list and show the success popup there
-        onSubmitted(result);
-        return;
-      }
-      await refreshWorkspace();
-      setShowCert(true);
-      return;
+      finishLab(latest, res);
     }
-
-    // Refresh marks; a refresh failure must not replace the submission result shown above
-    await refreshWorkspace();
   };
 
+  // Returns the fresh workspace, or null if the refresh failed (current view is kept)
   const refreshWorkspace = async () => {
     try {
       const updated = await attendStudentLab(labId);
       setWorkspace(updated);
+      return updated;
     } catch {
-      // Keep the current view if the refresh fails
+      return null;
+    }
+  };
+
+  const isWorkspaceCompleted = (ws) =>
+    Boolean(ws && (ws.lab_score?.is_completed || ws.submission?.status === "COMPLETED"));
+
+  // Lab is submitted: close it and show the success popup (or the certificate when used standalone)
+  const finishLab = (ws, res = {}) => {
+    const wsLab = ws?.lab || l;
+    const wsQuestions = ws?.questions || questions;
+    const result = {
+      labId,
+      labName: wsLab.name || lab?.name || "Security Lab",
+      labDesc: wsLab.description || lab?.description || "",
+      category: wsLab.category || lab?.category || "Cyber Security",
+      subjectName: wsLab.subject_name || lab?.subject_name || "",
+      studentName: ws?.student_name || workspace?.student_name || "Student",
+      score: ws?.lab_score?.score ?? res.total_score ?? currentScore,
+      maxScore: ws?.lab_score?.max_score ?? maxScore,
+      solvedQuestions: ws ? wsQuestions.filter((q) => q.is_solved).length : (res.solved_count ?? solvedCount),
+      totalQuestions: wsQuestions.length || res.total_questions || 0,
+      submittedAt: ws?.submission?.submitted_at || new Date().toISOString(),
+    };
+    if (onSubmitted) {
+      // Go back to the labs list and show the success popup there
+      onSubmitted(result);
+    } else {
+      setShowCert(true);
     }
   };
 

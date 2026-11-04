@@ -169,7 +169,7 @@ export default function LabSubmittedModal({ result, onClose }) {
               cursor: "pointer",
             }}
           >
-            <FileBadge size={15} /> View Certificate
+            <FileBadge size={15} /> Open Certificate
           </button>
           <button
             type="button"

@@ -1235,6 +1235,24 @@ def get_or_create_student_lab_batch(student):
     return active_batch
 
 
+def tally_lab_answers(lab, answers):
+    """
+    Count solved questions and earned points from a submission's answers, using ONLY the
+    lab's current questions. Editing a lab recreates its questions with new IDs, so answers
+    saved for old question IDs must not count (they made labs complete before every
+    current question was solved).
+    Returns: (solved_count, raw_points_total)
+    """
+    if not isinstance(answers, dict):
+        return 0, 0
+    current_ids = {str(q.id) for q in lab.questions.all()}
+    solved = [
+        item for key, item in answers.items()
+        if key in current_ids and isinstance(item, dict) and item.get('is_correct')
+    ]
+    return len(solved), sum(item.get('points_awarded', 0) for item in solved)
+
+
 def can_student_attend_lab(student, lab):
     """
     Check if a student can attend a lab.
@@ -1395,7 +1413,7 @@ class StudentLabListView(APIView):
             q_count = lab.questions.count()
             solved_questions = ls.solved_questions_count if ls else 0
             if not solved_questions and sub and isinstance(sub.answers, dict):
-                solved_questions = sum(1 for a in sub.answers.values() if isinstance(a, dict) and a.get('is_correct'))
+                solved_questions, _ = tally_lab_answers(lab, sub.answers)
             total_questions_completed += solved_questions
 
             progress_pct = 0
@@ -1834,21 +1852,12 @@ class StudentLabSubmitMarkView(APIView):
                 answers[q_key] = q_ans
                 submission.answers = answers
 
-                # Recalculate total score — strictly capped at lab.points
-                raw_total = sum(
-                    item.get('points_awarded', 0)
-                    for item in answers.values()
-                    if isinstance(item, dict) and item.get('is_correct')
-                )
+                # Recalculate solved count and total score from the lab's CURRENT questions only
+                # (score strictly capped at lab.points)
+                solved_count, raw_total = tally_lab_answers(lab, answers)
                 final_lab_score = min(lab.points, raw_total)
                 submission.score = final_lab_score
-
-                # Count solved questions
                 total_questions = lab.questions.count()
-                solved_count = sum(
-                    1 for item in answers.values()
-                    if isinstance(item, dict) and item.get('is_correct')
-                )
 
                 # When all questions in the lab are solved, complete and block the lab!
                 all_solved = (total_questions > 0 and solved_count >= total_questions)
@@ -1896,16 +1905,10 @@ class StudentLabSubmitMarkView(APIView):
 
         # 3. Finalize Lab Submission & Marks
         if action == 'finalize_submission':
-            answers = submission.answers if isinstance(submission.answers, dict) else {}
-            solved_count = sum(1 for a in answers.values() if isinstance(a, dict) and a.get('is_correct'))
             total_questions = lab.questions.count()
 
             # Students may finalize early: marks and certificate are based only on the questions they solved
-            raw_total = sum(
-                item.get('points_awarded', 0)
-                for item in answers.values()
-                if isinstance(item, dict) and item.get('is_correct')
-            )
+            solved_count, raw_total = tally_lab_answers(lab, submission.answers)
             final_lab_score = min(lab.points, max(0, raw_total))
 
             submission.score = final_lab_score
