@@ -98,6 +98,20 @@ export default function StudentLabAttendModal({ lab, onClose, onUpdated }) {
           success: res.is_correct,
         },
       }));
+      if (res.is_correct) {
+        // Show the question as solved right away, even if the follow-up refresh fails
+        const completed = Boolean(res.all_solved || res.is_completed);
+        setWorkspace((ws) => ws && {
+          ...ws,
+          questions: (ws.questions || []).map((q) =>
+            q.id === questionId
+              ? { ...q, is_solved: true, submitted_flag: flagVal, points_awarded: res.already_solved ? q.points_awarded : (res.points_awarded ?? q.points) }
+              : q
+          ),
+          lab_score: { ...(ws.lab_score || {}), score: res.total_score ?? ws.lab_score?.score, is_completed: completed || ws.lab_score?.is_completed },
+          submission: { ...(ws.submission || {}), score: res.total_score ?? ws.submission?.score, status: completed ? "COMPLETED" : (ws.submission?.status || "IN_PROGRESS") },
+        });
+      }
     } catch (err) {
       setFeedback((prev) => ({
         ...prev,

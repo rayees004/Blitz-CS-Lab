@@ -100,6 +100,7 @@ export default function LabDetail({ lab, back, onSubmitted }) {
         ...prev,
         [questionId]: { loading: false, msg: res.message, success: res.is_correct },
       }));
+      if (res.is_correct) markSolvedLocally(questionId, val, res);
     } catch (err) {
       // The server may have already locked this lab as completed: close it and show the result
       const latest = await refreshWorkspace();
@@ -117,10 +118,43 @@ export default function LabDetail({ lab, back, onSubmitted }) {
     // Refresh marks; a refresh failure must not replace the submission result shown above
     const latest = await refreshWorkspace();
 
-    // Last question answered correctly: the lab is auto-submitted
+    // Last question answered correctly: the lab is auto-submitted.
+    // Let the student see the question turn "Solved" first, then close the lab and show the popup.
     if (res.is_correct && (res.all_solved || res.is_completed)) {
-      finishLab(latest, res);
+      setTimeout(() => finishLab(latest, res), 1500);
     }
+  };
+
+  // Show the question as solved straight from the submit response, so it turns green
+  // even if the follow-up refresh fails
+  const markSolvedLocally = (questionId, flag, res) => {
+    setWorkspace((ws) => {
+      if (!ws) return ws;
+      const completed = Boolean(res.all_solved || res.is_completed);
+      return {
+        ...ws,
+        questions: (ws.questions || []).map((q) =>
+          q.id === questionId
+            ? {
+                ...q,
+                is_solved: true,
+                submitted_flag: flag,
+                points_awarded: res.already_solved ? q.points_awarded : (res.points_awarded ?? q.points),
+              }
+            : q
+        ),
+        lab_score: {
+          ...(ws.lab_score || {}),
+          score: res.total_score ?? ws.lab_score?.score,
+          is_completed: completed || ws.lab_score?.is_completed,
+        },
+        submission: {
+          ...(ws.submission || {}),
+          score: res.total_score ?? ws.submission?.score,
+          status: completed ? "COMPLETED" : (ws.submission?.status || "IN_PROGRESS"),
+        },
+      };
+    });
   };
 
   // Returns the fresh workspace, or null if the refresh failed (current view is kept)
