@@ -1565,10 +1565,12 @@ class StudentSubjectCertificateView(APIView):
     GET /api/student/certificates/                  — one certificate per subject
     GET /api/student/certificates/?subject_id=<id>  — only that subject's certificate
 
-    Certificates are subject based: a subject's certificate covers every lab of that subject
-    the student has completed (total score, labs completed, questions solved), plus a
-    per-lab breakdown (lab name, score, questions solved, time of completion).
-    A subject only gets a certificate once at least one of its labs is completed.
+    Certificates are subject based only (there are no per-lab certificates). A subject's
+    certificate is issued once the student has completed EVERY lab assigned to them in that
+    subject (active labs of their enrolled subjects; class-based students: their class's labs).
+    It shows the subject total score, labs completed and questions solved, plus a per-lab
+    breakdown (lab name, score, questions solved, time of completion).
+    Subjects that still have pending labs are returned under `in_progress` with the progress.
     """
     permission_classes = [IsAuthenticated]
 
@@ -1577,7 +1579,9 @@ class StudentSubjectCertificateView(APIView):
         if not student:
             return Response({'detail': 'No active student found.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        subject_id = request.query_params.get('subject_id')
+        subject_id = (request.query_params.get('subject_id') or '').strip()
+        if subject_id and not subject_id.isdigit():
+            return Response({'detail': 'Invalid subject_id.'}, status=status.HTTP_400_BAD_REQUEST)
 
         scores = {
             ls.lab_id: ls
@@ -1593,24 +1597,43 @@ class StudentSubjectCertificateView(APIView):
             lab_id for lab_id, sub in submissions.items() if sub.status == 'COMPLETED'
         }
 
-        labs_qs = (
-            Lab.objects.filter(id__in=completed_lab_ids, subject__isnull=False)
-            .select_related('subject', 'subject__course', 'course')
-            .prefetch_related('questions')
+        # Labs assigned to the student, same rules as the student labs list:
+        # active labs of enrolled subjects (class-based students: only their class's labs)
+        is_admin_or_staff = bool(
+            student.is_staff or student.is_superuser
+            or getattr(student, 'user_type', None) in ('admin', 'instructor')
         )
-        if subject_id:
-            labs_qs = labs_qs.filter(subject_id=subject_id)
-
-        # Labs of each subject the student can work on (class-based students: their class's labs only)
-        access_mode = getattr(student, 'lab_access_mode', 'unrestricted')
-        is_student = getattr(student, 'user_type', None) == 'student' and not (student.is_staff or student.is_superuser)
-        if is_student and access_mode == 'class_based':
-            subject_labs_base = student.assigned_class.labs.all() if student.assigned_class else Lab.objects.none()
+        if not is_admin_or_staff and getattr(student, 'lab_access_mode', 'unrestricted') == 'class_based':
+            base_labs = student.assigned_class.labs.all() if student.assigned_class else Lab.objects.none()
         else:
-            subject_labs_base = Lab.objects.all()
+            base_labs = Lab.objects.all()
+        assigned_qs = base_labs.filter(is_active=True, subject__isnull=False)
+        if is_admin_or_staff:
+            # Staff are not enrolled in subjects: use the subjects they completed labs in
+            assigned_qs = assigned_qs.filter(
+                subject_id__in=Lab.objects.filter(id__in=completed_lab_ids).values('subject_id')
+            )
+        else:
+            assigned_qs = assigned_qs.filter(
+                subject_id__in=SubjectEnrollment.objects.filter(
+                    student=student, is_active=True
+                ).values('subject_id')
+            )
+        if subject_id:
+            assigned_qs = assigned_qs.filter(subject_id=int(subject_id))
+        assigned_qs = (
+            assigned_qs.select_related('subject', 'subject__course', 'course')
+            .prefetch_related('questions')
+            .order_by('name')
+        )
 
         by_subject = {}
-        for lab in labs_qs:
+        for lab in assigned_qs:
+            entry = by_subject.setdefault(lab.subject_id, {'subject': lab.subject, 'labs': [], 'pending': []})
+            if lab.id not in completed_lab_ids:
+                entry['pending'].append({'lab_id': lab.id, 'lab_name': lab.name})
+                continue
+
             ls = scores.get(lab.id)
             sub = submissions.get(lab.id)
 
@@ -1626,7 +1649,6 @@ class StudentSubjectCertificateView(APIView):
 
             completed_at = (ls.completed_at if ls else None) or (sub.submitted_at if sub else None)
 
-            entry = by_subject.setdefault(lab.subject_id, {'subject': lab.subject, 'labs': []})
             entry['labs'].append({
                 'lab_id': lab.id,
                 'lab_name': lab.name,
@@ -1642,24 +1664,39 @@ class StudentSubjectCertificateView(APIView):
 
         student_name = (f"{student.first_name} {student.last_name}".strip() or student.username)
         certificates = []
-        for subj_id, entry in by_subject.items():
+        in_progress = []
+        for entry in by_subject.values():
             subject = entry['subject']
             labs = sorted(entry['labs'], key=lambda l: (l['completed_at'] is None, l['completed_at'] or timezone.now()))
-            total_score = sum(l['score'] for l in labs)
-            max_score = sum(l['max_score'] for l in labs)
-            completion_times = [l['completed_at'] for l in labs if l['completed_at']]
-            labs_in_subject = subject_labs_base.filter(subject_id=subj_id, is_active=True).count()
-
-            certificates.append({
-                'certificate_id': f"BLITZ-SUB-{subject.id:03d}-{student.id:05d}",
-                'student_name': student_name,
-                'student_username': student.username,
+            labs_in_subject = len(labs) + len(entry['pending'])
+            subject_info = {
                 'subject_id': subject.id,
                 'subject_name': subject.name,
                 'subject_code': subject.code,
                 'course_name': subject.course.name if subject.course else None,
                 'labs_completed': len(labs),
-                'labs_in_subject': max(labs_in_subject, len(labs)),
+                'labs_in_subject': labs_in_subject,
+            }
+
+            if entry['pending']:
+                # Certificate is issued only after every assigned lab of the subject is completed
+                in_progress.append({
+                    **subject_info,
+                    'labs_remaining': len(entry['pending']),
+                    'pending_labs': entry['pending'],
+                    'completed_labs': [{'lab_id': l['lab_id'], 'lab_name': l['lab_name']} for l in labs],
+                })
+                continue
+
+            total_score = sum(l['score'] for l in labs)
+            max_score = sum(l['max_score'] for l in labs)
+            completion_times = [l['completed_at'] for l in labs if l['completed_at']]
+
+            certificates.append({
+                **subject_info,
+                'certificate_id': f"BLITZ-SUB-{subject.id:03d}-{student.id:05d}",
+                'student_name': student_name,
+                'student_username': student.username,
                 'total_score': total_score,
                 'max_score': max_score,
                 'score_pct': round(total_score / max_score * 100) if max_score else 0,
@@ -1671,9 +1708,11 @@ class StudentSubjectCertificateView(APIView):
             })
 
         certificates.sort(key=lambda c: (c['subject_name'] or '').lower())
+        in_progress.sort(key=lambda c: (c['subject_name'] or '').lower())
         return Response({
             'student_name': student_name,
             'certificates': certificates,
+            'in_progress': in_progress,
         })
 
 

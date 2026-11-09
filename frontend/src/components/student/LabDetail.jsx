@@ -917,7 +917,7 @@ export default function LabDetail({ lab, back, onSubmitted }) {
                     cursor: "pointer",
                   }}
                 >
-                  <FileBadge size={14} /> View Certificate
+                  <FileBadge size={14} /> Subject Certificate
                 </button>
               </div>
             )}

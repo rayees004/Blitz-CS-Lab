@@ -709,7 +709,7 @@ class LabCompletionTests(TestCase):
 
 
 class SubjectCertificateTests(TestCase):
-    """One certificate per subject, covering the student's completed labs in that subject."""
+    """One certificate per subject, issued only after every assigned lab of that subject is completed."""
 
     def setUp(self):
         self.client = APIClient()
@@ -733,32 +733,60 @@ class SubjectCertificateTests(TestCase):
         self.client.post(f'/api/student/labs/{lab.id}/attend/')
         return self.client.post(f'/api/student/labs/{lab.id}/submit/', {'action': 'submit_flag', 'question_id': q.id, 'flag': flag}, format='json')
 
-    def test_certificate_covers_completed_labs_of_each_subject(self):
-        # Lab 1 fully solved (auto-completes), lab 2 finalized with 1 of 2, web lab only started
+    def _complete_ceh_labs_1_and_2(self):
+        # Lab 1 fully solved (auto-completes), lab 2 finalized with 1 of 2
         self._submit(self.lab1, self.l1q1, 'f1')
         self._submit(self.lab1, self.l1q2, 'f2')
         self._submit(self.lab2, self.l2q1, 'x1')
         self.client.post(f'/api/student/labs/{self.lab2.id}/submit/', {'action': 'finalize_submission'}, format='json')
+
+    def test_no_certificate_until_all_subject_labs_completed(self):
+        self._complete_ceh_labs_1_and_2()  # CEH lab 3 still pending
         self.client.post(f'/api/student/labs/{self.web_lab.id}/attend/')
 
         res = self.client.get('/api/student/certificates/')
         self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data['certificates'], [])
+        progress = {p['subject_name']: p for p in res.data['in_progress']}
+        self.assertEqual(set(progress), {'CEH', 'Web Security'})
+        self.assertEqual(progress['CEH']['labs_completed'], 2)
+        self.assertEqual(progress['CEH']['labs_in_subject'], 3)
+        self.assertEqual([l['lab_name'] for l in progress['CEH']['pending_labs']], ['Not started'])
+        self.assertEqual(progress['Web Security']['labs_completed'], 0)
+
+    def test_certificate_covers_all_labs_of_completed_subject(self):
+        self._complete_ceh_labs_1_and_2()
+        LabQuestion.objects.create(lab=self.lab3, title='Q1', flag='n1', points=100)
+        self._submit(self.lab3, self.lab3.questions.first(), 'n1')
+
+        res = self.client.get('/api/student/certificates/')
         certs = res.data['certificates']
-        self.assertEqual([c['subject_name'] for c in certs], ['CEH'])  # Web Security has no completed lab
+        self.assertEqual([c['subject_name'] for c in certs], ['CEH'])  # Web Security lab not done
         cert = certs[0]
         self.assertEqual(cert['student_name'], 'Asha K')
-        self.assertEqual(cert['labs_completed'], 2)
+        self.assertEqual(cert['labs_completed'], 3)
         self.assertEqual(cert['labs_in_subject'], 3)
-        self.assertEqual(cert['total_score'], 150)
-        self.assertEqual(cert['max_score'], 200)
-        self.assertEqual(cert['questions_solved'], 3)
-        self.assertEqual(cert['questions_total'], 4)
-        self.assertEqual([l['lab_name'] for l in cert['labs']], ['IDOR Lab', 'XSS Lab'])
+        self.assertEqual(cert['total_score'], 250)
+        self.assertEqual(cert['max_score'], 300)
+        self.assertEqual(cert['questions_solved'], 4)
+        self.assertEqual(cert['questions_total'], 5)
+        self.assertEqual([l['lab_name'] for l in cert['labs']], ['IDOR Lab', 'XSS Lab', 'Not started'])
         self.assertEqual(cert['labs'][1]['solved_questions'], 1)
         self.assertIsNotNone(cert['labs'][0]['completed_at'])
+        self.assertEqual([p['subject_name'] for p in res.data['in_progress']], ['Web Security'])
+
+    def test_inactive_labs_do_not_block_certificate(self):
+        self._complete_ceh_labs_1_and_2()
+        self.lab3.is_active = False
+        self.lab3.save()
+        certs = self.client.get('/api/student/certificates/').data['certificates']
+        self.assertEqual([c['labs_in_subject'] for c in certs], [2])
 
     def test_filter_by_subject(self):
-        self._submit(self.lab1, self.l1q1, 'f1')
-        self._submit(self.lab1, self.l1q2, 'f2')
-        self.assertEqual(len(self.client.get(f'/api/student/certificates/?subject_id={self.ceh.id}').data['certificates']), 1)
-        self.assertEqual(self.client.get(f'/api/student/certificates/?subject_id={self.web.id}').data['certificates'], [])
+        self.web_lab.questions.update(flag='w1')
+        self._submit(self.web_lab, self.web_lab.questions.first(), 'w1')
+        self.assertEqual(len(self.client.get(f'/api/student/certificates/?subject_id={self.web.id}').data['certificates']), 1)
+        res = self.client.get(f'/api/student/certificates/?subject_id={self.ceh.id}')
+        self.assertEqual(res.data['certificates'], [])
+        self.assertEqual(res.data['in_progress'][0]['labs_remaining'], 3)
+        self.assertEqual(self.client.get('/api/student/certificates/?subject_id=abc').status_code, status.HTTP_400_BAD_REQUEST)

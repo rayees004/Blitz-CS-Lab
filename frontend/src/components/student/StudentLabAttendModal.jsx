@@ -141,7 +141,8 @@ export default function StudentLabAttendModal({ lab, onClose, onUpdated }) {
     await refreshWorkspace();
     if (onUpdated) onUpdated();
 
-    // Last question answered correctly: the lab is auto-finalized, show the certificate right away
+    // Last question answered correctly: the lab is auto-finalized, show the subject certificate
+    // (or its progress when the subject still has pending labs)
     if (res.is_correct && (res.all_solved || res.is_completed)) {
       setShowCert(true);
     }
@@ -955,7 +956,7 @@ export default function StudentLabAttendModal({ lab, onClose, onUpdated }) {
                   cursor: "pointer",
                 }}
               >
-                <FileBadge size={14} /> View Certificate
+                <FileBadge size={14} /> Subject Certificate
               </button>
             )}
             <Btn onClick={onClose} tone="ghost" sm>

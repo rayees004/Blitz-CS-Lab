@@ -113,8 +113,9 @@ export async function fetchStudentLeaderboard(page = null) {
 }
 
 /**
- * Subject-based certificates: one per subject with at least one completed lab.
- * Pass a subjectId to get only that subject's certificate.
+ * Subject-based certificates: one per subject, issued once every assigned lab of the subject
+ * is completed. Returns { certificates, in_progress } — in_progress lists subjects that still
+ * have pending labs. Pass a subjectId to get only that subject.
  */
 export async function fetchStudentCertificates(subjectId = null) {
   return apiFetch(`/student/certificates/${subjectId ? `?subject_id=${subjectId}` : ''}`);

@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowLeft, Download, FileBadge, Loader2, X } from "lucide-react";
+import { ArrowLeft, Download, FileBadge, FlaskConical, Loader2, Lock, X } from "lucide-react";
 import { C, sans, mono } from "../../constants/theme";
 import { fetchStudentCertificates } from "../../api/labs";
 import SubjectCertificatePages, { PAGE_W_PX, PAGE_H_PX, certificatePageCount } from "./SubjectCertificateDocument";
@@ -11,6 +11,7 @@ import SubjectCertificatePages, { PAGE_W_PX, PAGE_H_PX, certificatePageCount } f
  */
 export default function SubjectCertificateModal({ subjectId, certificate, onClose }) {
   const [cert, setCert] = useState(certificate || null);
+  const [progress, setProgress] = useState(null);
   const [loading, setLoading] = useState(!certificate);
   const [error, setError] = useState(null);
   const [scale, setScale] = useState(1);
@@ -29,12 +30,15 @@ export default function SubjectCertificateModal({ subjectId, certificate, onClos
     let cancelled = false;
     setLoading(true);
     setError(null);
+    setProgress(null);
     fetchStudentCertificates(subjectId)
       .then((res) => {
         if (cancelled) return;
         const found = (res.certificates || [])[0];
+        const pending = (res.in_progress || [])[0];
         if (found) setCert(found);
-        else setError("No certificate yet for this subject. Complete a lab in this subject to earn it.");
+        else if (pending) setProgress(pending);
+        else setError("You are not assigned to this subject, so it has no subject certificate.");
       })
       .catch((err) => !cancelled && setError(err.message || "Failed to load the certificate."))
       .finally(() => !cancelled && setLoading(false));
@@ -200,6 +204,8 @@ export default function SubjectCertificateModal({ subjectId, certificate, onClos
               <FileBadge size={28} color={C.amber} style={{ marginBottom: 10 }} />
               <div>{error}</div>
             </div>
+          ) : progress ? (
+            <SubjectProgressNotice progress={progress} />
           ) : cert ? (
             <SubjectCertificatePages
               cert={cert}
@@ -223,5 +229,54 @@ export default function SubjectCertificateModal({ subjectId, certificate, onClos
         </div>
       </div>
     </>
+  );
+}
+
+/** Subject not finished yet: the certificate unlocks after every assigned lab is completed */
+function SubjectProgressNotice({ progress }) {
+  const pct = progress.labs_in_subject > 0
+    ? Math.round((progress.labs_completed / progress.labs_in_subject) * 100)
+    : 0;
+  return (
+    <div
+      style={{
+        maxWidth: 480, margin: "60px auto 0", padding: 24, borderRadius: 10,
+        background: C.panel, border: "1px solid rgba(245, 166, 35, 0.35)", fontFamily: sans,
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+        <Lock size={20} color={C.amber} />
+        <div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: C.hi }}>
+            {progress.subject_name} certificate is locked
+          </div>
+          <div style={{ fontSize: 12.5, color: C.mid, marginTop: 2 }}>
+            Complete all {progress.labs_in_subject} assigned lab{progress.labs_in_subject !== 1 ? "s" : ""} of this
+            subject to earn it.
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", justifyContent: "space-between", fontFamily: mono, fontSize: 11, color: C.low, marginBottom: 4 }}>
+        <span>{progress.labs_completed} of {progress.labs_in_subject} labs completed</span>
+        <span>{pct}%</span>
+      </div>
+      <div style={{ height: 6, borderRadius: 3, background: C.panel2, overflow: "hidden" }}>
+        <div style={{ width: `${pct}%`, height: "100%", background: C.amber }} />
+      </div>
+
+      {(progress.pending_labs || []).length > 0 && (
+        <div style={{ marginTop: 16 }}>
+          <div style={{ fontFamily: mono, fontSize: 10.5, color: C.low, textTransform: "uppercase", marginBottom: 6 }}>
+            Remaining labs
+          </div>
+          {progress.pending_labs.map((l) => (
+            <div key={l.lab_id} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: C.mid, padding: "3px 0" }}>
+              <FlaskConical size={12} color={C.cyan} style={{ flexShrink: 0 }} /> {l.lab_name}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

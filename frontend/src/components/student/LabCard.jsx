@@ -1,16 +1,14 @@
-import React, { useState } from "react";
-import { Play, Lock, Video, CheckCircle2, Clock, FileBadge, RotateCcw, Hourglass } from "lucide-react";
+import React from "react";
+import { Play, Lock, Video, CheckCircle2, Clock, RotateCcw, Hourglass } from "lucide-react";
 import Panel from "../common/Panel";
 import Btn from "../common/Btn";
 import Badge, { DiffBadge } from "../common/Badge";
 import ProgressBar from "../common/ProgressBar";
 import { C, sans, mono } from "../../constants/theme";
-import SubjectCertificateModal from "./SubjectCertificateModal";
 import { useTimeLeft, formatTimeLeft } from "../../utils/labTime";
 
+// Certificates are subject based only (see the Certificates page), so lab cards have no certificate action
 export default function LabCard({ lab, onOpen, onRequestRetake }) {
-  const [showCert, setShowCert] = useState(false);
-
   // A lab is only completed when all questions are solved or marked completed
   const isCompleted = Boolean(
     lab.is_completed ||
@@ -183,31 +181,6 @@ export default function LabCard({ lab, onOpen, onRequestRetake }) {
 
         {isCompleted ? (
           <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
-            <button
-              type="button"
-              onClick={() => setShowCert(true)}
-              style={{
-                flex: 1,
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 6,
-                background: "linear-gradient(135deg, rgba(245, 166, 35, 0.2) 0%, rgba(245, 166, 35, 0.1) 100%)",
-                border: "1px solid rgba(245, 166, 35, 0.45)",
-                color: C.amber,
-                padding: "8px 14px",
-                borderRadius: 6,
-                fontFamily: sans,
-                fontSize: 12.5,
-                fontWeight: 700,
-                cursor: "pointer",
-                boxShadow: "0 2px 8px rgba(245, 166, 35, 0.15)",
-                transition: "all 0.15s ease",
-              }}
-            >
-              <FileBadge size={14} /> View Certificate
-            </button>
-
             {/* Retake request: only for completed labs */}
             {hasPendingRetake ? (
               <span
@@ -275,10 +248,6 @@ export default function LabCard({ lab, onOpen, onRequestRetake }) {
           </Btn>
         )}
       </Panel>
-
-      {showCert && isCompleted && (
-        <SubjectCertificateModal subjectId={lab.subject_id} onClose={() => setShowCert(false)} />
-      )}
     </>
   );
 }

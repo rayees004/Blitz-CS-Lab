@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { CheckCircle2, FlaskConical, RefreshCw, Lock, Activity, FileBadge } from "lucide-react";
-import SubjectCertificateModal from "./SubjectCertificateModal";
+import { CheckCircle2, FlaskConical, RefreshCw, Lock, Activity } from "lucide-react";
 import Panel from "../common/Panel";
 import Btn from "../common/Btn";
 import ProgressBar from "../common/ProgressBar";
@@ -13,7 +12,6 @@ export default function StudentAttendanceLog() {
   const [labScores, setLabScores] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [viewingCert, setViewingCert] = useState(null);
   const [page, setPage] = useState(1);
   const [pageMeta, setPageMeta] = useState(null);
 
@@ -170,29 +168,6 @@ export default function StudentAttendanceLog() {
 
                   {/* Right: Actions */}
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    {isCompleted && (
-                      <button
-                        type="button"
-                        onClick={() => setViewingCert({ subjectId: sc.subject_id })}
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: 5,
-                          fontFamily: sans,
-                          fontSize: 11.5,
-                          fontWeight: 700,
-                          color: C.amber,
-                          background: "rgba(245, 166, 35, 0.12)",
-                          padding: "5px 12px",
-                          borderRadius: 6,
-                          border: "1px solid rgba(245, 166, 35, 0.35)",
-                          cursor: "pointer",
-                          transition: "all 0.15s ease",
-                        }}
-                      >
-                        <FileBadge size={13} /> View Certificate
-                      </button>
-                    )}
                     <span
                       style={{
                         display: "inline-flex",
@@ -219,13 +194,6 @@ export default function StudentAttendanceLog() {
       </div>
 
       <Pagination meta={pageMeta} onPageChange={setPage} loading={loading} />
-
-      {viewingCert && (
-        <SubjectCertificateModal
-          subjectId={viewingCert.subjectId}
-          onClose={() => setViewingCert(null)}
-        />
-      )}
     </div>
   );
 }
