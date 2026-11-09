@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { FileBadge, Search, RefreshCw, CheckCircle2, Calendar, FlaskConical, Hourglass } from "lucide-react";
 import Panel from "../common/Panel";
 import Btn from "../common/Btn";
@@ -6,12 +6,21 @@ import ProgressBar from "../common/ProgressBar";
 import { C, sans, mono } from "../../constants/theme";
 import { fetchStudentCertificates } from "../../api/labs";
 import SubjectCertificateModal from "./SubjectCertificateModal";
-import { formatDate } from "./SubjectCertificateDocument";
+import { formatDate, attendedLabs, LAB_STATUS_LABEL } from "./SubjectCertificateDocument";
+
+// Certificates are computed live on the server from the student's lab scores:
+// re-fetch while this page is open so score, report and progress count stay current
+const AUTO_REFRESH_MS = 30000;
+
+// Matches the rgba(0, 230, 118, …) accents (the theme has no green token)
+const GREEN = "#00E676";
+const STATUS_COLOR = { COMPLETED: GREEN, IN_PROGRESS: C.amber, EXPIRED: C.danger };
 
 /**
- * Subject-based certificates only (no per-lab certificates): one per assigned subject (CEH, CPENT, ...).
- * Each certificate exists from the start (empty) and fills in as the student attends the subject's labs:
- * labs attended, each lab's score, and the total score out of all assigned labs of the subject.
+ * Subject-based certificates only (no per-lab certificates): one per assigned subject (CEH, CHFI, SOC, CPENT, ...).
+ * Each certificate exists from the start (empty) and updates automatically as the student attends the
+ * subject's labs: certification score (out of all assigned labs), labs attended / completed, and a report
+ * of the attended labs only.
  */
 export default function StudentCertificates({ currentUser }) {
   const [certificates, setCertificates] = useState([]);
@@ -19,25 +28,49 @@ export default function StudentCertificates({ currentUser }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [search, setSearch] = useState("");
-  const [selected, setSelected] = useState(null);
+  const [selectedId, setSelectedId] = useState(null);
+  const [lastSynced, setLastSynced] = useState(null);
+  const requestSeq = useRef(0);
+  const lastFetchAt = useRef(0);
 
-  const loadData = async () => {
-    setLoading(true);
-    setError(null);
+  // silent: background refresh that keeps the current view (no spinner, no error banner)
+  const loadData = useCallback(async ({ silent = false } = {}) => {
+    const seq = ++requestSeq.current;
+    lastFetchAt.current = Date.now();
+    if (!silent) {
+      setLoading(true);
+      setError(null);
+    }
     try {
       const res = await fetchStudentCertificates();
+      if (seq !== requestSeq.current) return; // a newer request will update the view
       setCertificates(res.certificates || []);
       setStudentName(res.student_name || "");
+      setLastSynced(new Date());
+      setError(null);
     } catch (err) {
-      setError(err.message || "Failed to load certificates.");
+      if (seq === requestSeq.current && !silent) setError(err.message || "Failed to load certificates.");
     } finally {
-      setLoading(false);
+      if (seq === requestSeq.current) setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadData();
-  }, []);
+    const refresh = () => {
+      if (document.visibilityState !== "visible") return;
+      if (Date.now() - lastFetchAt.current < 3000) return; // focus + visibilitychange fire together
+      loadData({ silent: true });
+    };
+    const timer = setInterval(refresh, AUTO_REFRESH_MS);
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [loadData]);
 
   const recipient =
     studentName ||
@@ -53,9 +86,12 @@ export default function StudentCertificates({ currentUser }) {
       (c.subject_code || "").toLowerCase().includes(q) ||
       (c.course_name || "").toLowerCase().includes(q) ||
       (c.certificate_id || "").toLowerCase().includes(q) ||
-      (c.labs || []).some((l) => (l.lab_name || "").toLowerCase().includes(q))
+      attendedLabs(c).some((l) => (l.lab_name || "").toLowerCase().includes(q))
   );
   const completedCount = certificates.filter((c) => c.is_complete).length;
+  // The open certificate follows the auto-refreshed data
+  const selected = selectedId != null ? certificates.find((c) => c.subject_id === selectedId) || null : null;
+  const showSpinner = loading && certificates.length === 0;
 
   return (
     <div style={{ padding: 28, overflowY: "auto", height: "100%", boxSizing: "border-box" }}>
@@ -75,10 +111,18 @@ export default function StudentCertificates({ currentUser }) {
               {certificates.length} Subject{certificates.length !== 1 ? "s" : ""} · {completedCount} Completed
             </span>
           </div>
-          <p style={{ fontFamily: sans, fontSize: 13.5, color: C.mid, marginTop: 6, maxWidth: 680 }}>
-            One certificate for each of your subjects (CEH, CPENT, ...). It starts empty and fills in as you attend
-            the subject's labs: labs attended, each lab's score and your total score out of all assigned labs.
+          <p style={{ fontFamily: sans, fontSize: 13.5, color: C.mid, marginTop: 6, marginBottom: 0, maxWidth: 680 }}>
+            One certificate for each of your subjects (CEH, CHFI, SOC, CPENT, ...). It shows your certification score,
+            how many of the subject's labs you have attended, and a report of the labs you attended.
           </p>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: mono, fontSize: 10.5, color: C.low, marginTop: 6 }}>
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: GREEN, display: "inline-block" }} />
+            <span>
+              Updates automatically as you attend labs
+              {lastSynced &&
+                ` · last synced ${lastSynced.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" })}`}
+            </span>
+          </div>
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -97,7 +141,7 @@ export default function StudentCertificates({ currentUser }) {
               style={{ background: "transparent", border: "none", fontFamily: sans, fontSize: 12.5, color: C.hi, outline: "none", width: "100%" }}
             />
           </div>
-          <Btn icon={RefreshCw} tone="ghost" sm onClick={loadData}>
+          <Btn icon={RefreshCw} tone="ghost" sm onClick={() => loadData()}>
             {loading ? "Syncing..." : "Refresh"}
           </Btn>
         </div>
@@ -124,7 +168,7 @@ export default function StudentCertificates({ currentUser }) {
           <div>
             <div style={{ fontFamily: sans, fontSize: 14.5, fontWeight: 700, color: C.hi }}>Subject-Based Certification</div>
             <div style={{ fontFamily: sans, fontSize: 12.5, color: C.mid, marginTop: 2 }}>
-              Page 1: subject report · Next pages: every assigned lab with its score and status. Download as PDF.
+              Page 1: certification score and progress · Next pages: report of the labs you attended. Download as PDF.
             </div>
           </div>
         </div>
@@ -134,7 +178,7 @@ export default function StudentCertificates({ currentUser }) {
         </div>
       </div>
 
-      {loading ? (
+      {showSpinner ? (
         <Panel style={{ padding: 60, textAlign: "center", color: C.mid, marginTop: 24 }}>
           <RefreshCw size={26} color={C.cyan} style={{ animation: "spin 1s linear infinite", marginBottom: 12 }} />
           <div style={{ fontFamily: sans, fontSize: 14 }}>Retrieving your subject certificates...</div>
@@ -142,7 +186,7 @@ export default function StudentCertificates({ currentUser }) {
       ) : error ? (
         <Panel style={{ padding: 24, marginTop: 24, border: "1px solid rgba(229,83,75,0.3)", background: "rgba(229,83,75,0.08)" }}>
           <div style={{ color: C.danger, fontFamily: sans, fontSize: 13, fontWeight: 600 }}>{error}</div>
-          <Btn sm onClick={loadData} style={{ marginTop: 8 }}>Retry</Btn>
+          <Btn sm onClick={() => loadData()} style={{ marginTop: 8 }}>Retry</Btn>
         </Panel>
       ) : filtered.length === 0 ? (
         <Panel style={{ padding: 50, textAlign: "center", marginTop: 24, background: C.panel, border: `1px dashed ${C.border}` }}>
@@ -153,15 +197,15 @@ export default function StudentCertificates({ currentUser }) {
           <p style={{ fontFamily: sans, fontSize: 13, color: C.mid, maxWidth: 460, margin: "0 auto", lineHeight: 1.55 }}>
             {search
               ? "Try clearing your search term to see all certificates."
-              : "When you are assigned to a subject with labs, its certificate appears here and fills in as you attend the labs."}
+              : "When you are assigned to a subject with labs, its certificate appears here and updates as you attend the labs."}
           </p>
         </Panel>
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))", gap: 18, marginTop: 24 }}>
           {filtered.map((cert) => {
-            const attended = cert.labs_attended ?? cert.labs_completed;
+            const labs = attendedLabs(cert);
+            const attended = cert.labs_attended ?? labs.length;
             const labsPct = cert.labs_in_subject > 0 ? Math.round((cert.labs_completed / cert.labs_in_subject) * 100) : 0;
-            const attendedLabs = (cert.labs || []).filter((l) => l.status !== "NOT_ATTENDED");
             return (
               <Panel
                 key={cert.certificate_id}
@@ -179,7 +223,7 @@ export default function StudentCertificates({ currentUser }) {
                     {cert.is_complete ? (
                       <span
                         style={{
-                          fontFamily: mono, fontSize: 10, color: C.green, background: "rgba(0, 230, 118, 0.12)",
+                          fontFamily: mono, fontSize: 10, color: GREEN, background: "rgba(0, 230, 118, 0.12)",
                           padding: "2px 7px", borderRadius: 4, border: "1px solid rgba(0, 230, 118, 0.3)",
                           display: "inline-flex", alignItems: "center", gap: 3, fontWeight: 600,
                         }}
@@ -217,8 +261,8 @@ export default function StudentCertificates({ currentUser }) {
                     }}
                   >
                     <div>
-                      <div style={{ fontFamily: mono, fontSize: 9.5, color: C.low, textTransform: "uppercase" }}>Total Score</div>
-                      <div style={{ fontFamily: sans, fontSize: 13.5, fontWeight: 700, color: C.green }}>
+                      <div style={{ fontFamily: mono, fontSize: 9.5, color: C.low, textTransform: "uppercase" }}>Cert. Score</div>
+                      <div style={{ fontFamily: sans, fontSize: 13.5, fontWeight: 700, color: GREEN }}>
                         {cert.total_score}/{cert.max_score}
                       </div>
                     </div>
@@ -238,32 +282,37 @@ export default function StudentCertificates({ currentUser }) {
 
                   <div style={{ marginTop: 12 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", fontFamily: mono, fontSize: 10.5, color: C.low, marginBottom: 4 }}>
-                      <span>{cert.labs_completed} of {cert.labs_in_subject} assigned labs completed</span>
+                      <span>{cert.labs_completed} of {cert.labs_in_subject} labs completed</span>
                       <span>{labsPct}%</span>
                     </div>
-                    <ProgressBar value={labsPct} tone={cert.is_complete ? "green" : "amber"} h={5} />
+                    <ProgressBar value={labsPct} tone={cert.is_complete ? "cyan" : "amber"} h={5} />
                   </div>
 
                   <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 4 }}>
-                    {attendedLabs.length === 0 ? (
+                    <div style={{ fontFamily: mono, fontSize: 9.5, color: C.low, textTransform: "uppercase", marginBottom: 2 }}>
+                      Attended labs report
+                    </div>
+                    {labs.length === 0 ? (
                       <div style={{ fontFamily: sans, fontSize: 12, color: C.low, fontStyle: "italic" }}>
-                        No labs attended yet — attend a lab of this subject to add its score here.
+                        No labs attended yet. Attend a lab of this subject and its score is added here automatically.
                       </div>
                     ) : (
-                      attendedLabs.slice(0, 3).map((l) => (
+                      labs.slice(0, 4).map((l) => (
                         <div key={l.lab_id} style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: sans, fontSize: 12, color: C.mid }}>
-                          <FlaskConical size={12} color={l.status === "COMPLETED" ? C.green : C.amber} style={{ flexShrink: 0 }} />
+                          <FlaskConical size={12} color={STATUS_COLOR[l.status] || C.cyan} style={{ flexShrink: 0 }} />
                           <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.lab_name}</span>
-                          {l.status === "IN_PROGRESS" && (
-                            <span style={{ fontFamily: mono, fontSize: 10, color: C.amber }}>in progress</span>
+                          {l.status !== "COMPLETED" && (
+                            <span style={{ fontFamily: mono, fontSize: 10, color: STATUS_COLOR[l.status] || C.amber }}>
+                              {(LAB_STATUS_LABEL[l.status] || l.status).toLowerCase()}
+                            </span>
                           )}
                           <span style={{ fontFamily: mono, fontSize: 11, color: C.hi }}>{l.score}/{l.max_score}</span>
                         </div>
                       ))
                     )}
-                    {attendedLabs.length > 3 && (
+                    {labs.length > 4 && (
                       <div style={{ fontFamily: mono, fontSize: 11, color: C.low }}>
-                        + {attendedLabs.length - 3} more attended lab{attendedLabs.length - 3 !== 1 ? "s" : ""}
+                        + {labs.length - 4} more attended lab{labs.length - 4 !== 1 ? "s" : ""}
                       </div>
                     )}
                   </div>
@@ -275,12 +324,14 @@ export default function StudentCertificates({ currentUser }) {
                     <span>
                       {cert.is_complete
                         ? `Completed ${formatDate(cert.issued_at)}`
-                        : `${cert.labs_remaining ?? cert.labs_in_subject - cert.labs_completed} lab(s) remaining`}
+                        : cert.last_activity_at
+                        ? `Last activity ${formatDate(cert.last_activity_at)}`
+                        : "Not started yet"}
                     </span>
                   </div>
                   <button
                     type="button"
-                    onClick={() => setSelected(cert)}
+                    onClick={() => setSelectedId(cert.subject_id)}
                     style={{
                       display: "inline-flex", alignItems: "center", gap: 6, background: "rgba(245, 166, 35, 0.15)",
                       border: "1px solid rgba(245, 166, 35, 0.4)", color: C.amber, padding: "6px 14px", borderRadius: 6,
@@ -297,7 +348,7 @@ export default function StudentCertificates({ currentUser }) {
       )}
 
       {selected && (
-        <SubjectCertificateModal certificate={selected} onClose={() => setSelected(null)} />
+        <SubjectCertificateModal certificate={selected} onClose={() => setSelectedId(null)} />
       )}
     </div>
   );

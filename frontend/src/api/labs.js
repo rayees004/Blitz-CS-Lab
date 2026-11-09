@@ -113,9 +113,10 @@ export async function fetchStudentLeaderboard(page = null) {
 }
 
 /**
- * Subject-based certificates: one per assigned subject, present from the start (empty) and filled
- * in as the student attends the subject's labs (`is_complete` once every assigned lab is completed).
- * Pass a subjectId to get only that subject's certificate.
+ * Subject-based certificates: one per assigned subject, present from the start (empty) and computed
+ * live from the student's labs: certification score (out of all assigned labs), labs attended /
+ * completed, and `labs` = report of ATTENDED labs only (status COMPLETED / IN_PROGRESS / EXPIRED).
+ * `is_complete` once every assigned lab is completed. Pass a subjectId to get only that subject.
  */
 export async function fetchStudentCertificates(subjectId = null) {
   return apiFetch(`/student/certificates/${subjectId ? `?subject_id=${subjectId}` : ''}`);

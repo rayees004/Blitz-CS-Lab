@@ -1566,12 +1566,14 @@ class StudentSubjectCertificateView(APIView):
     GET /api/student/certificates/?subject_id=<id>  — only that subject's certificate
 
     Certificates are subject based only (there are no per-lab certificates). Every subject the
-    student is assigned to has a certificate from the start (empty: no labs attended, score 0).
-    As the student attends the subject's labs, each attended lab's score and questions are added.
+    student is assigned to (CEH, CHFI, SOC, CPENT, ...) has a certificate from the start (empty:
+    no labs attended, score 0). It is computed live, so each lab the student attends updates it.
     Assigned labs = active labs of their enrolled subjects (class-based students: their class's labs).
-    The score is out of the total points of ALL assigned labs of the subject. `is_complete` turns
-    true once every assigned lab is completed.
-    Each lab row has a status: COMPLETED, IN_PROGRESS (attended, not finished) or NOT_ATTENDED.
+      - certification score: points earned in attended labs, out of ALL assigned labs of the subject
+      - progress count: labs attended / completed out of the assigned labs
+      - report (`labs`): ATTENDED labs only, each with score, questions solved and status
+        COMPLETED, IN_PROGRESS or EXPIRED (24-hour window ended before finishing)
+    `is_complete` turns true once every assigned lab is completed.
     """
     permission_classes = [IsAuthenticated]
 
@@ -1631,24 +1633,17 @@ class StudentSubjectCertificateView(APIView):
             .order_by('name')
         )
 
+        now = timezone.now()
         by_subject = {}
         for lab in assigned_qs:
-            entry = by_subject.setdefault(lab.subject_id, {'subject': lab.subject, 'labs': []})
+            entry = by_subject.setdefault(lab.subject_id, {
+                'subject': lab.subject, 'labs': [], 'assigned': 0, 'max_score': 0, 'questions_total': 0,
+            })
             total_questions = len(lab.questions.all())
-            row = {
-                'lab_id': lab.id,
-                'lab_name': lab.name,
-                'category': lab.category,
-                'difficulty': lab.difficulty,
-                'status': 'NOT_ATTENDED',
-                'score': 0,
-                'max_score': lab.points,
-                'solved_questions': 0,
-                'total_questions': total_questions,
-                'attend_count': 0,
-                'completed_at': None,
-            }
-            entry['labs'].append(row)
+            # Totals cover every assigned lab; the report rows cover attended labs only
+            entry['assigned'] += 1
+            entry['max_score'] += lab.points
+            entry['questions_total'] += total_questions
             if lab.id not in attended_lab_ids:
                 continue
 
@@ -1661,33 +1656,46 @@ class StudentSubjectCertificateView(APIView):
             else:
                 solved = ls.solved_questions_count if ls else 0
             is_completed = lab.id in completed_lab_ids
+            if is_completed:
+                lab_status = 'COMPLETED'
+            elif ls and ls.is_attempt_expired(now):
+                lab_status = 'EXPIRED'
+            else:
+                lab_status = 'IN_PROGRESS'
 
-            row.update({
-                'status': 'COMPLETED' if is_completed else 'IN_PROGRESS',
+            entry['labs'].append({
+                'lab_id': lab.id,
+                'lab_name': lab.name,
+                'category': lab.category,
+                'difficulty': lab.difficulty,
+                'status': lab_status,
                 'score': min(lab.points, max(0, score)),
+                'max_score': lab.points,
                 'solved_questions': min(solved, total_questions) if total_questions else solved,
+                'total_questions': total_questions,
                 'attend_count': (ls.attend_count if ls else 0) or 1,
                 'completed_at': (
                     (ls.completed_at if ls else None) or (sub.submitted_at if sub else None)
                 ) if is_completed else None,
+                'last_activity_at': (ls.last_attended_at if ls else None) or (sub.started_at if sub else None),
             })
 
         student_name = (f"{student.first_name} {student.last_name}".strip() or student.username)
-        status_order = {'COMPLETED': 0, 'IN_PROGRESS': 1, 'NOT_ATTENDED': 2}
+        status_order = {'COMPLETED': 0, 'IN_PROGRESS': 1, 'EXPIRED': 2}
         certificates = []
         for entry in by_subject.values():
             subject = entry['subject']
-            # Completed labs first (in order of completion), then in progress, then not attended
+            # Completed labs first (in order of completion), then labs still in progress / expired
             labs = sorted(entry['labs'], key=lambda l: (
                 status_order[l['status']],
-                l['completed_at'] or timezone.now(),
+                l['completed_at'] or now,
                 (l['lab_name'] or '').lower(),
             ))
-            attended = [l for l in labs if l['status'] != 'NOT_ATTENDED']
             completed = [l for l in labs if l['status'] == 'COMPLETED']
-            total_score = sum(l['score'] for l in attended)
-            max_score = sum(l['max_score'] for l in labs)  # out of ALL assigned labs
+            total_score = sum(l['score'] for l in labs)
+            max_score = entry['max_score']  # out of ALL assigned labs
             completion_times = [l['completed_at'] for l in completed if l['completed_at']]
+            activity_times = [l['last_activity_at'] for l in labs if l['last_activity_at']]
 
             certificates.append({
                 'certificate_id': f"BLITZ-SUB-{subject.id:03d}-{student.id:05d}",
@@ -1697,19 +1705,20 @@ class StudentSubjectCertificateView(APIView):
                 'subject_name': subject.name,
                 'subject_code': subject.code,
                 'course_name': subject.course.name if subject.course else None,
-                'labs_in_subject': len(labs),
-                'labs_attended': len(attended),
+                'labs_in_subject': entry['assigned'],
+                'labs_attended': len(labs),
                 'labs_completed': len(completed),
-                'labs_remaining': len(labs) - len(completed),
-                'is_complete': len(completed) == len(labs),
+                'labs_remaining': entry['assigned'] - len(completed),
+                'is_complete': len(completed) == entry['assigned'],
                 'total_score': total_score,
                 'max_score': max_score,
                 'score_pct': round(total_score / max_score * 100) if max_score else 0,
-                'questions_solved': sum(l['solved_questions'] for l in attended),
-                'questions_total': sum(l['total_questions'] for l in labs),
+                'questions_solved': sum(l['solved_questions'] for l in labs),
+                'questions_total': entry['questions_total'],
                 'first_completed_at': min(completion_times) if completion_times else None,
                 'issued_at': max(completion_times) if completion_times else None,
-                'labs': labs,
+                'last_activity_at': max(activity_times) if activity_times else None,
+                'labs': labs,  # attended labs only
             })
 
         certificates.sort(key=lambda c: (c['subject_name'] or '').lower())

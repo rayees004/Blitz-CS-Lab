@@ -709,7 +709,10 @@ class LabCompletionTests(TestCase):
 
 
 class SubjectCertificateTests(TestCase):
-    """One certificate per assigned subject, starting empty and filled as the subject's labs are attended."""
+    """
+    One certificate per assigned subject, starting empty and updated as the subject's labs are attended.
+    Score and progress cover all assigned labs; the lab report lists attended labs only.
+    """
 
     def setUp(self):
         self.client = APIClient()
@@ -753,7 +756,8 @@ class SubjectCertificateTests(TestCase):
         self.assertEqual((ceh['labs_attended'], ceh['labs_completed'], ceh['labs_in_subject']), (0, 0, 3))
         self.assertEqual((ceh['total_score'], ceh['max_score']), (0, 300))  # out of all assigned labs
         self.assertFalse(ceh['is_complete'])
-        self.assertTrue(all(l['status'] == 'NOT_ATTENDED' for l in ceh['labs']))
+        self.assertEqual(ceh['labs'], [])  # report lists attended labs only
+        self.assertIsNone(ceh['last_activity_at'])
 
     def test_attended_labs_add_their_scores(self):
         self._complete_ceh_labs_1_and_2()  # CEH lab 3 not attended
@@ -764,17 +768,37 @@ class SubjectCertificateTests(TestCase):
         self.assertEqual((ceh['labs_attended'], ceh['labs_completed'], ceh['labs_remaining']), (2, 2, 1))
         self.assertEqual((ceh['total_score'], ceh['max_score'], ceh['score_pct']), (150, 300, 50))
         self.assertEqual((ceh['questions_solved'], ceh['questions_total']), (3, 4))
+        # Report: attended labs only (CEH lab 3 was never attended)
         self.assertEqual(
             [(l['lab_name'], l['status']) for l in ceh['labs']],
-            [('IDOR Lab', 'COMPLETED'), ('XSS Lab', 'COMPLETED'), ('Not started', 'NOT_ATTENDED')],
+            [('IDOR Lab', 'COMPLETED'), ('XSS Lab', 'COMPLETED')],
         )
         self.assertEqual(ceh['labs'][1]['solved_questions'], 1)
         self.assertIsNotNone(ceh['labs'][0]['completed_at'])
+        self.assertIsNotNone(ceh['last_activity_at'])
         self.assertFalse(ceh['is_complete'])
 
         web = certs['Web Security']
         self.assertEqual((web['labs_attended'], web['labs_completed']), (1, 0))
-        self.assertEqual(web['labs'][0]['status'], 'IN_PROGRESS')
+        self.assertEqual([(l['lab_name'], l['status'], l['score']) for l in web['labs']], [('Web Lab', 'IN_PROGRESS', 0)])
+
+    def test_score_and_progress_update_as_labs_are_attended(self):
+        before = self._certs()['CEH']
+        self._submit(self.lab1, self.l1q1, 'f1')  # lab 1 attended, half solved
+        after = self._certs()['CEH']
+        self.assertEqual((before['labs_attended'], before['total_score']), (0, 0))
+        self.assertEqual((after['labs_attended'], after['labs_completed'], after['total_score']), (1, 0, 50))
+        self.assertEqual([(l['lab_name'], l['status'], l['score']) for l in after['labs']], [('IDOR Lab', 'IN_PROGRESS', 50)])
+
+    def test_unfinished_lab_past_its_time_window_is_expired(self):
+        from datetime import timedelta
+        from django.utils import timezone
+        self._submit(self.lab1, self.l1q1, 'f1')
+        LabScore.objects.filter(student=self.student, lab=self.lab1).update(
+            attempt_started_at=timezone.now() - timedelta(hours=25)
+        )
+        lab_row = self._certs()['CEH']['labs'][0]
+        self.assertEqual((lab_row['status'], lab_row['score']), ('EXPIRED', 50))
 
     def test_certificate_complete_after_all_assigned_labs(self):
         self._complete_ceh_labs_1_and_2()

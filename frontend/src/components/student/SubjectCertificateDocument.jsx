@@ -3,9 +3,9 @@ import { sans, mono } from "../../constants/theme";
 
 /*
  * Subject certificate as fixed-size A4 landscape pages. Every assigned subject has one from the
- * start (empty); attended labs add their scores. Score is out of all assigned labs of the subject.
- *   Page 1     — overall report: student, subject, total score, labs attended/completed, questions solved
- *   Page 2..N  — lab table (every assigned lab): lab name, score, questions attended, status / time of completion.
+ * start (empty); each attended lab adds its score. The certification score is out of all assigned labs.
+ *   Page 1     — overall report: student, subject, certification score, labs attended/completed, questions solved
+ *   Page 2..N  — report of ATTENDED labs only: lab name, score, questions solved, status / time of completion.
  *                Rows are split across as many pages as needed (LAB_ROWS_PER_PAGE each).
  * The same pages are used for the on-screen preview and for printing / saving as PDF.
  */
@@ -40,9 +40,21 @@ function chunk(items, size) {
   return out;
 }
 
+/** Labs shown in the certificate report: attended labs only */
+export function attendedLabs(cert) {
+  return (cert?.labs || []).filter((l) => l.status !== "NOT_ATTENDED");
+}
+
+/** Status label of an attended lab */
+export const LAB_STATUS_LABEL = {
+  COMPLETED: "Completed",
+  IN_PROGRESS: "In progress",
+  EXPIRED: "Time expired",
+};
+
 /** Total number of pages a certificate needs (cover + lab pages) */
 export function certificatePageCount(cert) {
-  return 1 + Math.max(1, Math.ceil((cert?.labs?.length || 0) / LAB_ROWS_PER_PAGE));
+  return 1 + Math.max(1, Math.ceil(attendedLabs(cert).length / LAB_ROWS_PER_PAGE));
 }
 
 function Page({ children }) {
@@ -147,10 +159,10 @@ function CoverPage({ cert, pageCount }) {
           BLITZ ACADEMY · CYBERSECURITY DIVISION
         </div>
         <div style={{ fontSize: 34, fontWeight: 800, letterSpacing: "0.08em", marginTop: 6, textTransform: "uppercase" }}>
-          Certificate of Achievement
+          Subject Certification
         </div>
         <div style={{ fontFamily: mono, fontSize: 11.5, letterSpacing: "0.2em", color: TEAL, marginTop: 2, textTransform: "uppercase" }}>
-          Subject Practical Lab Report
+          Practical Lab Score Report
         </div>
         <div
           style={{
@@ -190,11 +202,11 @@ function CoverPage({ cert, pageCount }) {
           background: "#ffffff",
         }}
       >
-        <Stat label="Total Score" value={`${cert.total_score} / ${cert.max_score}`} sub={`${cert.score_pct}% of all assigned labs`} />
+        <Stat label="Certification Score" value={`${cert.total_score} / ${cert.max_score}`} sub={`${cert.score_pct}% of all assigned labs`} />
         <Stat
           label="Labs Attended"
           value={`${attended} of ${cert.labs_in_subject}`}
-          sub={`${cert.labs_completed} completed · assigned labs`}
+          sub={`${cert.labs_completed} completed`}
         />
         <Stat label="Questions Solved" value={`${cert.questions_solved} of ${cert.questions_total}`} sub="across assigned labs" />
         {complete ? (
@@ -216,7 +228,7 @@ function CoverPage({ cert, pageCount }) {
           ) : (
             <div>Report generated: <strong style={{ color: INK }}>{formatDate(new Date())}</strong></div>
           )}
-          <div>Lab-wise details on the following page{pageCount > 2 ? "s" : ""}</div>
+          <div>Attended labs report on the following page{pageCount > 2 ? "s" : ""}</div>
         </div>
         <div
           style={{
@@ -271,7 +283,7 @@ function LabsPage({ cert, rows, startIndex, pageNo, pageCount, isLast }) {
           <div style={{ fontFamily: mono, fontSize: 10.5, letterSpacing: "0.25em", color: GOLD, fontWeight: 700 }}>
             BLITZ ACADEMY · CYBERSECURITY DIVISION
           </div>
-          <div style={{ fontSize: 20, fontWeight: 800, marginTop: 3 }}>Lab Performance Details</div>
+          <div style={{ fontSize: 20, fontWeight: 800, marginTop: 3 }}>Attended Labs Report</div>
           <div style={{ fontSize: 12.5, color: TEAL, fontWeight: 700, marginTop: 1 }}>
             {cert.subject_name}{cert.course_name ? ` · ${cert.course_name}` : ""}
           </div>
@@ -280,7 +292,7 @@ function LabsPage({ cert, rows, startIndex, pageNo, pageCount, isLast }) {
           <div>Student: <strong style={{ color: INK }}>{cert.student_name}</strong></div>
           <div>
             Labs attended: <strong style={{ color: INK }}>{cert.labs_attended ?? cert.labs_completed} of {cert.labs_in_subject}</strong>
-            {" · "}Total score: <strong style={{ color: INK }}>{cert.total_score} / {cert.max_score}</strong>
+            {" · "}Certification score: <strong style={{ color: INK }}>{cert.total_score} / {cert.max_score}</strong>
           </div>
         </div>
       </div>
@@ -298,23 +310,22 @@ function LabsPage({ cert, rows, startIndex, pageNo, pageCount, isLast }) {
             <th style={th}>#</th>
             <th style={th}>Lab Name</th>
             <th style={th}>Score</th>
-            <th style={th}>Questions Attended</th>
+            <th style={th}>Questions Solved</th>
             <th style={th}>Status / Completed On</th>
           </tr>
         </thead>
         <tbody>
           {rows.length === 0 && (
             <tr>
-              <td colSpan={5} style={{ ...td, textAlign: "center", color: MUTED, fontStyle: "italic" }}>
-                No labs are assigned in this subject yet.
+              <td colSpan={5} style={{ ...td, height: 60, textAlign: "center", color: MUTED, fontStyle: "italic" }}>
+                No labs attended yet in this subject. Each lab you attend is added to this report automatically.
               </td>
             </tr>
           )}
           {rows.map((lab, i) => {
             const status = lab.status || "COMPLETED";
-            const notAttended = status === "NOT_ATTENDED";
             return (
-              <tr key={lab.lab_id} style={{ background: i % 2 ? ROW_ALT : "#ffffff", color: notAttended ? MUTED : INK }}>
+              <tr key={lab.lab_id} style={{ background: i % 2 ? ROW_ALT : "#ffffff" }}>
                 <td style={{ ...td, fontFamily: mono, color: MUTED }}>{startIndex + i + 1}</td>
                 <td style={{ ...td, overflow: "hidden", textOverflow: "ellipsis", fontWeight: 600 }} title={lab.lab_name}>
                   {lab.lab_name}
@@ -322,33 +333,29 @@ function LabsPage({ cert, rows, startIndex, pageNo, pageCount, isLast }) {
                     <span style={{ fontWeight: 400, color: MUTED, fontSize: 11 }}> · {lab.category}</span>
                   )}
                 </td>
-                <td style={{ ...td, fontFamily: mono, fontWeight: 700 }}>
-                  {notAttended ? "—" : lab.score} / {lab.max_score}
-                </td>
-                <td style={{ ...td, fontFamily: mono }}>
-                  {notAttended ? "—" : `${lab.solved_questions} of ${lab.total_questions} solved`}
-                </td>
+                <td style={{ ...td, fontFamily: mono, fontWeight: 700 }}>{lab.score} / {lab.max_score}</td>
+                <td style={{ ...td, fontFamily: mono }}>{lab.solved_questions} of {lab.total_questions} solved</td>
                 <td style={{ ...td, fontFamily: mono, fontSize: 11.5 }}>
                   {status === "COMPLETED" ? (
                     formatDateTime(lab.completed_at)
-                  ) : status === "IN_PROGRESS" ? (
-                    <span style={{ color: GOLD, fontWeight: 700 }}>In progress</span>
                   ) : (
-                    <span style={{ fontStyle: "italic" }}>Not attended</span>
+                    <span style={{ color: status === "EXPIRED" ? "#b3412e" : GOLD, fontWeight: 700 }}>
+                      {LAB_STATUS_LABEL[status] || status}
+                    </span>
                   )}
                 </td>
               </tr>
             );
           })}
-          {isLast && rows.length > 0 && (
+          {isLast && (
             <tr style={{ background: "rgba(183, 134, 43, 0.12)" }}>
               <td style={{ ...td, borderBottom: "none" }} />
               <td style={{ ...td, borderBottom: "none", fontWeight: 800 }}>
-                Total ({cert.labs_attended ?? cert.labs_completed} of {cert.labs_in_subject} labs attended)
+                Certification score ({cert.labs_attended ?? rows.length} of {cert.labs_in_subject} assigned labs attended)
               </td>
               <td style={{ ...td, borderBottom: "none", fontFamily: mono, fontWeight: 800 }}>{cert.total_score} / {cert.max_score}</td>
               <td style={{ ...td, borderBottom: "none", fontFamily: mono, fontWeight: 800 }}>{cert.questions_solved} of {cert.questions_total} solved</td>
-              <td style={{ ...td, borderBottom: "none", fontFamily: mono, fontSize: 11.5 }}>{cert.score_pct}% marks earned</td>
+              <td style={{ ...td, borderBottom: "none", fontFamily: mono, fontSize: 11.5 }}>{cert.score_pct}% of all assigned labs</td>
             </tr>
           )}
         </tbody>
@@ -367,7 +374,7 @@ function LabsPage({ cert, rows, startIndex, pageNo, pageCount, isLast }) {
 
 /** All pages of one subject certificate, in order */
 export default function SubjectCertificatePages({ cert, pageGap = 0, wrapPage }) {
-  const labChunks = chunk(cert.labs || [], LAB_ROWS_PER_PAGE);
+  const labChunks = chunk(attendedLabs(cert), LAB_ROWS_PER_PAGE);
   if (labChunks.length === 0) labChunks.push([]);
   const pageCount = 1 + labChunks.length;
   const wrap = wrapPage || ((node) => node);
