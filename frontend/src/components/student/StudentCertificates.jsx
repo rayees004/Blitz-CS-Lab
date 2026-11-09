@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { FileBadge, Search, RefreshCw, CheckCircle2, Calendar, ArrowRight, FlaskConical, Lock } from "lucide-react";
+import { FileBadge, Search, RefreshCw, CheckCircle2, Calendar, FlaskConical, Hourglass } from "lucide-react";
 import Panel from "../common/Panel";
 import Btn from "../common/Btn";
 import ProgressBar from "../common/ProgressBar";
@@ -9,12 +9,12 @@ import SubjectCertificateModal from "./SubjectCertificateModal";
 import { formatDate } from "./SubjectCertificateDocument";
 
 /**
- * Subject-based certificates only (no per-lab certificates): one per subject (CEH, CPENT, ...),
- * issued once the student completes every lab assigned to them in that subject.
+ * Subject-based certificates only (no per-lab certificates): one per assigned subject (CEH, CPENT, ...).
+ * Each certificate exists from the start (empty) and fills in as the student attends the subject's labs:
+ * labs attended, each lab's score, and the total score out of all assigned labs of the subject.
  */
-export default function StudentCertificates({ currentUser, go }) {
+export default function StudentCertificates({ currentUser }) {
   const [certificates, setCertificates] = useState([]);
-  const [inProgress, setInProgress] = useState([]);
   const [studentName, setStudentName] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -27,7 +27,6 @@ export default function StudentCertificates({ currentUser, go }) {
     try {
       const res = await fetchStudentCertificates();
       setCertificates(res.certificates || []);
-      setInProgress(res.in_progress || []);
       setStudentName(res.student_name || "");
     } catch (err) {
       setError(err.message || "Failed to load certificates.");
@@ -56,14 +55,7 @@ export default function StudentCertificates({ currentUser, go }) {
       (c.certificate_id || "").toLowerCase().includes(q) ||
       (c.labs || []).some((l) => (l.lab_name || "").toLowerCase().includes(q))
   );
-  const filteredProgress = inProgress.filter(
-    (p) =>
-      !q ||
-      (p.subject_name || "").toLowerCase().includes(q) ||
-      (p.subject_code || "").toLowerCase().includes(q) ||
-      (p.course_name || "").toLowerCase().includes(q) ||
-      [...(p.pending_labs || []), ...(p.completed_labs || [])].some((l) => (l.lab_name || "").toLowerCase().includes(q))
-  );
+  const completedCount = certificates.filter((c) => c.is_complete).length;
 
   return (
     <div style={{ padding: 28, overflowY: "auto", height: "100%", boxSizing: "border-box" }}>
@@ -80,13 +72,12 @@ export default function StudentCertificates({ currentUser, go }) {
                 padding: "2px 8px", borderRadius: 4, border: "1px solid rgba(245, 166, 35, 0.3)", fontWeight: 600,
               }}
             >
-              {certificates.length} Earned
+              {certificates.length} Subject{certificates.length !== 1 ? "s" : ""} · {completedCount} Completed
             </span>
           </div>
           <p style={{ fontFamily: sans, fontSize: 13.5, color: C.mid, marginTop: 6, maxWidth: 680 }}>
-            One certificate per subject (CEH, CPENT, ...). A subject's certificate is issued once you complete
-            every lab assigned to you in that subject. It shows the subject's total score and completed labs,
-            followed by every lab's score, questions attended and time of completion.
+            One certificate for each of your subjects (CEH, CPENT, ...). It starts empty and fills in as you attend
+            the subject's labs: labs attended, each lab's score and your total score out of all assigned labs.
           </p>
         </div>
 
@@ -133,7 +124,7 @@ export default function StudentCertificates({ currentUser, go }) {
           <div>
             <div style={{ fontFamily: sans, fontSize: 14.5, fontWeight: 700, color: C.hi }}>Subject-Based Certification</div>
             <div style={{ fontFamily: sans, fontSize: 12.5, color: C.mid, marginTop: 2 }}>
-              Page 1: overall report · Next pages: lab-wise details (more pages are added automatically). Download as PDF.
+              Page 1: subject report · Next pages: every assigned lab with its score and status. Download as PDF.
             </div>
           </div>
         </div>
@@ -157,43 +148,55 @@ export default function StudentCertificates({ currentUser, go }) {
         <Panel style={{ padding: 50, textAlign: "center", marginTop: 24, background: C.panel, border: `1px dashed ${C.border}` }}>
           <FileBadge size={30} color={C.amber} style={{ marginBottom: 12 }} />
           <h3 style={{ fontFamily: sans, fontSize: 17, fontWeight: 700, color: C.hi, margin: "0 0 8px" }}>
-            {search ? "No certificates match your search" : "No Subject Certificates Yet"}
+            {search ? "No certificates match your search" : "No Subjects Assigned Yet"}
           </h3>
-          <p style={{ fontFamily: sans, fontSize: 13, color: C.mid, maxWidth: 460, margin: "0 auto 20px", lineHeight: 1.55 }}>
+          <p style={{ fontFamily: sans, fontSize: 13, color: C.mid, maxWidth: 460, margin: "0 auto", lineHeight: 1.55 }}>
             {search
               ? "Try clearing your search term to see all certificates."
-              : "Complete all the assigned labs of a subject and that subject's certificate is issued here automatically."}
+              : "When you are assigned to a subject with labs, its certificate appears here and fills in as you attend the labs."}
           </p>
-          {go && !search && (
-            <Btn icon={ArrowRight} onClick={() => go("labs")}>Go to Labs</Btn>
-          )}
         </Panel>
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))", gap: 18, marginTop: 24 }}>
           {filtered.map((cert) => {
-            const labsPct = cert.labs_in_subject > 0 ? Math.round((cert.labs_completed / cert.labs_in_subject) * 100) : 100;
+            const attended = cert.labs_attended ?? cert.labs_completed;
+            const labsPct = cert.labs_in_subject > 0 ? Math.round((cert.labs_completed / cert.labs_in_subject) * 100) : 0;
+            const attendedLabs = (cert.labs || []).filter((l) => l.status !== "NOT_ATTENDED");
             return (
               <Panel
                 key={cert.certificate_id}
                 style={{
                   padding: 22, display: "flex", flexDirection: "column", justifyContent: "space-between", gap: 14,
                   background: "linear-gradient(180deg, rgba(18, 20, 29, 0.9) 0%, rgba(11, 13, 20, 0.95) 100%)",
-                  border: "1px solid rgba(245, 166, 35, 0.35)", position: "relative", overflow: "hidden",
+                  border: `1px solid ${cert.is_complete ? "rgba(0, 230, 118, 0.35)" : "rgba(245, 166, 35, 0.35)"}`,
+                  position: "relative", overflow: "hidden",
                 }}
               >
                 <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: "linear-gradient(90deg, #f5a623, #00e5ff)" }} />
 
                 <div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                    <span
-                      style={{
-                        fontFamily: mono, fontSize: 10, color: C.green, background: "rgba(0, 230, 118, 0.12)",
-                        padding: "2px 7px", borderRadius: 4, border: "1px solid rgba(0, 230, 118, 0.3)",
-                        display: "inline-flex", alignItems: "center", gap: 3, fontWeight: 600,
-                      }}
-                    >
-                      <CheckCircle2 size={10} /> VERIFIED
-                    </span>
+                    {cert.is_complete ? (
+                      <span
+                        style={{
+                          fontFamily: mono, fontSize: 10, color: C.green, background: "rgba(0, 230, 118, 0.12)",
+                          padding: "2px 7px", borderRadius: 4, border: "1px solid rgba(0, 230, 118, 0.3)",
+                          display: "inline-flex", alignItems: "center", gap: 3, fontWeight: 600,
+                        }}
+                      >
+                        <CheckCircle2 size={10} /> COMPLETED
+                      </span>
+                    ) : (
+                      <span
+                        style={{
+                          fontFamily: mono, fontSize: 10, color: C.amber, background: "rgba(245, 166, 35, 0.12)",
+                          padding: "2px 7px", borderRadius: 4, border: "1px solid rgba(245, 166, 35, 0.3)",
+                          display: "inline-flex", alignItems: "center", gap: 3, fontWeight: 600,
+                        }}
+                      >
+                        <Hourglass size={10} /> IN PROGRESS
+                      </span>
+                    )}
                     <span style={{ fontFamily: mono, fontSize: 10.5, color: C.amber }}>{cert.certificate_id}</span>
                   </div>
 
@@ -214,15 +217,15 @@ export default function StudentCertificates({ currentUser, go }) {
                     }}
                   >
                     <div>
-                      <div style={{ fontFamily: mono, fontSize: 9.5, color: C.low, textTransform: "uppercase" }}>Score</div>
+                      <div style={{ fontFamily: mono, fontSize: 9.5, color: C.low, textTransform: "uppercase" }}>Total Score</div>
                       <div style={{ fontFamily: sans, fontSize: 13.5, fontWeight: 700, color: C.green }}>
                         {cert.total_score}/{cert.max_score}
                       </div>
                     </div>
                     <div>
-                      <div style={{ fontFamily: mono, fontSize: 9.5, color: C.low, textTransform: "uppercase" }}>Labs</div>
+                      <div style={{ fontFamily: mono, fontSize: 9.5, color: C.low, textTransform: "uppercase" }}>Labs Attended</div>
                       <div style={{ fontFamily: sans, fontSize: 13.5, fontWeight: 700, color: C.hi }}>
-                        {cert.labs_completed} of {cert.labs_in_subject}
+                        {attended} of {cert.labs_in_subject}
                       </div>
                     </div>
                     <div>
@@ -235,22 +238,33 @@ export default function StudentCertificates({ currentUser, go }) {
 
                   <div style={{ marginTop: 12 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", fontFamily: mono, fontSize: 10.5, color: C.low, marginBottom: 4 }}>
-                      <span>Subject labs completed</span>
+                      <span>{cert.labs_completed} of {cert.labs_in_subject} assigned labs completed</span>
                       <span>{labsPct}%</span>
                     </div>
-                    <ProgressBar value={labsPct} tone="green" h={5} />
+                    <ProgressBar value={labsPct} tone={cert.is_complete ? "green" : "amber"} h={5} />
                   </div>
 
                   <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 4 }}>
-                    {(cert.labs || []).slice(0, 3).map((l) => (
-                      <div key={l.lab_id} style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: sans, fontSize: 12, color: C.mid }}>
-                        <FlaskConical size={12} color={C.cyan} style={{ flexShrink: 0 }} />
-                        <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.lab_name}</span>
-                        <span style={{ fontFamily: mono, fontSize: 11, color: C.hi }}>{l.score}/{l.max_score}</span>
+                    {attendedLabs.length === 0 ? (
+                      <div style={{ fontFamily: sans, fontSize: 12, color: C.low, fontStyle: "italic" }}>
+                        No labs attended yet — attend a lab of this subject to add its score here.
                       </div>
-                    ))}
-                    {(cert.labs || []).length > 3 && (
-                      <div style={{ fontFamily: mono, fontSize: 11, color: C.low }}>+ {cert.labs.length - 3} more lab{cert.labs.length - 3 !== 1 ? "s" : ""}</div>
+                    ) : (
+                      attendedLabs.slice(0, 3).map((l) => (
+                        <div key={l.lab_id} style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: sans, fontSize: 12, color: C.mid }}>
+                          <FlaskConical size={12} color={l.status === "COMPLETED" ? C.green : C.amber} style={{ flexShrink: 0 }} />
+                          <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.lab_name}</span>
+                          {l.status === "IN_PROGRESS" && (
+                            <span style={{ fontFamily: mono, fontSize: 10, color: C.amber }}>in progress</span>
+                          )}
+                          <span style={{ fontFamily: mono, fontSize: 11, color: C.hi }}>{l.score}/{l.max_score}</span>
+                        </div>
+                      ))
+                    )}
+                    {attendedLabs.length > 3 && (
+                      <div style={{ fontFamily: mono, fontSize: 11, color: C.low }}>
+                        + {attendedLabs.length - 3} more attended lab{attendedLabs.length - 3 !== 1 ? "s" : ""}
+                      </div>
                     )}
                   </div>
                 </div>
@@ -258,7 +272,11 @@ export default function StudentCertificates({ currentUser, go }) {
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingTop: 10, borderTop: `1px solid ${C.border}` }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 5, fontFamily: mono, fontSize: 10.5, color: C.low }}>
                     <Calendar size={11} />
-                    <span>Updated {formatDate(cert.issued_at)}</span>
+                    <span>
+                      {cert.is_complete
+                        ? `Completed ${formatDate(cert.issued_at)}`
+                        : `${cert.labs_remaining ?? cert.labs_in_subject - cert.labs_completed} lab(s) remaining`}
+                    </span>
                   </div>
                   <button
                     type="button"
@@ -275,71 +293,6 @@ export default function StudentCertificates({ currentUser, go }) {
               </Panel>
             );
           })}
-        </div>
-      )}
-
-      {/* Subjects still in progress: certificate unlocks after all assigned labs are completed */}
-      {!loading && !error && filteredProgress.length > 0 && (
-        <div style={{ marginTop: 30 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-            <Lock size={15} color={C.amber} />
-            <h2 style={{ fontFamily: sans, fontSize: 16, fontWeight: 700, color: C.hi, margin: 0 }}>Certificates In Progress</h2>
-          </div>
-          <p style={{ fontFamily: sans, fontSize: 12.5, color: C.mid, margin: "0 0 14px" }}>
-            Finish the remaining labs of these subjects to unlock their certificates.
-          </p>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 14 }}>
-            {filteredProgress.map((p) => {
-              const pct = p.labs_in_subject > 0 ? Math.round((p.labs_completed / p.labs_in_subject) * 100) : 0;
-              return (
-                <Panel key={p.subject_id} style={{ padding: 18, background: C.panel, border: `1px dashed ${C.borderLight}` }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-                    <h3 style={{ fontFamily: sans, fontSize: 15, fontWeight: 700, color: C.hi, margin: 0 }}>
-                      {p.subject_name}
-                      {p.subject_code && p.subject_code !== p.subject_name && (
-                        <span style={{ fontFamily: mono, fontSize: 11, color: C.mid, fontWeight: 500 }}> · {p.subject_code}</span>
-                      )}
-                    </h3>
-                    <span
-                      style={{
-                        fontFamily: mono, fontSize: 10, color: C.amber, background: "rgba(245, 166, 35, 0.1)",
-                        padding: "2px 7px", borderRadius: 4, border: "1px solid rgba(245, 166, 35, 0.3)",
-                        display: "inline-flex", alignItems: "center", gap: 3, fontWeight: 600, flexShrink: 0,
-                      }}
-                    >
-                      <Lock size={10} /> LOCKED
-                    </span>
-                  </div>
-                  {p.course_name && (
-                    <div style={{ fontFamily: mono, fontSize: 11, color: C.cyan, marginTop: 4 }}>Course: {p.course_name}</div>
-                  )}
-
-                  <div style={{ marginTop: 12 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontFamily: mono, fontSize: 10.5, color: C.low, marginBottom: 4 }}>
-                      <span>{p.labs_completed} of {p.labs_in_subject} labs completed</span>
-                      <span>{pct}%</span>
-                    </div>
-                    <ProgressBar value={pct} tone="amber" h={5} />
-                  </div>
-
-                  <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 4 }}>
-                    <div style={{ fontFamily: mono, fontSize: 10, color: C.low, textTransform: "uppercase" }}>
-                      {p.labs_remaining} lab{p.labs_remaining !== 1 ? "s" : ""} remaining
-                    </div>
-                    {(p.pending_labs || []).slice(0, 3).map((l) => (
-                      <div key={l.lab_id} style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: sans, fontSize: 12, color: C.mid }}>
-                        <FlaskConical size={12} color={C.amber} style={{ flexShrink: 0 }} />
-                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.lab_name}</span>
-                      </div>
-                    ))}
-                    {(p.pending_labs || []).length > 3 && (
-                      <div style={{ fontFamily: mono, fontSize: 11, color: C.low }}>+ {p.pending_labs.length - 3} more</div>
-                    )}
-                  </div>
-                </Panel>
-              );
-            })}
-          </div>
         </div>
       )}
 

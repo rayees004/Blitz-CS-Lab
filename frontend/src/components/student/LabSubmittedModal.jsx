@@ -7,8 +7,8 @@ import { C, sans, mono } from "../../constants/theme";
  * Shown on the labs list after a student's lab is submitted
  * (e.g. automatically when the last question is answered correctly).
  * `result`: { labId, labName, subjectId, subjectName, score, maxScore, solvedQuestions, totalQuestions, ... }
- * "Subject Certificate" opens the certificate of the lab's subject — or, while the subject still
- * has pending labs, the progress towards it (certificates are subject based only).
+ * "Subject Certificate" opens the certificate of the lab's subject, now including this lab's score
+ * (certificates are subject based only).
  */
 export default function LabSubmittedModal({ result, onClose }) {
   const [showCert, setShowCert] = useState(false);

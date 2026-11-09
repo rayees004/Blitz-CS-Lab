@@ -142,7 +142,7 @@ export default function StudentLabAttendModal({ lab, onClose, onUpdated }) {
     if (onUpdated) onUpdated();
 
     // Last question answered correctly: the lab is auto-finalized, show the subject certificate
-    // (or its progress when the subject still has pending labs)
+    // (now including this lab's score)
     if (res.is_correct && (res.all_solved || res.is_completed)) {
       setShowCert(true);
     }

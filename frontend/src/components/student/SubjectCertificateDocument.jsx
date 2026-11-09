@@ -2,9 +2,10 @@ import React from "react";
 import { sans, mono } from "../../constants/theme";
 
 /*
- * Subject certificate as fixed-size A4 landscape pages:
- *   Page 1     — overall report: student, subject, total score, labs completed, questions solved
- *   Page 2..N  — lab table: lab name, score, questions attended, time of completion.
+ * Subject certificate as fixed-size A4 landscape pages. Every assigned subject has one from the
+ * start (empty); attended labs add their scores. Score is out of all assigned labs of the subject.
+ *   Page 1     — overall report: student, subject, total score, labs attended/completed, questions solved
+ *   Page 2..N  — lab table (every assigned lab): lab name, score, questions attended, status / time of completion.
  *                Rows are split across as many pages as needed (LAB_ROWS_PER_PAGE each).
  * The same pages are used for the on-screen preview and for printing / saving as PDF.
  */
@@ -125,6 +126,13 @@ function CoverPage({ cert, pageCount }) {
     cert.first_completed_at && cert.issued_at && shortDate(cert.first_completed_at) !== shortDate(cert.issued_at)
       ? <>{shortDate(cert.first_completed_at)} –<br />{shortDate(cert.issued_at)}</>
       : shortDate(cert.issued_at);
+  const complete = Boolean(cert.is_complete);
+  const attended = cert.labs_attended ?? cert.labs_completed ?? 0;
+  const statement = complete
+    ? "has successfully completed all assigned hands-on practical cybersecurity labs in the subject"
+    : attended > 0
+    ? "is undertaking hands-on practical cybersecurity labs in the subject"
+    : "is enrolled for hands-on practical cybersecurity labs in the subject";
 
   return (
     <Page>
@@ -144,6 +152,15 @@ function CoverPage({ cert, pageCount }) {
         <div style={{ fontFamily: mono, fontSize: 11.5, letterSpacing: "0.2em", color: TEAL, marginTop: 2, textTransform: "uppercase" }}>
           Subject Practical Lab Report
         </div>
+        <div
+          style={{
+            marginTop: 6, padding: "2px 12px", borderRadius: 12, fontFamily: mono, fontSize: 10.5, fontWeight: 700,
+            letterSpacing: "0.15em", color: complete ? TEAL : GOLD,
+            border: `1px solid ${complete ? TEAL : GOLD}`, background: complete ? "rgba(14,124,134,0.06)" : "rgba(183,134,43,0.08)",
+          }}
+        >
+          {complete ? "COMPLETED" : "IN PROGRESS"}
+        </div>
         <div style={{ width: 180, height: 2, background: `linear-gradient(90deg, transparent, ${GOLD}, transparent)`, margin: "12px 0 14px" }} />
 
         <div style={{ fontSize: 14, fontStyle: "italic", color: MUTED }}>This is to certify that</div>
@@ -152,7 +169,7 @@ function CoverPage({ cert, pageCount }) {
         </div>
         <div style={{ width: 360, height: 1, background: GOLD_SOFT, marginBottom: 10 }} />
         <div style={{ fontSize: 14, color: MUTED, maxWidth: 720, lineHeight: 1.5 }}>
-          has successfully completed hands-on practical cybersecurity labs in the subject
+          {statement}
         </div>
         <div style={{ fontSize: 24, fontWeight: 800, color: TEAL, marginTop: 6 }}>{subjectLabel}</div>
         {cert.course_name && (
@@ -173,16 +190,32 @@ function CoverPage({ cert, pageCount }) {
           background: "#ffffff",
         }}
       >
-        <Stat label="Total Score" value={`${cert.total_score} / ${cert.max_score}`} sub={`${cert.score_pct}% marks earned`} />
-        <Stat label="Labs Completed" value={`${cert.labs_completed} of ${cert.labs_in_subject}`} sub="labs in this subject" />
-        <Stat label="Questions Solved" value={`${cert.questions_solved} of ${cert.questions_total}`} sub="across completed labs" />
-        <Stat label="Completion Period" value={<span style={{ fontSize: 14 }}>{period}</span>} />
+        <Stat label="Total Score" value={`${cert.total_score} / ${cert.max_score}`} sub={`${cert.score_pct}% of all assigned labs`} />
+        <Stat
+          label="Labs Attended"
+          value={`${attended} of ${cert.labs_in_subject}`}
+          sub={`${cert.labs_completed} completed · assigned labs`}
+        />
+        <Stat label="Questions Solved" value={`${cert.questions_solved} of ${cert.questions_total}`} sub="across assigned labs" />
+        {complete ? (
+          <Stat label="Completion Period" value={<span style={{ fontSize: 14 }}>{period}</span>} />
+        ) : (
+          <Stat
+            label="Status"
+            value={<span style={{ fontSize: 16, color: GOLD }}>In Progress</span>}
+            sub={`${cert.labs_remaining ?? cert.labs_in_subject - cert.labs_completed} lab(s) remaining`}
+          />
+        )}
       </div>
 
       {/* Signature row */}
       <div style={{ marginTop: "auto", display: "flex", alignItems: "flex-end", justifyContent: "space-between", padding: "0 30px 10px" }}>
         <div style={{ fontFamily: mono, fontSize: 11, color: MUTED, lineHeight: 1.7 }}>
-          <div>Date of Issue: <strong style={{ color: INK }}>{formatDate(cert.issued_at)}</strong></div>
+          {complete ? (
+            <div>Date of Issue: <strong style={{ color: INK }}>{formatDate(cert.issued_at)}</strong></div>
+          ) : (
+            <div>Report generated: <strong style={{ color: INK }}>{formatDate(new Date())}</strong></div>
+          )}
           <div>Lab-wise details on the following page{pageCount > 2 ? "s" : ""}</div>
         </div>
         <div
@@ -245,7 +278,10 @@ function LabsPage({ cert, rows, startIndex, pageNo, pageCount, isLast }) {
         </div>
         <div style={{ textAlign: "right", fontSize: 12, color: MUTED, lineHeight: 1.6 }}>
           <div>Student: <strong style={{ color: INK }}>{cert.student_name}</strong></div>
-          <div>Labs completed: <strong style={{ color: INK }}>{cert.labs_completed}</strong> · Total score: <strong style={{ color: INK }}>{cert.total_score} / {cert.max_score}</strong></div>
+          <div>
+            Labs attended: <strong style={{ color: INK }}>{cert.labs_attended ?? cert.labs_completed} of {cert.labs_in_subject}</strong>
+            {" · "}Total score: <strong style={{ color: INK }}>{cert.total_score} / {cert.max_score}</strong>
+          </div>
         </div>
       </div>
 
@@ -263,28 +299,53 @@ function LabsPage({ cert, rows, startIndex, pageNo, pageCount, isLast }) {
             <th style={th}>Lab Name</th>
             <th style={th}>Score</th>
             <th style={th}>Questions Attended</th>
-            <th style={th}>Time of Completion</th>
+            <th style={th}>Status / Completed On</th>
           </tr>
         </thead>
         <tbody>
-          {rows.map((lab, i) => (
-            <tr key={lab.lab_id} style={{ background: i % 2 ? ROW_ALT : "#ffffff" }}>
-              <td style={{ ...td, fontFamily: mono, color: MUTED }}>{startIndex + i + 1}</td>
-              <td style={{ ...td, overflow: "hidden", textOverflow: "ellipsis", fontWeight: 600 }} title={lab.lab_name}>
-                {lab.lab_name}
-                {lab.category && (
-                  <span style={{ fontWeight: 400, color: MUTED, fontSize: 11 }}> · {lab.category}</span>
-                )}
+          {rows.length === 0 && (
+            <tr>
+              <td colSpan={5} style={{ ...td, textAlign: "center", color: MUTED, fontStyle: "italic" }}>
+                No labs are assigned in this subject yet.
               </td>
-              <td style={{ ...td, fontFamily: mono, fontWeight: 700 }}>{lab.score} / {lab.max_score}</td>
-              <td style={{ ...td, fontFamily: mono }}>{lab.solved_questions} of {lab.total_questions} solved</td>
-              <td style={{ ...td, fontFamily: mono, fontSize: 11.5 }}>{formatDateTime(lab.completed_at)}</td>
             </tr>
-          ))}
-          {isLast && (
+          )}
+          {rows.map((lab, i) => {
+            const status = lab.status || "COMPLETED";
+            const notAttended = status === "NOT_ATTENDED";
+            return (
+              <tr key={lab.lab_id} style={{ background: i % 2 ? ROW_ALT : "#ffffff", color: notAttended ? MUTED : INK }}>
+                <td style={{ ...td, fontFamily: mono, color: MUTED }}>{startIndex + i + 1}</td>
+                <td style={{ ...td, overflow: "hidden", textOverflow: "ellipsis", fontWeight: 600 }} title={lab.lab_name}>
+                  {lab.lab_name}
+                  {lab.category && (
+                    <span style={{ fontWeight: 400, color: MUTED, fontSize: 11 }}> · {lab.category}</span>
+                  )}
+                </td>
+                <td style={{ ...td, fontFamily: mono, fontWeight: 700 }}>
+                  {notAttended ? "—" : lab.score} / {lab.max_score}
+                </td>
+                <td style={{ ...td, fontFamily: mono }}>
+                  {notAttended ? "—" : `${lab.solved_questions} of ${lab.total_questions} solved`}
+                </td>
+                <td style={{ ...td, fontFamily: mono, fontSize: 11.5 }}>
+                  {status === "COMPLETED" ? (
+                    formatDateTime(lab.completed_at)
+                  ) : status === "IN_PROGRESS" ? (
+                    <span style={{ color: GOLD, fontWeight: 700 }}>In progress</span>
+                  ) : (
+                    <span style={{ fontStyle: "italic" }}>Not attended</span>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+          {isLast && rows.length > 0 && (
             <tr style={{ background: "rgba(183, 134, 43, 0.12)" }}>
               <td style={{ ...td, borderBottom: "none" }} />
-              <td style={{ ...td, borderBottom: "none", fontWeight: 800 }}>Total ({cert.labs_completed} labs)</td>
+              <td style={{ ...td, borderBottom: "none", fontWeight: 800 }}>
+                Total ({cert.labs_attended ?? cert.labs_completed} of {cert.labs_in_subject} labs attended)
+              </td>
               <td style={{ ...td, borderBottom: "none", fontFamily: mono, fontWeight: 800 }}>{cert.total_score} / {cert.max_score}</td>
               <td style={{ ...td, borderBottom: "none", fontFamily: mono, fontWeight: 800 }}>{cert.questions_solved} of {cert.questions_total} solved</td>
               <td style={{ ...td, borderBottom: "none", fontFamily: mono, fontSize: 11.5 }}>{cert.score_pct}% marks earned</td>
