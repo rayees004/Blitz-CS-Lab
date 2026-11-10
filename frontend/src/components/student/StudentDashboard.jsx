@@ -16,6 +16,7 @@ import { CATEGORIES } from "../../data/mockData";
 import { fetchStudentLabs } from "../../api/labs";
 import StudentLabAttendModal from "./StudentLabAttendModal";
 import LabSubmittedModal from "./LabSubmittedModal";
+import SmartDashboardContent from "../smart/SmartDashboardContent";
 import RetakeRequestModal from "./RetakeRequestModal";
 import { useTimeLeft, formatTimeLeft } from "../../utils/labTime";
 
@@ -38,7 +39,8 @@ function TimeLeftNote({ deadline }) {
   );
 }
 
-export default function StudentDashboard({ go, onNavigate }) {
+// smart: render the Smart UI layout (same data, actions and pop-ups as the classic layout)
+export default function StudentDashboard({ go, onNavigate, smart = false }) {
   const [labs, setLabs] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -86,7 +88,21 @@ export default function StudentDashboard({ go, onNavigate }) {
   const dashboardLabs = labs.slice(0, MAX_DASHBOARD_LABS);
 
   return (
-    <div style={{ padding: 28, overflowY: "auto", height: "100%", boxSizing: "border-box" }}>
+    <div style={{ padding: smart ? "4px 28px 32px" : 28, overflowY: "auto", height: "100%", boxSizing: "border-box" }}>
+      {smart ? (
+        <SmartDashboardContent
+          stats={stats}
+          labs={dashboardLabs}
+          loading={loading}
+          inProgressTotal={inProgressTotal}
+          maxLabs={MAX_DASHBOARD_LABS}
+          onSync={loadData}
+          onNavigate={onNavigate}
+          onAttend={setAttendingLab}
+          onLocked={setLockedLabNotice}
+        />
+      ) : (
+      <>
       {/* Top Header */}
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
         <div>
@@ -553,6 +569,8 @@ export default function StudentDashboard({ go, onNavigate }) {
           </div>
         )}
       </div>
+      </>
+      )}
 
       {/* Locked Lab Notice Modal */}
       {lockedLabNotice && (

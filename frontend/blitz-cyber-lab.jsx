@@ -9,6 +9,9 @@ import { C, sans } from "./src/constants/theme";
 import { NAV_STUDENT, NAV_ADMIN, NAV_INSTRUCTOR } from "./src/data/mockData";
 import Sidebar from "./src/components/layout/Sidebar";
 import Topbar from "./src/components/layout/Topbar";
+import SmartSidebar from "./src/components/smart/SmartSidebar";
+import SmartTopbar from "./src/components/smart/SmartTopbar";
+import { useUiMode } from "./src/utils/uiMode";
 import Login from "./src/components/auth/Login";
 import Placeholder from "./src/components/common/Placeholder";
 
@@ -80,6 +83,9 @@ export default function BlitzCyberLab() {
   const [submittedLab, setSubmittedLab] = useState(null);
 
   const [sessionNotice, setSessionNotice] = useState(null);
+  // Student panel look: Smart UI or Classic (switch in the top bar, remembered per browser)
+  const [uiMode, setUiMode] = useUiMode();
+  const smartUi = uiMode === "smart";
 
   React.useEffect(() => {
     // 1. Listen for global token expiry / 401 unauthorized events
@@ -214,7 +220,7 @@ export default function BlitzCyberLab() {
   // ─── Student Stage ───
   // (Available to Students, and Admins who toggle to preview student experience)
   const pages = {
-    dashboard: <StudentDashboard go={goLab} onNavigate={setStudentPage} />,
+    dashboard: <StudentDashboard go={goLab} onNavigate={setStudentPage} smart={smartUi} />,
     learning: <Learning go={goLab} onSelect={setStudentPage} />,
     labs: <LabExplorer go={goLab} />,
     "lab-detail": (
@@ -239,18 +245,31 @@ export default function BlitzCyberLab() {
     : (currentUser?.username || "Student");
 
   return (
-    <div style={{ fontFamily: sans, display: "flex", height: "100vh", background: C.void, color: C.hi, overflow: "hidden" }}>
-      <Sidebar
-        items={NAV_STUDENT}
-        active={studentPage === "lab-detail" ? "labs" : studentPage}
-        onSelect={setStudentPage}
-        onSwitch={handleLogout}
-        switchLabel="Sign out"
-        userType={isStudent ? "student" : "admin"}
-        canAccessDjangoAdmin={isAdmin}
-        onToggleView={isAdmin ? handleToggleAdminView : null}
-        viewMode="student"
-      />
+    <div
+      className={smartUi ? "smart-shell" : undefined}
+      style={{ fontFamily: sans, display: "flex", height: "100vh", background: smartUi ? undefined : C.void, color: C.hi, overflow: "hidden" }}
+    >
+      {smartUi ? (
+        <SmartSidebar
+          items={NAV_STUDENT}
+          active={studentPage === "lab-detail" ? "labs" : studentPage}
+          onSelect={setStudentPage}
+          onSignOut={handleLogout}
+          onToggleView={isAdmin ? handleToggleAdminView : null}
+        />
+      ) : (
+        <Sidebar
+          items={NAV_STUDENT}
+          active={studentPage === "lab-detail" ? "labs" : studentPage}
+          onSelect={setStudentPage}
+          onSwitch={handleLogout}
+          switchLabel="Sign out"
+          userType={isStudent ? "student" : "admin"}
+          canAccessDjangoAdmin={isAdmin}
+          onToggleView={isAdmin ? handleToggleAdminView : null}
+          viewMode="student"
+        />
+      )}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, height: "100%" }}>
         {/* Banner if Platform Admin is previewing Student Panel */}
         {isAdmin && (
@@ -296,7 +315,15 @@ export default function BlitzCyberLab() {
           </div>
         )}
 
-        {studentPage !== "lab-detail" && (
+        {studentPage !== "lab-detail" && (smartUi ? (
+          <SmartTopbar
+            name={studentFullName}
+            role={isAdmin ? "Administrator (Previewing Student)" : "Student"}
+            userType={isStudent ? "student" : "admin"}
+            uiMode={uiMode}
+            onUiModeChange={setUiMode}
+          />
+        ) : (
           <Topbar
             name={studentFullName}
             role={isAdmin ? "Administrator (Previewing Student)" : "Student"}
@@ -304,8 +331,10 @@ export default function BlitzCyberLab() {
             canAccessDjangoAdmin={isAdmin}
             onToggleView={isAdmin ? handleToggleAdminView : null}
             viewMode="student"
+            uiMode={uiMode}
+            onUiModeChange={setUiMode}
           />
-        )}
+        ))}
         <div style={{ flex: 1, overflow: "hidden" }}>{pages[studentPage]}</div>
       </div>
 

@@ -2,6 +2,7 @@ import React from "react";
 import { Bell, Shield, ExternalLink, Eye, LayoutDashboard } from "lucide-react";
 import { C, sans, mono } from "../../constants/theme";
 import { DJANGO_ADMIN_URL } from "../../api/client";
+import UiModeSwitch from "./UiModeSwitch";
 
 export default function Topbar({
   name,
@@ -10,6 +11,9 @@ export default function Topbar({
   canAccessDjangoAdmin = false,
   onToggleView = null,
   viewMode = "admin",
+  // Student panel only: Classic / Smart UI switch
+  uiMode = null,
+  onUiModeChange = null,
 }) {
   const isAdmin = userType === "admin" || canAccessDjangoAdmin;
   const isInstructor = userType === "instructor";
@@ -123,6 +127,7 @@ export default function Topbar({
 
       {/* Right side user info & notification */}
       <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
+        {onUiModeChange && <UiModeSwitch mode={uiMode} onChange={onUiModeChange} />}
         <Bell size={17} color={C.mid} strokeWidth={2} style={{ cursor: "pointer" }} />
         <div style={{ width: 1, height: 22, background: C.border }} />
 
