@@ -1,8 +1,12 @@
-import { useCallback, useState } from "react";
+import { createContext, useCallback, useContext, useState } from "react";
 
 // Look of the student panel: "smart" (new design) or "classic". Remembered per browser.
 const STORAGE_KEY = "blitz.uiMode";
 export const DEFAULT_UI_MODE = "smart";
+
+// Provided around the student panel only, so admin/instructor screens always stay classic
+export const UiModeContext = createContext("classic");
+export const useSmartUi = () => useContext(UiModeContext) === "smart";
 
 function readStoredMode() {
   try {

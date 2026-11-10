@@ -21,7 +21,7 @@ export default function SmartSidebar({ items, active, onSelect, onSignOut, onTog
   return (
     <aside className="smart-sidebar smart-ui" aria-label="Main navigation">
       <div className="smart-brand">
-        <Zap className="smart-brand-icon" size={40} color="#f5a623" fill="#f5a623" strokeWidth={1.4} />
+        <Zap className="smart-brand-icon" size={32} color="#f5a623" fill="#f5a623" strokeWidth={1.4} />
         <div className="smart-brand-text">
           <div className="smart-brand-name">
             BLITZ<span>/</span>CYBER
@@ -46,7 +46,7 @@ export default function SmartSidebar({ items, active, onSelect, onSignOut, onTog
               onClick={() => onSelect(it.key)}
             >
               <Icon
-                size={21}
+                size={17}
                 strokeWidth={isActive ? 2.3 : 1.9}
                 color={isActive ? "#f5a623" : "#8a93a1"}
                 fill={isActive && it.key === "dashboard" ? "#f5a623" : "none"}
@@ -58,7 +58,7 @@ export default function SmartSidebar({ items, active, onSelect, onSignOut, onTog
       </nav>
 
       <button type="button" className="smart-promo" onClick={() => onSelect("labs")} title="Go to Labs">
-        <Rocket size={32} color="#f5a623" strokeWidth={1.8} style={{ flexShrink: 0 }} />
+        <Rocket size={26} color="#f5a623" strokeWidth={1.8} style={{ flexShrink: 0 }} />
         <div style={{ position: "relative" }}>
           <div className="smart-promo-title">Keep Learning!</div>
           <div className="smart-promo-sub">
@@ -72,12 +72,12 @@ export default function SmartSidebar({ items, active, onSelect, onSignOut, onTog
       <div className="smart-foot">
         {onToggleView && (
           <button type="button" className="smart-foot-item" onClick={onToggleView} title="Admin Dashboard">
-            <LayoutDashboard size={18} color="#f5a623" />
+            <LayoutDashboard size={15} color="#f5a623" />
             <span className="smart-label">Admin Dashboard</span>
           </button>
         )}
         <button type="button" className="smart-foot-item" onClick={onSignOut} title="Sign out">
-          <LogOut size={18} color="#8a93a1" />
+          <LogOut size={15} color="#8a93a1" />
           <span className="smart-label">Sign out</span>
         </button>
       </div>

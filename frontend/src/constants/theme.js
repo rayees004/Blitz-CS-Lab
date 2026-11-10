@@ -19,5 +19,6 @@ export const C = {
   warn: "#F0B429",
 };
 
-export const sans = "'IBM Plex Sans', system-ui, sans-serif";
+// --font-sans is set by the student panel's Smart UI (.smart-ui in components/smart/smart.css)
+export const sans = "var(--font-sans, 'IBM Plex Sans', system-ui, sans-serif)";
 export const mono = "'IBM Plex Mono', 'SF Mono', monospace";

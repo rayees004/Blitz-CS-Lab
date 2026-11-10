@@ -15,23 +15,23 @@ export default function SmartTopbar({ name, role, userType = "student", uiMode, 
     <header className="smart-topbar smart-ui">
       {onUiModeChange && <UiModeSwitch mode={uiMode} onChange={onUiModeChange} />}
 
-      <Bell size={22} color="#aab2bf" strokeWidth={1.9} aria-hidden="true" />
-      <div style={{ width: 1, height: 30, background: "#232a35" }} />
+      <Bell size={18} color="#aab2bf" strokeWidth={1.9} aria-hidden="true" />
+      <div style={{ width: 1, height: 24, background: "#232a35" }} />
 
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <div className="smart-avatar" aria-hidden="true">
           {name ? name[0].toUpperCase() : "U"}
         </div>
         <div className="smart-user-text" style={{ lineHeight: 1.3 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: 15, fontWeight: 600, color: "#fff" }}>{name}</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+            <span style={{ fontSize: 12.5, fontWeight: 600, color: "#fff" }}>{name}</span>
             <span
               style={{
-                fontSize: 10,
+                fontSize: 9,
                 fontWeight: 700,
                 letterSpacing: "0.05em",
-                padding: "2px 7px",
-                borderRadius: 6,
+                padding: "1px 6px",
+                borderRadius: 5,
                 color: badge.color,
                 background: badge.bg,
                 border: `1px solid ${badge.border}`,
@@ -40,7 +40,7 @@ export default function SmartTopbar({ name, role, userType = "student", uiMode, 
               {badge.label}
             </span>
           </div>
-          <div style={{ fontSize: 12.5, color: "#9ba3b0" }}>{role}</div>
+          <div style={{ fontSize: 10.5, color: "#9ba3b0" }}>{role}</div>
         </div>
       </div>
     </header>

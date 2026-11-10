@@ -11,7 +11,7 @@ import Sidebar from "./src/components/layout/Sidebar";
 import Topbar from "./src/components/layout/Topbar";
 import SmartSidebar from "./src/components/smart/SmartSidebar";
 import SmartTopbar from "./src/components/smart/SmartTopbar";
-import { useUiMode } from "./src/utils/uiMode";
+import { useUiMode, UiModeContext } from "./src/utils/uiMode";
 import Login from "./src/components/auth/Login";
 import Placeholder from "./src/components/common/Placeholder";
 
@@ -245,8 +245,9 @@ export default function BlitzCyberLab() {
     : (currentUser?.username || "Student");
 
   return (
+    <UiModeContext.Provider value={uiMode}>
     <div
-      className={smartUi ? "smart-shell" : undefined}
+      className={smartUi ? "smart-shell smart-ui" : undefined}
       style={{ fontFamily: sans, display: "flex", height: "100vh", background: smartUi ? undefined : C.void, color: C.hi, overflow: "hidden" }}
     >
       {smartUi ? (
@@ -342,5 +343,6 @@ export default function BlitzCyberLab() {
         <LabSubmittedModal result={submittedLab} onClose={() => setSubmittedLab(null)} />
       )}
     </div>
+    </UiModeContext.Provider>
   );
 }
