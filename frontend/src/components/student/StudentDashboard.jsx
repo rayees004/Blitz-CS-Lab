@@ -15,6 +15,7 @@ import { C, sans, mono } from "../../constants/theme";
 import { CATEGORIES } from "../../data/mockData";
 import { fetchStudentLabs } from "../../api/labs";
 import StudentLabAttendModal from "./StudentLabAttendModal";
+import LabSubmittedModal from "./LabSubmittedModal";
 import RetakeRequestModal from "./RetakeRequestModal";
 import { useTimeLeft, formatTimeLeft } from "../../utils/labTime";
 
@@ -49,6 +50,8 @@ export default function StudentDashboard({ go, onNavigate }) {
 
   // Lab modal state for attending and submitting marks
   const [attendingLab, setAttendingLab] = useState(null);
+  // Result of a lab auto-submitted by its last correct answer ("submitted successfully" popup)
+  const [submittedLab, setSubmittedLab] = useState(null);
 
   const [inProgressTotal, setInProgressTotal] = useState(0);
 
@@ -652,7 +655,15 @@ export default function StudentDashboard({ go, onNavigate }) {
           lab={attendingLab}
           onClose={() => setAttendingLab(null)}
           onUpdated={loadData}
+          onSubmitted={(result) => {
+            setAttendingLab(null);
+            setSubmittedLab(result);
+          }}
         />
+      )}
+
+      {submittedLab && (
+        <LabSubmittedModal result={submittedLab} onClose={() => setSubmittedLab(null)} />
       )}
     </div>
   );

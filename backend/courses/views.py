@@ -1414,6 +1414,10 @@ class StudentLabListView(APIView):
             solved_questions = ls.solved_questions_count if ls else 0
             if not solved_questions and sub and isinstance(sub.answers, dict):
                 solved_questions, _ = tally_lab_answers(lab, sub.answers)
+            if q_count:
+                # The stored count can exceed the lab's current questions after the lab was edited
+                # (same cap as the subject certificate), which would show e.g. 3 / 2 and 150%
+                solved_questions = min(solved_questions, q_count)
             total_questions_completed += solved_questions
 
             progress_pct = 0

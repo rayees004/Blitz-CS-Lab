@@ -104,6 +104,23 @@ class LabSecurityTests(TestCase):
         self.assertEqual(stats['labs_assigned'], 1)
         self.assertEqual(stats['total_questions_completed'], 1)
 
+    def test_student_progress_stats_cap_stale_solved_count(self):
+        # Progress page: marks are out of max_total_points; a stored solved count left over from
+        # before the lab was edited never exceeds the lab's current questions (no 3 / 2, no 150%)
+        self.client.force_authenticate(self.student)
+        self.client.post(f'/api/student/labs/{self.lab.id}/submit/', {
+            'question_id': self.question.id, 'flag': 'BLITZ{secret}'
+        }, format='json')
+        LabScore.objects.filter(student=self.student, lab=self.lab).update(solved_questions_count=3)
+
+        data = self.client.get('/api/student/labs/').data
+        stats, lab = data['stats'], data['labs'][0]
+        self.assertEqual(stats['max_total_points'], 100)
+        self.assertEqual(stats['total_points_earned'], 50)
+        self.assertEqual(lab['solved_questions_count'], 1)
+        self.assertEqual(lab['progress_pct'], 100)
+        self.assertEqual(stats['total_questions_completed'], 1)
+
     def test_retake_request_only_for_completed_labs(self):
         self.client.force_authenticate(self.student)
         url = f'/api/student/labs/{self.lab.id}/retake-request/'

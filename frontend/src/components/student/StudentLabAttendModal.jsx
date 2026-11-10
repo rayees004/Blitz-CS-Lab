@@ -21,7 +21,10 @@ import {
 import { getStoredUser } from "../../api/auth";
 import { useTimeLeft, formatTimeLeft } from "../../utils/labTime";
 
-export default function StudentLabAttendModal({ lab, onClose, onUpdated }) {
+// onSubmitted(result): optional; called when the last correct answer auto-submits the lab,
+// so the parent can close this window and show a "submitted successfully" popup.
+// Without it, the subject certificate opens on top of this window instead.
+export default function StudentLabAttendModal({ lab, onClose, onUpdated, onSubmitted }) {
   const [loading, setLoading] = useState(true);
   const [workspace, setWorkspace] = useState(null);
   const [error, setError] = useState(null);
@@ -116,14 +119,14 @@ export default function StudentLabAttendModal({ lab, onClose, onUpdated }) {
       // Lab already locked as completed on the server: show the recorded result and certificate
       if (/lab completed/i.test(err.message || "")) {
         setFeedback((prev) => ({ ...prev, [questionId]: { submitting: false, msg: null, success: false } }));
-        await refreshWorkspace();
+        const latest = await refreshWorkspace();
         setWorkspace((ws) => ws && {
           ...ws,
           lab_score: { ...(ws.lab_score || {}), is_completed: true },
           submission: { ...(ws.submission || {}), status: "COMPLETED" },
         });
         if (onUpdated) onUpdated();
-        setShowCert(true);
+        finishLab(latest);
         return;
       }
       setFeedback((prev) => ({
@@ -138,23 +141,46 @@ export default function StudentLabAttendModal({ lab, onClose, onUpdated }) {
     }
 
     // Reload fresh workspace state to reflect awarded points (never overrides the result shown above)
-    await refreshWorkspace();
+    const latest = await refreshWorkspace();
     if (onUpdated) onUpdated();
 
-    // Last question answered correctly: the lab is auto-finalized, show the subject certificate
-    // (now including this lab's score)
+    // Last question answered correctly: the lab is auto-submitted.
+    // Let the student see the question turn "Solved" first, then close the lab window.
     if (res.is_correct && (res.all_solved || res.is_completed)) {
-      setShowCert(true);
+      setTimeout(() => finishLab(latest, res), 1500);
     }
   };
 
+  // Returns the fresh workspace, or null if the refresh failed (current view is kept)
   const refreshWorkspace = async () => {
     try {
       const updatedData = await attendStudentLab(lab.id);
       setWorkspace(updatedData);
+      return updatedData;
     } catch {
-      // Keep the current view if the refresh fails
+      return null;
     }
+  };
+
+  // Lab is submitted: let the parent close this window and show the success popup,
+  // or show the subject certificate here (now including this lab's score)
+  const finishLab = (ws, res = {}) => {
+    if (!onSubmitted) {
+      setShowCert(true);
+      return;
+    }
+    const wsLab = ws?.lab || {};
+    const wsQuestions = ws?.questions || [];
+    onSubmitted({
+      labId: lab.id,
+      labName: wsLab.name || lab.name || "Security Lab",
+      subjectId: wsLab.subject_id ?? lab.subject_id ?? null,
+      subjectName: wsLab.subject_name || lab.subject_name || "",
+      score: ws?.lab_score?.score ?? res.total_score ?? currentScore,
+      maxScore: ws?.lab_score?.max_score ?? maxScore,
+      solvedQuestions: ws ? wsQuestions.filter((q) => q.is_solved).length : (res.solved_count ?? solvedQuestionsCount),
+      totalQuestions: wsQuestions.length || res.total_questions || questions.length,
+    });
   };
 
   // Unlock hint

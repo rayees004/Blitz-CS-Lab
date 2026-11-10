@@ -38,9 +38,14 @@ export default function StudentProgressView({ go }) {
   const inProgressLabs = labs.filter((l) => l.submission_status === "IN_PROGRESS" && !l.is_completed);
   const attendedLabs = labs.filter((l) => (l.attend_count > 0 || l.submission_status !== "NOT_STARTED"));
 
+  // Score progress: marks earned out of the marks of ALL labs in the student's assigned subjects
   const totalPoints = stats?.total_points_earned || 0;
-  const maxPossible = stats?.total_possible_points || 1;
-  const overallPct = Math.round((totalPoints / maxPossible) * 100);
+  const maxPossible = stats?.max_total_points || 0;
+  const overallPct = maxPossible > 0 ? Math.min(100, Math.round((totalPoints / maxPossible) * 100)) : 0;
+  // Completion rate: labs completed out of the labs assigned to the student (same count as the Dashboard)
+  const assignedCount = stats?.labs_assigned ?? labs.length;
+  const completionPct =
+    assignedCount > 0 ? Math.min(100, Math.round((completedLabs.length / assignedCount) * 100)) : 0;
 
   return (
     <div style={{ padding: "26px 30px", height: "100%", overflowY: "auto", boxSizing: "border-box" }}>
@@ -88,7 +93,7 @@ export default function StudentProgressView({ go }) {
           icon={CheckCircle2}
           label="Labs Completed"
           value={completedLabs.length}
-          sub={`${overallPct}% completion rate`}
+          sub={`${completionPct}% of ${assignedCount} assigned labs`}
           tone="cyan"
         />
         <StatCard
@@ -130,7 +135,7 @@ export default function StudentProgressView({ go }) {
             {overallPct}%
           </div>
         </div>
-        <ProgressBar pct={overallPct} color={C.cyan} />
+        <ProgressBar value={overallPct} tone="cyan" />
       </div>
 
       {/* Attended Labs & Score Breakdown List */}
@@ -180,7 +185,7 @@ export default function StudentProgressView({ go }) {
                     {lab.subject_name ? `Subject: ${lab.subject_name}` : lab.category} • Attended {lab.attend_count || 1} time(s)
                   </div>
                   <div style={{ marginTop: 8, maxWidth: 360 }}>
-                    <ProgressBar pct={lab.progress_pct || 0} color={lab.is_completed ? "#4ade80" : C.cyan} />
+                    <ProgressBar value={lab.progress_pct || 0} tone={lab.is_completed ? "green" : "cyan"} />
                   </div>
                 </div>
 
