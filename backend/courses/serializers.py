@@ -434,6 +434,15 @@ class LabScoreSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'first_attended_at', 'last_attended_at']
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        # The stored solved count can exceed the lab's questions after the lab was edited
+        # (e.g. 3/2 Solved): cap it, as the student labs list and subject certificate do
+        total = data.get('total_questions_count') or 0
+        if total and (data.get('solved_questions_count') or 0) > total:
+            data['solved_questions_count'] = total
+        return data
+
 
 class StudyMaterialSerializer(serializers.ModelSerializer):
     subject_name = serializers.CharField(source='subject.name', read_only=True)

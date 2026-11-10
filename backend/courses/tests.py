@@ -154,6 +154,11 @@ class LabSecurityTests(TestCase):
         self.assertEqual(lab['progress_pct'], 100)
         self.assertEqual(stats['total_questions_completed'], 1)
 
+        # Attendance log (lab scores) applies the same cap
+        LabScore.objects.filter(student=self.student, lab=self.lab).update(total_questions_count=1)
+        scores = self.client.get('/api/student/lab-scores/').data['results']
+        self.assertEqual(scores[0]['solved_questions_count'], 1)
+
     def test_retake_request_only_for_completed_labs(self):
         self.client.force_authenticate(self.student)
         url = f'/api/student/labs/{self.lab.id}/retake-request/'
