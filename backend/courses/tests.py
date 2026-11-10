@@ -95,6 +95,39 @@ class LabSecurityTests(TestCase):
         self.assertEqual(Lab.objects.get(name='XSS Lab').created_by, self.instructor)
         self.assertEqual(response.data['lab']['created_by_username'], 'instructor')
 
+    def test_lab_points_are_sum_of_question_points(self):
+        self.client.force_authenticate(self.instructor)
+        questions = [
+            {'title': 'Q1', 'flag': 'f1', 'points': 30},
+            {'title': 'Q2', 'flag': 'f2', 'points': 45},
+        ]
+        # The total sent by the client is ignored when the lab has questions
+        response = self.client.post('/api/labs/', {
+            'name': 'Auto Points Lab', 'points': 100, 'questions': questions,
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        lab = Lab.objects.get(name='Auto Points Lab')
+        self.assertEqual(lab.points, 75)
+
+        # Editing the questions recalculates the total
+        response = self.client.patch(f'/api/labs/{lab.id}/', {
+            'questions': questions + [{'title': 'Q3', 'flag': 'f3', 'points': 25}],
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        lab.refresh_from_db()
+        self.assertEqual(lab.points, 100)
+
+        # Editing other fields leaves the total alone
+        self.client.patch(f'/api/labs/{lab.id}/', {'name': 'Renamed Lab'}, format='json')
+        lab.refresh_from_db()
+        self.assertEqual(lab.points, 100)
+
+    def test_lab_without_questions_keeps_entered_points(self):
+        self.client.force_authenticate(self.instructor)
+        response = self.client.post('/api/labs/', {'name': 'Open Lab', 'points': 80, 'questions': []}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertEqual(Lab.objects.get(name='Open Lab').points, 80)
+
     def test_student_dashboard_stats_include_assigned_and_questions(self):
         self.client.force_authenticate(self.student)
         self.client.post(f'/api/student/labs/{self.lab.id}/submit/', {

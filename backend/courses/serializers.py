@@ -326,6 +326,17 @@ class LabSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('Lab name is required.')
         return val
 
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        # A lab's total points are the sum of its questions' points, so solving every question
+        # gives full marks (scores are capped at lab.points). A lab without questions keeps the
+        # points that were entered.
+        questions = attrs.get('questions')
+        if questions:
+            default_points = LabQuestion._meta.get_field('points').default
+            attrs['points'] = sum(q.get('points', default_points) for q in questions)
+        return attrs
+
     def create(self, validated_data):
         validated_data.pop('remove_video_file', None)
         validated_data.pop('remove_source_file', None)

@@ -240,11 +240,17 @@ function AddLabModalContent({ onClose, onLabCreated, initialLab = null, initialC
     });
   };
 
+  // Lab total points = sum of its questions' points (so solving every question gives full marks).
+  // Only a lab without questions has its total entered by hand.
+  const hasQuestions = form.questions.length > 0;
+  const questionPointsTotal = form.questions.reduce((sum, q) => sum + (Number(q.points) || 0), 0);
+  const labPoints = hasQuestions ? questionPointsTotal : Number(form.points) || 0;
+
   const validate = () => {
     const errs = {};
     if (!form.name.trim()) errs.name = "Lab name is required";
     if (!form.description.trim()) errs.description = "Lab description is required";
-    if (!form.points || Number(form.points) <= 0) errs.points = "Points must be greater than 0";
+    if (!hasQuestions && labPoints <= 0) errs.points = "Points must be greater than 0";
 
     form.questions.forEach((q, qIdx) => {
       if (!q.title.trim()) {
@@ -252,6 +258,9 @@ function AddLabModalContent({ onClose, onLabCreated, initialLab = null, initialC
       }
       if (!q.flag.trim()) {
         errs[`q_${qIdx}_flag`] = `Question #${qIdx + 1} flag is required`;
+      }
+      if (!(Number(q.points) > 0)) {
+        errs[`q_${qIdx}_points`] = `Question #${qIdx + 1} points must be greater than 0`;
       }
     });
 
@@ -292,7 +301,7 @@ function AddLabModalContent({ onClose, onLabCreated, initialLab = null, initialC
         payload.append("org", form.org.trim() || "BlitzLab");
         payload.append("category", form.category);
         payload.append("difficulty", form.difficulty);
-        payload.append("points", String(Number(form.points) || 100));
+        payload.append("points", String(labPoints));
         payload.append("target_url", form.target_url.trim());
         payload.append("video_url", form.video_url.trim());
         payload.append("source_link", form.source_link.trim());
@@ -317,7 +326,7 @@ function AddLabModalContent({ onClose, onLabCreated, initialLab = null, initialC
           org: form.org.trim() || "BlitzLab",
           category: form.category,
           difficulty: form.difficulty,
-          points: Number(form.points) || 100,
+          points: labPoints,
           target_url: form.target_url.trim(),
           video_url: form.video_url.trim(),
           source_link: form.source_link.trim(),
@@ -624,12 +633,14 @@ function AddLabModalContent({ onClose, onLabCreated, initialLab = null, initialC
                   type="number"
                   min="10"
                   step="10"
-                  value={form.points}
+                  value={hasQuestions ? questionPointsTotal : form.points}
+                  readOnly={hasQuestions}
                   onChange={(e) => updateField("points", e.target.value)}
+                  title={hasQuestions ? "Calculated automatically from the question points below" : undefined}
                   style={{
                     width: "100%",
                     boxSizing: "border-box",
-                    background: C.panel2,
+                    background: hasQuestions ? C.panel : C.panel2,
                     border: `1px solid ${errors.points ? C.danger : C.border}`,
                     borderRadius: 7,
                     padding: "9px 12px",
@@ -637,8 +648,15 @@ function AddLabModalContent({ onClose, onLabCreated, initialLab = null, initialC
                     fontSize: 13,
                     color: C.amber,
                     outline: "none",
+                    cursor: hasQuestions ? "default" : "text",
                   }}
                 />
+                <div style={{ fontFamily: sans, fontSize: 11, color: errors.points ? C.danger : C.low, marginTop: 4 }}>
+                  {errors.points ||
+                    (hasQuestions
+                      ? `Auto: sum of ${form.questions.length} question${form.questions.length === 1 ? "" : "s"}`
+                      : "No questions: enter the lab's points")}
+                </div>
               </div>
             </div>
 
@@ -1222,12 +1240,15 @@ function AddLabModalContent({ onClose, onLabCreated, initialLab = null, initialC
                           min="5"
                           step="5"
                           value={q.points}
-                          onChange={(e) => updateQuestion(qIdx, "points", e.target.value)}
+                          onChange={(e) => {
+                            updateQuestion(qIdx, "points", e.target.value);
+                            if (errors[`q_${qIdx}_points`]) setErrors((prev) => ({ ...prev, [`q_${qIdx}_points`]: null }));
+                          }}
                           style={{
                             width: "100%",
                             boxSizing: "border-box",
                             background: C.panel,
-                            border: `1px solid ${C.border}`,
+                            border: `1px solid ${errors[`q_${qIdx}_points`] ? C.danger : C.border}`,
                             borderRadius: 6,
                             padding: "8px 10px",
                             fontFamily: mono,
@@ -1236,6 +1257,11 @@ function AddLabModalContent({ onClose, onLabCreated, initialLab = null, initialC
                             outline: "none",
                           }}
                         />
+                        {errors[`q_${qIdx}_points`] && (
+                          <div style={{ color: C.danger, fontSize: 11, marginTop: 3 }}>
+                            Must be greater than 0
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -1447,6 +1473,8 @@ function AddLabModalContent({ onClose, onLabCreated, initialLab = null, initialC
             <span style={{ color: C.amber, fontWeight: 600 }}>
               {form.questions.reduce((acc, q) => acc + (q.hints?.length || 0), 0)} hints
             </span>
+            {" · "}
+            <span style={{ color: C.amber, fontWeight: 600 }}>{labPoints} pts</span>
           </div>
 
           <div style={{ display: "flex", gap: 10 }}>
