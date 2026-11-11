@@ -115,7 +115,7 @@ export default function AdminActivity({ onSelectStudent }) {
   return (
     <div style={{ padding: "26px 30px", height: "100%", overflowY: "auto", boxSizing: "border-box" }}>
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+      <div className="page-head" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
         <div>
           <h1 style={{ fontFamily: sans, fontSize: 24, fontWeight: 700, color: C.hi, margin: 0 }}>
             Student Activity & Overall Progress

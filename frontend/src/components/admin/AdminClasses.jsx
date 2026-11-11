@@ -8,6 +8,7 @@ import {
 import Panel from "../common/Panel";
 import Btn from "../common/Btn";
 import Badge from "../common/Badge";
+import StatCard from "../common/StatCard";
 import { C, sans, mono } from "../../constants/theme";
 import {
   fetchClasses,
@@ -1105,7 +1106,7 @@ export default function AdminClasses() {
       {toast && <Toast message={toast.message} type={toast.type} onDone={() => setToast(null)} />}
 
       {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 22 }}>
+      <div className="page-head" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 22 }}>
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <h1 style={{ fontFamily: sans, fontSize: 22, fontWeight: 700, color: C.hi, margin: 0 }}>
@@ -1128,31 +1129,10 @@ export default function AdminClasses() {
 
       {/* Summary Stat Cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14, marginBottom: 24 }}>
-        {[
-          { label: "TOTAL CLASSES", value: classStats.total_classes, icon: GraduationCap, color: C.amber },
-          { label: "ENROLLED STUDENTS", value: totalStudentsInClasses, icon: Users, color: C.cyan },
-          { label: "ASSIGNED LABS", value: totalLabsAssigned, icon: FlaskConical, color: "#a78bfa" },
-          { label: "CATALOG LABS", value: classStats.catalog_labs, icon: Layers, color: C.hi },
-        ].map((st, i) => {
-          const Icon = st.icon;
-          return (
-            <Panel key={i} style={{ padding: "16px 20px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>
-                  <div style={{ fontFamily: mono, fontSize: 10, color: C.low, letterSpacing: "0.06em", marginBottom: 5 }}>
-                    {st.label}
-                  </div>
-                  <div style={{ fontFamily: mono, fontSize: 24, fontWeight: 700, color: st.color }}>
-                    {st.value}
-                  </div>
-                </div>
-                <div style={{ width: 40, height: 40, borderRadius: 10, background: "rgba(255,255,255,0.03)", border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center", color: st.color }}>
-                  <Icon size={18} />
-                </div>
-              </div>
-            </Panel>
-          );
-        })}
+        <StatCard label="Total Classes" value={classStats.total_classes} icon={GraduationCap} sub="Student cohorts" tone="amber" />
+        <StatCard label="Enrolled Students" value={totalStudentsInClasses} icon={Users} sub="Students in classes" tone="cyan" />
+        <StatCard label="Assigned Labs" value={totalLabsAssigned} icon={FlaskConical} sub="Labs given to classes" tone="purple" />
+        <StatCard label="Catalog Labs" value={classStats.catalog_labs} icon={Layers} sub="Labs in the catalog" />
       </div>
 
       {/* Search & Actions Bar */}

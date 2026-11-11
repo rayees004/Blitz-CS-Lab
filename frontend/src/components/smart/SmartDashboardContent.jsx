@@ -9,7 +9,8 @@ import SmartStatTile from "./SmartStatTile";
 import { useTimeLeft, formatTimeLeft } from "../../utils/labTime";
 import "./smart.css";
 
-function ShieldArt() {
+// Gold shield + padlock shown in the dashboard hero (student and admin)
+export function ShieldArt() {
   return (
     <svg className="smart-hero-art" width="120" height="120" viewBox="0 0 160 160" aria-hidden="true">
       <defs>

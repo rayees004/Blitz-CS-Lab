@@ -8,6 +8,7 @@ import {
 import Panel from "../common/Panel";
 import Btn from "../common/Btn";
 import Badge, { DiffBadge } from "../common/Badge";
+import StatCard from "../common/StatCard";
 import { C, sans, mono } from "../../constants/theme";
 import {
   fetchSubjects,
@@ -422,7 +423,7 @@ function CourseModulesDrawer({ course, onClose, onModulesCountChanged }) {
       {/* Drawer */}
       <div style={{
         position: "fixed", top: 0, right: 0, bottom: 0, width: 540,
-        background: C.void, borderLeft: `1px solid ${C.borderLight}`,
+        background: C.drawer, borderLeft: `1px solid ${C.drawerEdge}`,
         zIndex: 901, display: "flex", flexDirection: "column",
         boxShadow: "-16px 0 50px rgba(0,0,0,0.8)",
         animation: "slideIn 200ms cubic-bezier(0.16,1,0.3,1)",
@@ -909,7 +910,7 @@ function CourseLabsDrawer({ course, onClose, onLabsCountChanged }) {
       {/* Drawer */}
       <div style={{
         position: "fixed", top: 0, right: 0, bottom: 0, width: 560,
-        background: C.void, borderLeft: `1px solid ${C.borderLight}`,
+        background: C.drawer, borderLeft: `1px solid ${C.drawerEdge}`,
         zIndex: 901, display: "flex", flexDirection: "column",
         boxShadow: "-16px 0 50px rgba(0,0,0,0.8)",
         animation: "slideIn 200ms cubic-bezier(0.16,1,0.3,1)",
@@ -1227,72 +1228,34 @@ export default function AdminSubjects() {
       )}
 
       {/* Top Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 14 }}>
+      <div className="page-head" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 14, marginBottom: 0 }}>
         <div>
           <h1 style={{ fontFamily: sans, fontSize: 22, fontWeight: 700, color: C.hi, margin: 0 }}>Courses</h1>
-          <div style={{ fontFamily: sans, fontSize: 13, color: C.low, marginTop: 4 }}>
+          <div style={{ fontFamily: sans, fontSize: 13, color: C.mid, marginTop: 4 }}>
             Curriculum courses, syllabus modules, and hands-on training tracks
           </div>
         </div>
 
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-          <button
-            onClick={loadData}
-            title="Refresh"
-            style={{
-              background: C.panel, border: `1px solid ${C.border}`, borderRadius: 7,
-              padding: "8px 12px", color: C.mid, cursor: "pointer", display: "flex",
-              alignItems: "center", gap: 6, fontFamily: sans, fontSize: 12.5,
-            }}
-          >
-            <RefreshCw size={13} style={loading ? { animation: "spin 1s linear infinite" } : {}} />
+          <Btn variant="outline" icon={RefreshCw} onClick={loadData} disabled={loading}>
             Refresh
-          </button>
+          </Btn>
           <Btn icon={Plus} onClick={() => setDrawerState({ mode: "add" })}>Add Course</Btn>
         </div>
       </div>
 
       {/* Stats row */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginTop: 22 }}>
-        <Panel style={{ padding: "16px 20px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontFamily: sans, fontSize: 12, color: C.low, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Total Courses</span>
-            <BookOpen size={16} color={C.amber} />
-          </div>
-          <div style={{ fontFamily: mono, fontSize: 26, fontWeight: 700, color: C.hi, marginTop: 8 }}>
-            {totalCourses}
-          </div>
-        </Panel>
-
-        <Panel style={{ padding: "16px 20px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontFamily: sans, fontSize: 12, color: C.low, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Total Modules</span>
-            <Layers size={16} color={C.accentCyan} />
-          </div>
-          <div style={{ fontFamily: mono, fontSize: 26, fontWeight: 700, color: C.hi, marginTop: 8 }}>
-            {totalModules}
-          </div>
-        </Panel>
-
-        <Panel style={{ padding: "16px 20px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontFamily: sans, fontSize: 12, color: C.low, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Total Hours</span>
-            <Clock size={16} color={C.accentGreen} />
-          </div>
-          <div style={{ fontFamily: mono, fontSize: 26, fontWeight: 700, color: C.hi, marginTop: 8 }}>
-            {totalHours}h
-          </div>
-        </Panel>
-
-        <Panel style={{ padding: "16px 20px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontFamily: sans, fontSize: 12, color: C.low, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Avg Duration</span>
-            <Award size={16} color={C.amber} />
-          </div>
-          <div style={{ fontFamily: mono, fontSize: 26, fontWeight: 700, color: C.hi, marginTop: 8 }}>
-            {totalCourses > 0 ? Math.round(totalHours / totalCourses) : 0}h
-          </div>
-        </Panel>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14, marginTop: 22 }}>
+        <StatCard label="Total Courses" value={totalCourses} icon={BookOpen} sub="Curriculum courses" tone="amber" />
+        <StatCard label="Total Modules" value={totalModules} icon={Layers} sub="Syllabus modules" tone="cyan" />
+        <StatCard label="Total Hours" value={`${totalHours}h`} icon={Clock} sub="Across all courses" tone="green" />
+        <StatCard
+          label="Avg Duration"
+          value={`${totalCourses > 0 ? Math.round(totalHours / totalCourses) : 0}h`}
+          icon={Award}
+          sub="Per course"
+          tone="purple"
+        />
       </div>
 
       {/* Search Bar (Class connection removed) */}

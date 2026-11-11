@@ -19,12 +19,10 @@ import {
   finalizeStudentLab
 } from "../../api/labs";
 import { useTimeLeft, formatTimeLeft } from "../../utils/labTime";
-import { useSmartUi } from "../../utils/uiMode";
 
 // onSubmitted(result): optional; called when the last correct answer auto-submits the lab,
 // so the parent can return to the labs list and show a "submitted successfully" popup.
 export default function LabDetail({ lab, back, onSubmitted }) {
-  const smart = useSmartUi();
   const [loading, setLoading] = useState(true);
   const [workspace, setWorkspace] = useState(null);
   const [error, setError] = useState(null);
@@ -273,18 +271,18 @@ export default function LabDetail({ lab, back, onSubmitted }) {
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", background: smart ? "transparent" : C.void, color: C.hi }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "transparent", color: C.hi }}>
       {/* Top Header */}
       <div
         style={{
           height: 54,
-          borderBottom: `1px solid ${smart ? "rgba(245, 166, 35, 0.25)" : C.border}`,
+          borderBottom: "1px solid rgba(245, 166, 35, 0.25)",
           display: "flex",
           alignItems: "center",
           padding: "0 22px",
           gap: 12,
           flexShrink: 0,
-          background: smart ? "linear-gradient(100deg, #12161e 0%, #151922 60%, #2a1f0b 100%)" : C.panel2,
+          background: "linear-gradient(100deg, #12161e 0%, #151922 60%, #2a1f0b 100%)",
         }}
       >
         <span

@@ -7,11 +7,8 @@ import {
 
 import { C, sans } from "./src/constants/theme";
 import { NAV_STUDENT, NAV_ADMIN, NAV_INSTRUCTOR } from "./src/data/mockData";
-import Sidebar from "./src/components/layout/Sidebar";
-import Topbar from "./src/components/layout/Topbar";
 import SmartSidebar from "./src/components/smart/SmartSidebar";
 import SmartTopbar from "./src/components/smart/SmartTopbar";
-import { useUiMode, UiModeContext } from "./src/utils/uiMode";
 import Login from "./src/components/auth/Login";
 import Placeholder from "./src/components/common/Placeholder";
 
@@ -43,9 +40,8 @@ import StudentAttendanceLog from "./src/components/student/StudentAttendanceLog"
 import StudentLeaderboard from "./src/components/student/StudentLeaderboard";
 
 // Export modular subcomponents for external consumption
-export { default as Sidebar } from "./src/components/layout/Sidebar";
-export { default as Topbar } from "./src/components/layout/Topbar";
-export { default as Logo } from "./src/components/layout/Logo";
+export { default as SmartSidebar } from "./src/components/smart/SmartSidebar";
+export { default as SmartTopbar } from "./src/components/smart/SmartTopbar";
 export { default as Login } from "./src/components/auth/Login";
 export { default as Btn } from "./src/components/common/Btn";
 export { default as Panel } from "./src/components/common/Panel";
@@ -83,9 +79,6 @@ export default function BlitzCyberLab() {
   const [submittedLab, setSubmittedLab] = useState(null);
 
   const [sessionNotice, setSessionNotice] = useState(null);
-  // Student panel look: Smart UI or Classic (switch in the top bar, remembered per browser)
-  const [uiMode, setUiMode] = useUiMode();
-  const smartUi = uiMode === "smart";
 
   React.useEffect(() => {
     // 1. Listen for global token expiry / 401 unauthorized events
@@ -190,26 +183,27 @@ export default function BlitzCyberLab() {
     const roleTitle = isAdmin ? "Platform Administrator" : "Instructor / Faculty";
 
     return (
-      <div style={{ fontFamily: sans, display: "flex", height: "100vh", background: C.void, color: C.hi, overflow: "hidden" }}>
-        <Sidebar
+      <div
+        className="smart-shell smart-ui"
+        style={{ fontFamily: sans, display: "flex", height: "100vh", color: C.hi, overflow: "hidden" }}
+      >
+        <SmartSidebar
           items={isInstructor ? NAV_INSTRUCTOR : NAV_ADMIN}
           active={adminPage}
           onSelect={setAdminPage}
-          onSwitch={handleLogout}
-          switchLabel="Sign out"
-          userType={currentUser?.user_type || (isAdmin ? "admin" : "instructor")}
-          canAccessDjangoAdmin={isAdmin}
+          onSignOut={handleLogout}
           onToggleView={isAdmin ? handleToggleAdminView : null}
           viewMode="admin"
+          tagline={isAdmin ? "Admin Console" : "Instructor Console"}
+          canAccessDjangoAdmin={isAdmin}
         />
         <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, height: "100%" }}>
-          <Topbar
+          <SmartTopbar
             name={userFullName}
             role={roleTitle}
-            userType={currentUser?.user_type || (isAdmin ? "admin" : "instructor")}
+            userType={isAdmin ? "admin" : "instructor"}
             canAccessDjangoAdmin={isAdmin}
-            onToggleView={isAdmin ? handleToggleAdminView : null}
-            viewMode="admin"
+            onPreviewStudent={isAdmin ? handleToggleAdminView : null}
           />
           <div style={{ flex: 1, overflow: "hidden" }}>{pages[adminPage]}</div>
         </div>
@@ -220,7 +214,7 @@ export default function BlitzCyberLab() {
   // ─── Student Stage ───
   // (Available to Students, and Admins who toggle to preview student experience)
   const pages = {
-    dashboard: <StudentDashboard go={goLab} onNavigate={setStudentPage} smart={smartUi} />,
+    dashboard: <StudentDashboard onNavigate={setStudentPage} />,
     learning: <Learning go={goLab} onSelect={setStudentPage} />,
     labs: <LabExplorer go={goLab} />,
     "lab-detail": (
@@ -245,32 +239,18 @@ export default function BlitzCyberLab() {
     : (currentUser?.username || "Student");
 
   return (
-    <UiModeContext.Provider value={uiMode}>
     <div
-      className={smartUi ? "smart-shell smart-ui" : undefined}
-      style={{ fontFamily: sans, display: "flex", height: "100vh", background: smartUi ? undefined : C.void, color: C.hi, overflow: "hidden" }}
+      className="smart-shell smart-ui"
+      style={{ fontFamily: sans, display: "flex", height: "100vh", color: C.hi, overflow: "hidden" }}
     >
-      {smartUi ? (
-        <SmartSidebar
-          items={NAV_STUDENT}
-          active={studentPage === "lab-detail" ? "labs" : studentPage}
-          onSelect={setStudentPage}
-          onSignOut={handleLogout}
-          onToggleView={isAdmin ? handleToggleAdminView : null}
-        />
-      ) : (
-        <Sidebar
-          items={NAV_STUDENT}
-          active={studentPage === "lab-detail" ? "labs" : studentPage}
-          onSelect={setStudentPage}
-          onSwitch={handleLogout}
-          switchLabel="Sign out"
-          userType={isStudent ? "student" : "admin"}
-          canAccessDjangoAdmin={isAdmin}
-          onToggleView={isAdmin ? handleToggleAdminView : null}
-          viewMode="student"
-        />
-      )}
+      <SmartSidebar
+        items={NAV_STUDENT}
+        active={studentPage === "lab-detail" ? "labs" : studentPage}
+        onSelect={setStudentPage}
+        onSignOut={handleLogout}
+        onToggleView={isAdmin ? handleToggleAdminView : null}
+        viewMode="student"
+      />
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, height: "100%" }}>
         {/* Banner if Platform Admin is previewing Student Panel */}
         {isAdmin && (
@@ -316,26 +296,13 @@ export default function BlitzCyberLab() {
           </div>
         )}
 
-        {studentPage !== "lab-detail" && (smartUi ? (
+        {studentPage !== "lab-detail" && (
           <SmartTopbar
             name={studentFullName}
             role={isAdmin ? "Administrator (Previewing Student)" : "Student"}
             userType={isStudent ? "student" : "admin"}
-            uiMode={uiMode}
-            onUiModeChange={setUiMode}
           />
-        ) : (
-          <Topbar
-            name={studentFullName}
-            role={isAdmin ? "Administrator (Previewing Student)" : "Student"}
-            userType={isStudent ? "student" : "admin"}
-            canAccessDjangoAdmin={isAdmin}
-            onToggleView={isAdmin ? handleToggleAdminView : null}
-            viewMode="student"
-            uiMode={uiMode}
-            onUiModeChange={setUiMode}
-          />
-        ))}
+        )}
         <div style={{ flex: 1, overflow: "hidden" }}>{pages[studentPage]}</div>
       </div>
 
@@ -343,6 +310,5 @@ export default function BlitzCyberLab() {
         <LabSubmittedModal result={submittedLab} onClose={() => setSubmittedLab(null)} />
       )}
     </div>
-    </UiModeContext.Provider>
   );
 }

@@ -79,7 +79,7 @@ export default function AdminAttendLabView({ currentUser, onNavigate }) {
   return (
     <div style={{ padding: 28, overflowY: "auto", height: "100%", boxSizing: "border-box" }}>
       {/* Top Banner */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, marginBottom: 20 }}>
+      <div className="page-head" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, marginBottom: 20 }}>
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
             <span
@@ -106,27 +106,9 @@ export default function AdminAttendLabView({ currentUser, onNavigate }) {
           </p>
         </div>
 
-        <button
-          onClick={loadLabs}
-          style={{
-            background: C.panel2,
-            border: `1px solid ${C.border}`,
-            borderRadius: 6,
-            cursor: "pointer",
-            color: C.mid,
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            padding: "7px 12px",
-            fontFamily: sans,
-            fontSize: 12,
-            transition: "all 0.15s ease",
-          }}
-          title="Refresh Labs"
-        >
-          <RefreshCw size={13} style={{ animation: loading ? "spin 1s linear infinite" : "none" }} />
-          <span>Refresh</span>
-        </button>
+        <Btn variant="outline" icon={RefreshCw} onClick={loadLabs} disabled={loading} small title="Refresh Labs">
+          Refresh
+        </Btn>
       </div>
 
       {/* Filter / Search Bar */}

@@ -103,7 +103,7 @@ export default function AdminAuditLogs() {
   return (
     <div style={{ padding: "24px 28px", height: "100%", overflowY: "auto", boxSizing: "border-box" }}>
       {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+      <div className="page-head" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <h1 style={{ fontFamily: sans, fontSize: 22, fontWeight: 700, color: C.hi, margin: 0 }}>
@@ -115,7 +115,7 @@ export default function AdminAuditLogs() {
             System activity ledger tracking administrative modifications, account access, and governance events.
           </div>
         </div>
-        <Btn variant="subtle" icon={RefreshCw} onClick={loadLogs} disabled={loading} small>
+        <Btn variant="outline" icon={RefreshCw} onClick={loadLogs} disabled={loading} small>
           {loading ? "Refreshing..." : "Refresh"}
         </Btn>
       </div>

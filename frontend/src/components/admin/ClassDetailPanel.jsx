@@ -290,7 +290,7 @@ export default function ClassDetailPanel({ course, onClose }) {
 
       <div style={{
         position: "fixed", top: 0, right: 0, width: 540, height: "100vh",
-        background: C.void, borderLeft: `1px solid ${C.border}`,
+        background: C.drawer, borderLeft: `1px solid ${C.drawerEdge}`,
         zIndex: 901, display: "flex", flexDirection: "column",
         boxShadow: "-16px 0 60px rgba(0,0,0,0.55)",
         animation: "slideIn 200ms ease",

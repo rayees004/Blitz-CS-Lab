@@ -1,6 +1,6 @@
 import React from "react";
-import { Bell } from "lucide-react";
-import UiModeSwitch from "../layout/UiModeSwitch";
+import { Bell, Shield, ExternalLink, Eye } from "lucide-react";
+import { DJANGO_ADMIN_URL } from "../../api/client";
 import "./smart.css";
 
 const ROLE_BADGE = {
@@ -9,17 +9,45 @@ const ROLE_BADGE = {
   student: { label: "STUDENT", color: "#34d399", bg: "rgba(52, 211, 153, 0.12)", border: "rgba(52, 211, 153, 0.35)" },
 };
 
-export default function SmartTopbar({ name, role, userType = "student", uiMode, onUiModeChange }) {
+/**
+ * Smart UI top bar for every role.
+ * canAccessDjangoAdmin / onPreviewStudent: admin console quick actions (left side).
+ */
+export default function SmartTopbar({ name, role, userType = "student", canAccessDjangoAdmin = false, onPreviewStudent = null }) {
   const badge = ROLE_BADGE[userType] || ROLE_BADGE.student;
+  const hasActions = canAccessDjangoAdmin || onPreviewStudent;
+
   return (
     <header className="smart-topbar smart-ui">
-      {onUiModeChange && <UiModeSwitch mode={uiMode} onChange={onUiModeChange} />}
+      {hasActions && (
+        <div className="smart-top-actions">
+          {canAccessDjangoAdmin && (
+            <a
+              className="smart-top-action is-django"
+              href={DJANGO_ADMIN_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Open Django Administration Panel (/admin/)"
+            >
+              <Shield size={13} />
+              <span>Django Admin</span>
+              <ExternalLink size={11} style={{ opacity: 0.8 }} />
+            </a>
+          )}
+          {onPreviewStudent && (
+            <button type="button" className="smart-top-action" onClick={onPreviewStudent} title="Preview Platform as Student">
+              <Eye size={13} />
+              <span>Preview Student View</span>
+            </button>
+          )}
+        </div>
+      )}
 
       <Bell size={18} color="#aab2bf" strokeWidth={1.9} aria-hidden="true" />
       <div style={{ width: 1, height: 24, background: "#232a35" }} />
 
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <div className="smart-avatar" aria-hidden="true">
+        <div className={`smart-avatar is-${userType}`} aria-hidden="true">
           {name ? name[0].toUpperCase() : "U"}
         </div>
         <div className="smart-user-text" style={{ lineHeight: 1.3 }}>

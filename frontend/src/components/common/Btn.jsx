@@ -1,10 +1,8 @@
 import React from "react";
 import { C, sans } from "../../constants/theme";
-import { useSmartUi } from "../../utils/uiMode";
 
 export default function Btn({ children, variant = "primary", onClick, style, icon: Icon, small, sm, disabled, type = "button", ...rest }) {
   const isSmall = small || sm;
-  const smart = useSmartUi();
   const base = {
     display: "inline-flex",
     alignItems: "center",
@@ -14,7 +12,7 @@ export default function Btn({ children, variant = "primary", onClick, style, ico
     fontWeight: 600,
     fontSize: isSmall ? 12.5 : 13.5,
     padding: isSmall ? "6px 12px" : "9px 16px",
-    borderRadius: 7,
+    borderRadius: isSmall ? 8 : 10,
     cursor: disabled ? "not-allowed" : "pointer",
     opacity: disabled ? 0.6 : 1,
     border: "1px solid transparent",
@@ -22,23 +20,18 @@ export default function Btn({ children, variant = "primary", onClick, style, ico
     flexShrink: 0,
     transition: "background 120ms ease, border-color 120ms ease, transform 80ms ease",
   };
+  // Smart UI: rounder buttons, glowing gold primary
   const variants = {
-    primary: { background: C.amber, color: "#1A1200", border: `1px solid ${C.amber}` },
-    outline: { background: "transparent", color: C.hi, border: `1px solid ${C.borderLight}` },
-    ghost: { background: "transparent", color: C.mid, border: "1px solid transparent" },
-    subtle: { background: C.panel3, color: C.hi, border: `1px solid ${C.border}` },
-  };
-  if (smart) {
-    // Student panel Smart UI: rounder buttons, glowing gold primary
-    base.borderRadius = isSmall ? 8 : 10;
-    variants.primary = {
+    primary: {
       background: "linear-gradient(180deg, #ffc046, #f5a623)",
       color: "#1A1200",
       border: "1px solid #f5a623",
       boxShadow: "0 5px 14px -7px rgba(245, 166, 35, 0.8)",
-    };
-    variants.outline = { background: "rgba(255, 255, 255, 0.02)", color: C.hi, border: "1px solid #2c3444" };
-  }
+    },
+    outline: { background: "rgba(255, 255, 255, 0.02)", color: C.hi, border: "1px solid #2c3444" },
+    ghost: { background: "transparent", color: C.mid, border: "1px solid transparent" },
+    subtle: { background: C.panel3, color: C.hi, border: `1px solid ${C.border}` },
+  };
   return (
     <button
       type={type}

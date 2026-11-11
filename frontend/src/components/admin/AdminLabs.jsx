@@ -57,8 +57,8 @@ function LabViewDrawer({ lab, courses, onClose, onEdit, onDelete }) {
           bottom: 0,
           width: 580,
           maxWidth: "100vw",
-          background: C.void,
-          borderLeft: `1px solid ${C.borderLight}`,
+          background: C.drawer,
+          borderLeft: `1px solid ${C.drawerEdge}`,
           zIndex: 901,
           display: "flex",
           flexDirection: "column",
@@ -809,7 +809,7 @@ export default function AdminLabs({ onOpenAddModal = null, mode = "all" }) {
   return (
     <div style={{ padding: 28, overflowY: "auto", height: "100%", boxSizing: "border-box" }}>
       {/* Top Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+      <div className="page-head" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 14, flexWrap: "wrap", marginBottom: 20 }}>
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <h1 style={{ fontFamily: sans, fontSize: 22, fontWeight: 700, color: C.hi, margin: 0 }}>

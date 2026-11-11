@@ -549,19 +549,19 @@ export default function AdminStudents({ currentUser }) {
   return (
     <div style={{ padding: 28, overflowY: "auto", height: "100%", boxSizing: "border-box" }}>
       {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+      <div className="page-head" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 0 }}>
         <div>
           <h1 style={{ fontFamily: sans, fontSize: 22, fontWeight: 700, color: C.hi, margin: "0 0 4px" }}>
             Users & Students
           </h1>
-          <div style={{ fontFamily: mono, fontSize: 11, color: C.low }}>
+          <div style={{ fontFamily: mono, fontSize: 11, color: C.mid }}>
             {loading ? "Loading..." : `${matchingCount} of ${totalUsers} user${totalUsers !== 1 ? "s" : ""}`}
           </div>
         </div>
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-          <button onClick={load} style={{ background: "none", border: "none", cursor: "pointer", color: C.low, display: "flex", padding: 4 }} title="Refresh">
-            <RefreshCw size={15} style={{ animation: loading ? "spin 1s linear infinite" : "none" }} />
-          </button>
+          <Btn variant="outline" icon={RefreshCw} onClick={load} disabled={loading}>
+            Refresh
+          </Btn>
           <Btn icon={Plus} onClick={() => setShowAddDrawer(true)}>
             {isPlatformAdmin ? "Add User" : "Add Student"}
           </Btn>

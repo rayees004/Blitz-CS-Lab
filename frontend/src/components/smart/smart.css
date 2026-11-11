@@ -1,5 +1,5 @@
 /* ============================================================
-   Smart UI — student panel only (switch: src/utils/uiMode.js)
+   Smart UI — the interface for every role (student, instructor, admin)
    ============================================================ */
 
 .smart-ui {
@@ -16,6 +16,12 @@
 }
 
 .smart-ui button { font-family: inherit; }
+.smart-ui ::placeholder { color: #6b7482; opacity: 1; }
+
+/* Scrollbars sit on the shell gradient instead of a solid dark strip */
+.smart-ui ::-webkit-scrollbar-track { background: transparent; }
+.smart-ui ::-webkit-scrollbar-thumb { background: #262d38; border-radius: 999px; }
+.smart-ui ::-webkit-scrollbar-thumb:hover { background: rgba(245, 166, 35, 0.45); }
 
 .smart-ui :focus-visible {
   outline: 2px solid #f5a623;
@@ -145,8 +151,17 @@
   border-radius: 8px;
   color: #aab2bf;
   font-size: 12px;
+  text-decoration: none;
 }
 .smart-foot-item:hover { background: rgba(255, 255, 255, 0.045); color: #edeff2; }
+.smart-foot-item.is-django {
+  color: #34d399;
+  font-weight: 600;
+  background: rgba(16, 185, 129, 0.08);
+  border-color: rgba(16, 185, 129, 0.25);
+  margin-bottom: 2px;
+}
+.smart-foot-item.is-django:hover { background: rgba(16, 185, 129, 0.16); color: #34d399; }
 
 /* Short windows: hide the promo card so every menu item stays visible */
 @media (max-height: 700px) {
@@ -190,13 +205,51 @@
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
   flex-shrink: 0;
 }
+.smart-avatar.is-admin {
+  background: radial-gradient(circle at 30% 25%, #7dd3fc, #0369a1);
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.25);
+}
+.smart-avatar.is-instructor {
+  background: radial-gradient(circle at 30% 25%, #d8b4fe, #7e22ce);
+  box-shadow: 0 0 0 2px rgba(192, 132, 252, 0.25);
+}
+
+/* Admin console quick actions (left side of the top bar) */
+.smart-top-actions {
+  margin-right: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.smart-top-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 13px;
+  border-radius: 999px;
+  border: 1px solid #2c3444;
+  background: rgba(255, 255, 255, 0.03);
+  color: #c3c9d3;
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+.smart-top-action:hover { border-color: rgba(63, 216, 200, 0.5); color: #3fd8c8; background: rgba(63, 216, 200, 0.06); }
+.smart-top-action.is-django { color: #34d399; border-color: rgba(16, 185, 129, 0.35); background: rgba(16, 185, 129, 0.1); }
+.smart-top-action.is-django:hover { background: rgba(16, 185, 129, 0.2); border-color: rgba(16, 185, 129, 0.55); color: #34d399; }
 
 @media (max-width: 640px) {
   .smart-topbar { padding: 0 14px; gap: 10px; }
   .smart-user-text { display: none; }
+  .smart-top-action { padding: 7px; }
+  .smart-top-action span, .smart-top-action svg + svg { display: none; }
 }
 
-/* ── Page header card (student pages: className="page-head") ── */
+/* ── Page header card (pages: className="page-head") ── */
 .smart-ui .page-head {
   position: relative;
   overflow: hidden;
@@ -274,6 +327,31 @@
 .smart-hero-art { margin: -11px 0; }
 .smart-hero .smart-btn-primary { align-self: start; }
 
+/* Small uppercase label above a hero title (e.g. "ADMIN DASHBOARD") */
+.smart-eyebrow {
+  display: inline-block;
+  margin-bottom: 6px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #f5a623;
+}
+
+/* Several hero buttons stacked in the action column */
+.smart-hero-actions {
+  align-self: start;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  max-width: 340px;
+}
+.smart-hero-actions .smart-btn-primary { align-self: auto; }
+
+.smart-btn-outline.is-django { color: #34d399; border-color: rgba(16, 185, 129, 0.4); background: rgba(16, 185, 129, 0.08); text-decoration: none; }
+.smart-btn-outline.is-django:hover { background: rgba(16, 185, 129, 0.16); border-color: rgba(16, 185, 129, 0.6); }
+
 @media (max-width: 1100px) {
   .smart-hero { grid-template-columns: minmax(0, 1fr) auto; }
   .smart-hero-art { display: none; }
@@ -282,6 +360,7 @@
   .smart-hero { grid-template-columns: 1fr; padding: 18px; }
   .smart-hero h1 { font-size: 19px; }
   .smart-hero .smart-btn-primary { justify-self: start; }
+  .smart-hero-actions { justify-content: flex-start; max-width: none; }
 }
 
 .smart-btn-primary,
@@ -449,6 +528,105 @@ button.smart-stat:hover .smart-stat-arrow { transform: translateX(2px); }
   line-height: 1.5;
 }
 .smart-notice strong { color: #fca5a5; }
+.smart-notice.is-success { border-color: rgba(63, 216, 200, 0.4); background: rgba(63, 216, 200, 0.08); color: #a5f3eb; }
+
+/* Count pill next to a panel title */
+.smart-count {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #f5a623;
+  background: rgba(245, 166, 35, 0.14);
+  border: 1px solid rgba(245, 166, 35, 0.4);
+}
+
+.smart-panel.is-attention { border-color: rgba(245, 166, 35, 0.4); background: linear-gradient(180deg, rgba(245, 166, 35, 0.05), #0e1117 70%); }
+
+/* Admin dashboard: retake request rows */
+.smart-req-list { display: flex; flex-direction: column; gap: 10px; }
+.smart-req {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1px solid #1f2530;
+  background: rgba(255, 255, 255, 0.02);
+}
+.smart-req-main { flex: 1; min-width: 240px; }
+.smart-req-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.smart-req-name { font-size: 13px; font-weight: 700; color: #fff; }
+.smart-req-user { font-size: 11px; color: #3fd8c8; }
+.smart-req-lab { font-size: 12.5px; font-weight: 600; color: #f5a623; }
+.smart-req-reason { font-size: 11.5px; color: #aab2bf; font-style: italic; margin-top: 4px; }
+.smart-req-meta { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 5px; font-size: 10.5px; color: #7c8594; }
+.smart-req-meta span { display: inline-flex; align-items: center; gap: 4px; }
+.smart-req-actions { display: flex; align-items: center; gap: 8px; }
+
+.smart-btn-accept,
+.smart-btn-reject {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 150ms ease, border-color 150ms ease;
+}
+.smart-btn-accept { color: #a7f3d0; background: rgba(34, 197, 94, 0.14); border: 1px solid rgba(34, 197, 94, 0.4); }
+.smart-btn-accept:hover { background: rgba(34, 197, 94, 0.24); }
+.smart-btn-reject { color: #fca5a5; background: rgba(229, 83, 75, 0.1); border: 1px solid rgba(229, 83, 75, 0.35); }
+.smart-btn-reject:hover { background: rgba(229, 83, 75, 0.2); }
+.smart-btn-accept:disabled, .smart-btn-reject:disabled { cursor: wait; opacity: 0.7; }
+
+.smart-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: none;
+  background: transparent;
+  padding: 0;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #f5a623;
+  cursor: pointer;
+}
+.smart-link:hover { text-decoration: underline; }
+
+/* Admin dashboard: chart + labs side by side */
+.smart-dash-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.1fr);
+  gap: 16px;
+}
+@media (max-width: 1100px) { .smart-dash-grid { grid-template-columns: minmax(0, 1fr); } }
+
+.smart-lab-rows { display: flex; flex-direction: column; }
+.smart-lab-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 2px;
+  border-top: 1px solid #1c222c;
+}
+.smart-lab-row-name { font-size: 12.5px; font-weight: 600; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.smart-lab-row-meta { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; margin-top: 3px; font-size: 10.5px; color: #7c8594; }
+.smart-lab-row-meta span { display: inline-flex; align-items: center; gap: 3px; }
+.smart-panel-foot {
+  display: flex;
+  justify-content: center;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed #232a35;
+}
 
 /* In-progress lab cards */
 .smart-labs {
@@ -482,7 +660,8 @@ button.smart-stat:hover .smart-stat-arrow { transform: translateX(2px); }
 .smart-time.is-urgent { color: #fca5a5; }
 
 @media (prefers-reduced-motion: reduce) {
-  .smart-stat, .smart-stat-arrow, .smart-btn-primary, .smart-btn-outline, .smart-nav-item { transition: none; }
+  .smart-stat, .smart-stat-arrow, .smart-btn-primary, .smart-btn-outline, .smart-nav-item,
+  .smart-top-action, .smart-btn-accept, .smart-btn-reject { transition: none; }
   button.smart-stat:hover, .smart-btn-primary:hover { transform: none; }
   button.smart-stat:hover .smart-stat-arrow { transform: none; }
   .smart-spin { animation: none; }

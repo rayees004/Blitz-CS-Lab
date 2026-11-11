@@ -8,6 +8,7 @@ import {
 import Panel from "../common/Panel";
 import Btn from "../common/Btn";
 import Badge from "../common/Badge";
+import StatCard from "../common/StatCard";
 import { C, sans, mono } from "../../constants/theme";
 import { fetchMaterials, createMaterial, deleteMaterial } from "../../api/materials";
 import { fetchSubjects } from "../../api/subjects";
@@ -247,7 +248,7 @@ export default function AdminMaterials() {
       )}
 
       {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+      <div className="page-head" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <h1 style={{ fontFamily: sans, fontSize: 22, fontWeight: 700, color: C.hi, margin: 0 }}>
@@ -270,61 +271,11 @@ export default function AdminMaterials() {
       </div>
 
       {/* Stats Cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 24 }}>
-        <Panel style={{ padding: "16px 18px" }}>
-          <div style={{ fontFamily: sans, fontSize: 12, color: C.low }}>Total Documents</div>
-          <div style={{ fontFamily: mono, fontSize: 24, fontWeight: 700, color: C.hi, marginTop: 6 }}>
-            {totalMaterials}
-          </div>
-          <div style={{ fontFamily: sans, fontSize: 11, color: C.mid, marginTop: 4 }}>
-            Across {materialStats.subjects} subjects
-          </div>
-        </Panel>
-
-        <Panel style={{ padding: "16px 18px" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <div style={{ fontFamily: sans, fontSize: 12, color: C.low }}>PDF Documents</div>
-            <span style={{ fontSize: 10, fontFamily: mono, color: "#ef4444", background: "rgba(239,68,68,0.12)", padding: "2px 6px", borderRadius: 4 }}>
-              PDF
-            </span>
-          </div>
-          <div style={{ fontFamily: mono, fontSize: 24, fontWeight: 700, color: "#ef4444", marginTop: 6 }}>
-            {pdfCount}
-          </div>
-          <div style={{ fontFamily: sans, fontSize: 11, color: C.mid, marginTop: 4 }}>
-            Manuals & guides
-          </div>
-        </Panel>
-
-        <Panel style={{ padding: "16px 18px" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <div style={{ fontFamily: sans, fontSize: 12, color: C.low }}>Word Documents</div>
-            <span style={{ fontSize: 10, fontFamily: mono, color: "#3b82f6", background: "rgba(59,130,246,0.12)", padding: "2px 6px", borderRadius: 4 }}>
-              DOCX
-            </span>
-          </div>
-          <div style={{ fontFamily: mono, fontSize: 24, fontWeight: 700, color: "#3b82f6", marginTop: 6 }}>
-            {wordCount}
-          </div>
-          <div style={{ fontFamily: sans, fontSize: 11, color: C.mid, marginTop: 4 }}>
-            Editable worksheets & notes
-          </div>
-        </Panel>
-
-        <Panel style={{ padding: "16px 18px" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <div style={{ fontFamily: sans, fontSize: 12, color: C.low }}>PowerPoint Slides</div>
-            <span style={{ fontSize: 10, fontFamily: mono, color: "#f97316", background: "rgba(249,115,22,0.12)", padding: "2px 6px", borderRadius: 4 }}>
-              PPTX
-            </span>
-          </div>
-          <div style={{ fontFamily: mono, fontSize: 24, fontWeight: 700, color: "#f97316", marginTop: 6 }}>
-            {pptxCount}
-          </div>
-          <div style={{ fontFamily: sans, fontSize: 11, color: C.mid, marginTop: 4 }}>
-            Class lecture presentations
-          </div>
-        </Panel>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14, marginBottom: 24 }}>
+        <StatCard label="Total Documents" value={totalMaterials} icon={Layers} sub={`Across ${materialStats.subjects} subjects`} tone="cyan" />
+        <StatCard label="PDF Documents" value={pdfCount} icon={FileText} sub="Manuals & guides" tone="purple" />
+        <StatCard label="Word Documents" value={wordCount} icon={File} sub="Editable worksheets & notes" />
+        <StatCard label="PowerPoint Slides" value={pptxCount} icon={Presentation} sub="Class lecture presentations" tone="green" />
       </div>
 
       {/* Filter & Search Bar */}

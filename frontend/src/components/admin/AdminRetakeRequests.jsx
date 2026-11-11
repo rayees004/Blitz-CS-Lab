@@ -119,7 +119,6 @@ export default function AdminRetakeRequests({ currentUser, onNavigate }) {
         height: "100%",
         overflowY: "auto",
         boxSizing: "border-box",
-        background: C.void,
         fontFamily: sans,
       }}
     >
@@ -152,6 +151,7 @@ export default function AdminRetakeRequests({ currentUser, onNavigate }) {
 
       {/* Header */}
       <div
+        className="page-head"
         style={{
           display: "flex",
           alignItems: "center",
