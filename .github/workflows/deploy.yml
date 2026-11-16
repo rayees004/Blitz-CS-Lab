@@ -6,19 +6,70 @@ on:
       - main
   workflow_dispatch:
 
+# Needed to push the rebuilt frontend/dist back to main
+permissions:
+  contents: write
+
+# One deploy at a time; a newer push waits instead of racing the current one
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
 jobs:
   deploy:
-    name: Deploy Latest Git Version
+    name: Build frontend and deploy
     runs-on: ubuntu-latest
     steps:
+      - name: Check out main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # The server only copies the committed frontend/dist into public_html, so build it here
+      # instead of relying on whoever pushed to have run `npm run build` and committed it.
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Commit the build if it changed
+        id: build_commit
+        run: |
+          git add -A frontend/dist
+          if git diff --cached --quiet; then
+            echo "frontend/dist is already up to date."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -m "Build frontend for ${GITHUB_SHA::8} [skip ci]"
+            if ! git push origin HEAD:main; then
+              # Someone pushed again meanwhile; that push's run builds and deploys the newer code
+              echo "main moved on during this build; leaving the deploy to the newer run."
+              echo "skip_deploy=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+          echo "deploy_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
       # SSH (port 22) is firewalled on the cPanel host, so deployment is triggered through
-      # the HTTPS webhook (backend/blitz_backend/views.py), which runs /home/decodexe/deploy.sh.
+      # the HTTPS webhook (backend/blitz_backend/views.py), which runs /home/decodexe/deploy.sh
+      # (git pull, copy frontend/dist to public_html, migrate, collectstatic, restart).
       - name: Trigger deploy webhook
+        if: steps.build_commit.outputs.skip_deploy != 'true'
         env:
           WEBHOOK_URL: https://backend.decodexe.com/api/webhook/github-deploy/
           WEBHOOK_SECRET: ${{ secrets.DEPLOY_WEBHOOK_SECRET }}
+          DEPLOY_SHA: ${{ steps.build_commit.outputs.deploy_sha }}
         run: |
-          BODY=$(printf '{"ref":"refs/heads/main","after":"%s","head_commit":{"id":"%s","message":"GitHub Actions deploy"}}' "$GITHUB_SHA" "$GITHUB_SHA")
+          BODY=$(printf '{"ref":"refs/heads/main","after":"%s","head_commit":{"id":"%s","message":"GitHub Actions deploy"}}' "$DEPLOY_SHA" "$DEPLOY_SHA")
           SIG_HEADER=()
           if [ -n "$WEBHOOK_SECRET" ]; then
             SIG="sha256=$(printf '%s' "$BODY" | openssl dgst -sha256 -hmac "$WEBHOOK_SECRET" | sed 's/^.* //')"
