@@ -6,6 +6,8 @@
 !.env.production.example
 .env.deploy*
 !.env.deploy.example
+# Public production URLs for `npm run dev:live` (no secrets)
+!frontend/.env.live
 deploy_secrets.*
 *.pem
 *.key

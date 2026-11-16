@@ -511,6 +511,14 @@
 
 /* ── Responsive ───────────────────────────────────────────── */
 
+/* Desktop: render the whole interface at 80% of its designed size
+   (backdrop stays full-bleed). Phones/tablets keep their tuned sizes
+   so inputs stay >=16px and iOS doesn't zoom on focus. */
+@media (min-width: 961px) {
+  .lg-main,
+  .lg-footer { zoom: 0.8; }
+}
+
 /* Not enough room for the illustration beside the copy */
 @media (max-width: 1180px) {
   .lg-root { --lg-text-w: 100%; }

@@ -6,6 +6,7 @@ import {
   FolderArchive, Download, Copy, Check, FileCode, FileBadge
 } from "lucide-react";
 import SubjectCertificateModal from "./SubjectCertificateModal";
+import { labTargetViewerHref, safeHttpUrl } from "./LabTargetViewer";
 import Panel from "../common/Panel";
 import Btn from "../common/Btn";
 import Badge, { DiffBadge } from "../common/Badge";
@@ -586,22 +587,65 @@ export default function LabDetail({ lab, back, onSubmitted }) {
 
         {/* Center: Live Questions & Flag Submission */}
         <div style={{ flex: 1, display: "flex", flexDirection: "column", overflowY: "auto", padding: 24, gap: 18 }}>
-          {l.target_url && (
-            <div style={{ display: "flex", flexDirection: "column", minHeight: 500, border: `1px solid ${C.border}`, borderRadius: 8, overflow: "hidden", marginBottom: 12 }}>
-               <div style={{ background: C.panel2, padding: "8px 12px", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <div style={{ fontFamily: mono, fontSize: 11, color: C.cyan, display: "flex", alignItems: "center", gap: 6 }}>
-                    <Globe size={13} />
-                    STUDENT PLATFORM ENVIRONMENT
-                  </div>
-                  <a href={l.target_url} target="_blank" rel="noreferrer" style={{ fontFamily: sans, fontSize: 11, color: C.mid, textDecoration: "none", display: "flex", alignItems: "center", gap: 4 }}>
-                    Open in new tab <ExternalLink size={11} />
-                  </a>
-               </div>
-               <iframe
-                 src={l.target_url}
-                 style={{ width: "100%", flex: 1, border: "none", background: "#fff" }}
-                 title="Student Platform"
-               />
+          {safeHttpUrl(l.target_url) && labId && (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 14,
+                padding: "14px 16px",
+                border: `1px solid ${C.border}`,
+                borderRadius: 10,
+                background: C.panel2,
+              }}
+            >
+              <div
+                style={{
+                  width: 38,
+                  height: 38,
+                  borderRadius: 9,
+                  display: "grid",
+                  placeItems: "center",
+                  flexShrink: 0,
+                  color: C.cyan,
+                  background: "rgba(63, 216, 200, 0.1)",
+                  border: "1px solid rgba(63, 216, 200, 0.25)",
+                }}
+              >
+                <Globe size={18} />
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontFamily: mono, fontSize: 11, color: C.cyan, letterSpacing: "0.04em" }}>
+                  STUDENT PLATFORM ENVIRONMENT
+                </div>
+                <div style={{ fontFamily: sans, fontSize: 12.5, color: C.mid, marginTop: 3 }}>
+                  Opens the target site full screen in a new tab.
+                </div>
+              </div>
+              <a
+                href={labTargetViewerHref(labId)}
+                target="_blank"
+                rel="noopener"
+                style={{
+                  flexShrink: 0,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 7,
+                  padding: "9px 16px",
+                  borderRadius: 10,
+                  border: "1px solid #f5a623",
+                  background: "linear-gradient(180deg, #ffc046, #f5a623)",
+                  boxShadow: "0 5px 14px -7px rgba(245, 166, 35, 0.8)",
+                  color: "#1A1200",
+                  fontFamily: sans,
+                  fontSize: 13.5,
+                  fontWeight: 600,
+                  textDecoration: "none",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                <Play size={15} strokeWidth={2.2} /> Launch Lab Environment
+              </a>
             </div>
           )}
 
