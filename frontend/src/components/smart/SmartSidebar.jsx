@@ -1,6 +1,6 @@
 import React from "react";
 import {
-  Zap, Home, GraduationCap, FlaskConical, CalendarDays, BookOpen,
+  Home, GraduationCap, FlaskConical, CalendarDays, BookOpen,
   TrendingUp, Trophy, Award, Rocket, LogOut, LayoutDashboard, Eye, Shield, ExternalLink,
 } from "lucide-react";
 import { DJANGO_ADMIN_URL } from "../../api/client";
@@ -42,7 +42,13 @@ export default function SmartSidebar({
   return (
     <aside className="smart-sidebar smart-ui" aria-label="Main navigation">
       <div className="smart-brand">
-        <Zap className="smart-brand-icon" size={32} color="#f5a623" fill="#f5a623" strokeWidth={1.4} />
+        <img
+          className="smart-brand-logo"
+          src={`${import.meta.env.BASE_URL}favicon.png`}
+          alt="Blitz Academy"
+          width={44}
+          height={44}
+        />
         <div className="smart-brand-text">
           <div className="smart-brand-name">
             BLITZ<span>/</span>CYBER

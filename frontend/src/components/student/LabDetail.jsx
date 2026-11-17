@@ -6,7 +6,7 @@ import {
   FolderArchive, Download, Copy, Check, FileCode, FileBadge
 } from "lucide-react";
 import SubjectCertificateModal from "./SubjectCertificateModal";
-import { labTargetViewerHref, safeHttpUrl } from "./LabTargetViewer";
+import { LAB_TARGET_PATH, handOffLabTarget, safeHttpUrl } from "./LabTargetViewer";
 import Panel from "../common/Panel";
 import Btn from "../common/Btn";
 import Badge, { DiffBadge } from "../common/Badge";
@@ -385,38 +385,6 @@ export default function LabDetail({ lab, back, onSubmitted }) {
             <li>Finalize the lab once completed.</li>
           </ol>
 
-          {l.target_url && (
-            <>
-              <div style={{ fontFamily: mono, fontSize: 10.5, color: C.low, letterSpacing: "0.04em", margin: "20px 0 8px" }}>
-                TARGET INFORMATION
-              </div>
-              <Panel style={{ padding: 12, background: C.panel2 }}>
-                <div style={{ fontFamily: mono, fontSize: 11, color: C.mid }}>
-                  Target Host:
-                </div>
-                <a
-                  href={l.target_url}
-                  target="_blank"
-                  rel="noreferrer"
-                  style={{
-                    fontFamily: mono,
-                    fontSize: 11.5,
-                    color: C.cyan,
-                    wordBreak: "break-all",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 4,
-                    marginTop: 4,
-                    textDecoration: "none",
-                  }}
-                >
-                  {l.target_url}
-                  <ExternalLink size={11} />
-                </a>
-              </Panel>
-            </>
-          )}
-
           {/* Teaching Video for Students */}
           {(l.video_file || l.video_url) && (
             <div style={{ marginTop: 20 }}>
@@ -623,9 +591,14 @@ export default function LabDetail({ lab, back, onSubmitted }) {
                 </div>
               </div>
               <a
-                href={labTargetViewerHref(labId)}
+                href={LAB_TARGET_PATH}
                 target="_blank"
                 rel="noopener"
+                // The lab id is handed to the new tab through storage, so it stays out of the URL.
+                // Click covers left click and Enter; auxclick covers middle click; contextmenu covers "Open in new tab".
+                onClick={() => handOffLabTarget(labId)}
+                onAuxClick={() => handOffLabTarget(labId)}
+                onContextMenu={() => handOffLabTarget(labId)}
                 style={{
                   flexShrink: 0,
                   display: "inline-flex",

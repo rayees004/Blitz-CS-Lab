@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { AlertTriangle, ExternalLink, Globe, Loader2, Maximize2, Minimize2, RotateCw } from "lucide-react";
+import { AlertTriangle, Globe, Loader2, Maximize2, Minimize2, RotateCw } from "lucide-react";
 import { fetchStudentLabAttendState } from "../../api/labs";
 import { getStoredToken } from "../../api/auth";
 import { C, sans, mono } from "../../constants/theme";
@@ -14,9 +14,41 @@ export function safeHttpUrl(value) {
   }
 }
 
-/** Link that opens a lab's target site in the full-screen viewer (new tab). */
-export function labTargetViewerHref(labId) {
-  return `${import.meta.env.BASE_URL}?lab-target=${encodeURIComponent(labId)}`;
+/** Address of the full-screen viewer. It carries no lab id; see handOffLabTarget. */
+export const LAB_TARGET_PATH = `${import.meta.env.BASE_URL}target_environment/`;
+
+export function isLabTargetPath(pathname) {
+  return pathname.replace(/\/+$/, "") === LAB_TARGET_PATH.replace(/\/+$/, "");
+}
+
+const HANDOFF_KEY = "blitz.labTarget.handoff"; // localStorage: lab page -> the tab it is opening
+const TAB_KEY = "blitz.labTarget.id"; // sessionStorage: the lab this viewer tab shows (survives reload)
+const HANDOFF_MAX_AGE_MS = 2 * 60 * 1000;
+
+/** Call just before opening LAB_TARGET_PATH in a new tab: tells that tab which lab to load. */
+export function handOffLabTarget(labId) {
+  try {
+    localStorage.setItem(HANDOFF_KEY, JSON.stringify({ id: String(labId), at: Date.now() }));
+  } catch {
+    // Storage blocked: the viewer shows "open it from the lab page".
+  }
+}
+
+// A reload keeps this tab's own lab; a fresh tab takes the lab page's recent hand-off.
+function resolveLabTargetId() {
+  try {
+    const own = sessionStorage.getItem(TAB_KEY);
+    if (own) return own;
+    const handoff = JSON.parse(localStorage.getItem(HANDOFF_KEY) || "null");
+    localStorage.removeItem(HANDOFF_KEY);
+    if (handoff?.id && Date.now() - handoff.at < HANDOFF_MAX_AGE_MS) {
+      sessionStorage.setItem(TAB_KEY, handoff.id);
+      return handoff.id;
+    }
+  } catch {
+    // Storage blocked or a malformed value: fall through.
+  }
+  return null;
 }
 
 /**
@@ -24,7 +56,8 @@ export function labTargetViewerHref(labId) {
  * Looks up the target by lab id (with the signed-in session) instead of trusting a URL
  * in the address bar, so this page can't be used to frame arbitrary sites.
  */
-export default function LabTargetViewer({ labId }) {
+export default function LabTargetViewer() {
+  const [labId] = useState(resolveLabTargetId);
   const [state, setState] = useState({ status: "loading", lab: null, error: null });
   const [frameKey, setFrameKey] = useState(0);
   const [frameLoading, setFrameLoading] = useState(true);
@@ -32,6 +65,10 @@ export default function LabTargetViewer({ labId }) {
   const rootRef = useRef(null);
 
   useEffect(() => {
+    if (!labId) {
+      setState({ status: "error", lab: null, error: "Open the lab environment from the lab page using Launch Lab Environment." });
+      return;
+    }
     if (!getStoredToken()) {
       setState({ status: "error", lab: null, error: "Sign in to Blitz Cyber Lab first, then open the lab environment again." });
       return;
@@ -80,7 +117,6 @@ export default function LabTargetViewer({ labId }) {
   };
 
   const targetUrl = state.status === "ready" ? safeHttpUrl(state.lab.target_url) : null;
-  const host = targetUrl ? new URL(targetUrl).host : "";
 
   return (
     <div
@@ -119,19 +155,11 @@ export default function LabTargetViewer({ labId }) {
             {state.lab.name}
           </div>
         )}
-        {host && (
-          <div style={{ fontFamily: mono, fontSize: 11.5, color: C.mid, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>
-            {host}
-          </div>
-        )}
 
         <div style={{ flex: 1 }} />
 
         {targetUrl && (
           <>
-            <span style={{ fontSize: 11.5, color: C.low, whiteSpace: "nowrap" }} className="ltv-hint">
-              Blank page or login not sticking? Use Open directly.
-            </span>
             <ToolbarButton onClick={reload} title="Reload the lab site">
               <RotateCw size={13} /> Reload
             </ToolbarButton>
@@ -139,13 +167,9 @@ export default function LabTargetViewer({ labId }) {
               {isFullscreen ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
               {isFullscreen ? "Exit full screen" : "Full screen"}
             </ToolbarButton>
-            <ToolbarButton as="a" href={targetUrl} rel="noreferrer" title="Open the lab site itself in this tab" primary>
-              <ExternalLink size={13} /> Open directly
-            </ToolbarButton>
           </>
         )}
       </header>
-      <style>{"@media (max-width: 900px) { .ltv-hint { display: none; } }"}</style>
 
       {/* Body */}
       <main style={{ position: "relative", flex: 1, minHeight: 0, background: "#fff" }}>
@@ -212,10 +236,10 @@ function Centered({ children }) {
   );
 }
 
-function ToolbarButton({ as: Tag = "button", primary, children, ...rest }) {
+function ToolbarButton({ children, ...rest }) {
   return (
-    <Tag
-      {...(Tag === "button" ? { type: "button" } : {})}
+    <button
+      type="button"
       {...rest}
       style={{
         flexShrink: 0,
@@ -225,18 +249,17 @@ function ToolbarButton({ as: Tag = "button", primary, children, ...rest }) {
         height: 30,
         padding: "0 11px",
         borderRadius: 8,
-        border: primary ? "1px solid #f5a623" : `1px solid ${C.borderLight}`,
-        background: primary ? "linear-gradient(180deg, #ffc046, #f5a623)" : "rgba(255, 255, 255, 0.03)",
-        color: primary ? "#1A1200" : C.hi,
+        border: `1px solid ${C.borderLight}`,
+        background: "rgba(255, 255, 255, 0.03)",
+        color: C.hi,
         fontFamily: sans,
         fontSize: 12.5,
         fontWeight: 600,
-        textDecoration: "none",
         whiteSpace: "nowrap",
         cursor: "pointer",
       }}
     >
       {children}
-    </Tag>
+    </button>
   );
 }

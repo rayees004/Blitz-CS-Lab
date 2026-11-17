@@ -44,7 +44,7 @@
   border-right: 1px solid #1c222c;
 }
 
-/* Golden swoosh in the top-left corner (behind the bolt, clear of the text) */
+/* Golden swoosh in the top-left corner (behind the logo, clear of the text) */
 .smart-sidebar::before {
   content: "";
   position: absolute;
@@ -66,7 +66,17 @@
   padding: 22px 18px 20px;
 }
 
-.smart-brand-icon { filter: drop-shadow(0 0 8px rgba(245, 166, 35, 0.55)); flex-shrink: 0; }
+/* Blitz Academy logo (public/favicon.png) as a rounded app-icon tile; the PNG has a light background */
+.smart-brand-logo {
+  flex-shrink: 0;
+  display: block;
+  width: 44px;
+  height: 44px;
+  border-radius: 11px;
+  object-fit: cover;
+  background: #fff;
+  box-shadow: 0 0 0 1px rgba(245, 166, 35, 0.4), 0 6px 18px -6px rgba(245, 166, 35, 0.55);
+}
 .smart-brand-name { font-size: 15px; font-weight: 700; line-height: 1.15; letter-spacing: 0.01em; color: #fff; }
 .smart-brand-name span { color: #f5a623; }
 .smart-brand-tag { font-size: 10px; color: #9ba3b0; margin-top: 3px; }
@@ -173,6 +183,7 @@
 @media (max-width: 900px) {
   .smart-sidebar { width: 61px; }
   .smart-brand { justify-content: center; padding: 18px 0; }
+  .smart-brand-logo { width: 38px; height: 38px; border-radius: 10px; }
   .smart-brand-text, .smart-label, .smart-promo { display: none; }
   .smart-nav { padding: 3px 8px; }
   .smart-nav-item, .smart-foot-item { justify-content: center; padding: 9px 0; }
