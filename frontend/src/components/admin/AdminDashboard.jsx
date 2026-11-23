@@ -73,31 +73,16 @@ export default function AdminDashboard({ onNavigate, currentUser }) {
   }, [loadData]);
 
   const handleLabCreated = async (payload) => {
-    try {
-      await createLab(payload);
-      setNotice({ type: "success", text: `Lab "${payload.name}" successfully created with ${payload.questions.length} questions!` });
-      await loadData();
-      setTimeout(() => setNotice(null), 5000);
-    } catch (err) {
-      // In case of backend issue, add locally so UI updates smoothly
-      const newLocalLab = {
-        id: Date.now(),
-        name: payload.name,
-        desc: payload.description,
-        description: payload.description,
-        org: payload.org,
-        cat: payload.category,
-        category: payload.category,
-        diff: payload.difficulty,
-        difficulty: payload.difficulty,
-        pts: payload.points,
-        points: payload.points,
-        questions: payload.questions,
-      };
-      setLabs((prev) => [newLocalLab, ...prev]);
-      setNotice({ type: "success", text: `Lab "${payload.name}" created with ${payload.questions.length} questions!` });
-      setTimeout(() => setNotice(null), 5000);
-    }
+    // The modal sends FormData when a video or source file is attached, a plain object otherwise
+    const isForm = payload instanceof FormData;
+    const labName = isForm ? payload.get("name") : payload.name;
+    const questions = isForm ? JSON.parse(payload.get("questions") || "[]") : payload.questions || [];
+
+    // A failed save throws back to the modal, which stays open and shows the server's error
+    await createLab(payload);
+    setNotice({ type: "success", text: `Lab "${labName}" successfully created with ${questions.length} questions!` });
+    setTimeout(() => setNotice(null), 5000);
+    await loadData();
   };
 
   const handleReviewRetake = async (requestId, action, studentName, labName) => {
