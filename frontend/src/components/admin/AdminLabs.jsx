@@ -1182,7 +1182,21 @@ export default function AdminLabs({ onOpenAddModal = null, mode = "all" }) {
                       )}
                     </div>
 
-                    <p style={{ fontFamily: sans, fontSize: 13, color: C.mid, margin: "6px 0 12px", lineHeight: 1.5 }}>
+                    {/* Card shows the first 4 lines; the full description is in the View panel */}
+                    <p
+                      style={{
+                        fontFamily: sans,
+                        fontSize: 13,
+                        color: C.mid,
+                        margin: "6px 0 12px",
+                        lineHeight: 1.5,
+                        display: "-webkit-box",
+                        WebkitBoxOrient: "vertical",
+                        WebkitLineClamp: 4,
+                        overflow: "hidden",
+                        overflowWrap: "anywhere",
+                      }}
+                    >
                       {l.description || l.desc || "No description provided."}
                     </p>
 
