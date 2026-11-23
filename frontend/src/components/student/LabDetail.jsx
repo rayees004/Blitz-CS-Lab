@@ -6,7 +6,6 @@ import {
   FolderArchive, Download, Copy, Check, FileCode, FileBadge
 } from "lucide-react";
 import SubjectCertificateModal from "./SubjectCertificateModal";
-import { LAB_TARGET_PATH, handOffLabTarget, safeHttpUrl } from "./LabTargetViewer";
 import Panel from "../common/Panel";
 import Btn from "../common/Btn";
 import Badge, { DiffBadge } from "../common/Badge";
@@ -20,6 +19,16 @@ import {
   finalizeStudentLab
 } from "../../api/labs";
 import { useTimeLeft, formatTimeLeft } from "../../utils/labTime";
+
+// Only real web addresses get a launch link; a javascript:/data: URL would run inside this site.
+function safeHttpUrl(value) {
+  try {
+    const url = new URL(String(value || "").trim());
+    return url.protocol === "http:" || url.protocol === "https:" ? url.href : null;
+  } catch {
+    return null;
+  }
+}
 
 // onSubmitted(result): optional; called when the last correct answer auto-submits the lab,
 // so the parent can return to the labs list and show a "submitted successfully" popup.
@@ -79,6 +88,7 @@ export default function LabDetail({ lab, back, onSubmitted }) {
       ? 100
       : 0;
   const timeLeft = useTimeLeft(isCompleted ? null : workspace?.lab_score?.attempt_deadline);
+  const targetUrl = safeHttpUrl(l.target_url);
 
   const handleSubmitFlag = async (questionId) => {
     const val = flagInputs[questionId]?.trim();
@@ -555,7 +565,7 @@ export default function LabDetail({ lab, back, onSubmitted }) {
 
         {/* Center: Live Questions & Flag Submission */}
         <div style={{ flex: 1, display: "flex", flexDirection: "column", overflowY: "auto", padding: 24, gap: 18 }}>
-          {safeHttpUrl(l.target_url) && labId && (
+          {targetUrl && (
             <div
               style={{
                 display: "flex",
@@ -587,18 +597,13 @@ export default function LabDetail({ lab, back, onSubmitted }) {
                   STUDENT PLATFORM ENVIRONMENT
                 </div>
                 <div style={{ fontFamily: sans, fontSize: 12.5, color: C.mid, marginTop: 3 }}>
-                  Opens the target site full screen in a new tab.
+                  Opens the lab site in a new tab.
                 </div>
               </div>
               <a
-                href={LAB_TARGET_PATH}
+                href={targetUrl}
                 target="_blank"
-                rel="noopener"
-                // The lab id is handed to the new tab through storage, so it stays out of the URL.
-                // Click covers left click and Enter; auxclick covers middle click; contextmenu covers "Open in new tab".
-                onClick={() => handOffLabTarget(labId)}
-                onAuxClick={() => handOffLabTarget(labId)}
-                onContextMenu={() => handOffLabTarget(labId)}
+                rel="noopener noreferrer"
                 style={{
                   flexShrink: 0,
                   display: "inline-flex",
